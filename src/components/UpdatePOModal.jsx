@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -19,10 +19,12 @@ import {
   Typography,
   InputAdornment,
   MenuItem,
+  Divider,
   Chip,
 } from "@mui/material";
-import { Close, Search } from "@mui/icons-material";
+import { Close, Search, Person, ShoppingCart } from "@mui/icons-material";
 
+// Sample Inventory Data
 const inventoryItems = [
   {
     id: 1,
@@ -54,13 +56,33 @@ const inventoryItems = [
   },
 ];
 
-// Changed options constant name
+// Renamed from remarkOptions
 const statusOptions = ["Job Order", "Pending", "Done"];
 
-export default function CreatePOModal({ open, handleClose, mode }) {
+export default function UpdatePOModal({ open, handleClose, mode, poData }) {
   const [selectedItems, setSelectedItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [status, setStatus] = useState("Job Order"); // Changed state name from remarks
+  const [formData, setFormData] = useState({
+    customerName: "",
+    email: "",
+    contact: "",
+    status: "Job Order", // Renamed from remark
+    totalPrice: "",
+  });
+
+  // Sync state when poData is passed
+  useEffect(() => {
+    if (poData) {
+      setFormData({
+        customerName: poData.customerName || "",
+        email: poData.email || "",
+        contact: poData.contact || "",
+        status: poData.status || poData.remark || "Job Order", // Handles both naming conventions
+        totalPrice: poData.totalPrice || "",
+      });
+      setSelectedItems(poData.items || []);
+    }
+  }, [poData]);
 
   const handleToggleItem = (itemId) => {
     const currentIndex = selectedItems.indexOf(itemId);
@@ -71,6 +93,10 @@ export default function CreatePOModal({ open, handleClose, mode }) {
       newChecked.splice(currentIndex, 1);
     }
     setSelectedItems(newChecked);
+  };
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const fieldStyle = {
@@ -85,6 +111,12 @@ export default function CreatePOModal({ open, handleClose, mode }) {
     bgcolor: mode === "light" ? "action.hover" : "rgba(255,255,255,0.05)",
   };
 
+  const handleSubmit = () => {
+    const finalData = { ...formData, selectedItems };
+    console.log("Updating PO ID:", poData?.id, finalData);
+    handleClose();
+  };
+
   return (
     <Dialog
       open={open}
@@ -92,11 +124,7 @@ export default function CreatePOModal({ open, handleClose, mode }) {
       fullWidth
       maxWidth="md"
       PaperProps={{
-        sx: {
-          borderRadius: 3,
-          backgroundImage: "none",
-          bgcolor: "background.paper",
-        },
+        sx: { borderRadius: 3, backgroundImage: "none" },
       }}
     >
       <DialogTitle
@@ -107,49 +135,88 @@ export default function CreatePOModal({ open, handleClose, mode }) {
           alignItems: "center",
         }}
       >
-        Create New Purchase Order
+        <Box>
+          <Typography variant="h6" fontWeight="bold">
+            Update Purchase Order
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            PO Number: {poData?.poNumber || poData?.id}
+          </Typography>
+        </Box>
         <IconButton onClick={handleClose} size="small">
           <Close />
         </IconButton>
       </DialogTitle>
 
       <DialogContent dividers sx={{ py: 3 }}>
+        {/* Section 1: Customer Information */}
         <Typography
           variant="subtitle2"
           color="primary"
           fontWeight="bold"
-          gutterBottom
+          sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}
         >
-          Order Information
+          <Person fontSize="small" /> Customer Details
         </Typography>
 
         <Grid container spacing={2} sx={{ mb: 4 }}>
-          <Grid item xs={6} md={3}>
+          <Grid item xs={12} md={4}>
             <TextField
               fullWidth
               size="small"
-              label="PO Number"
-              placeholder="PO-2024-XXX"
+              label="Customer Name"
+              name="customerName"
+              value={formData.customerName}
+              onChange={handleChange}
               sx={fieldStyle}
             />
           </Grid>
-          <Grid item xs={6} md={3}>
+          <Grid item xs={12} md={4}>
             <TextField
               fullWidth
               size="small"
-              label="Total Price"
-              type="number"
+              label="Email Address"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
               sx={fieldStyle}
             />
           </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Contact Number"
+              name="contact"
+              value={formData.contact}
+              onChange={handleChange}
+              sx={fieldStyle}
+            />
+          </Grid>
+        </Grid>
+
+        <Divider sx={{ mb: 3 }} />
+
+        {/* Section 2: Order Information & Status */}
+        <Typography
+          variant="subtitle2"
+          color="primary"
+          fontWeight="bold"
+          sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <ShoppingCart fontSize="small" /> Order Specifications
+        </Typography>
+
+        <Grid container spacing={2} sx={{ mb: 4 }}>
           <Grid item xs={12} md={6}>
             <TextField
               fullWidth
               select
               size="small"
-              label="Status" // Changed Label
-              value={status} // Changed Value
-              onChange={(e) => setStatus(e.target.value)} // Changed Setter
+              label="Status" // Renamed Label
+              name="status" // Renamed Name
+              value={formData.status}
+              onChange={handleChange}
               sx={fieldStyle}
             >
               {statusOptions.map((option) => (
@@ -159,33 +226,24 @@ export default function CreatePOModal({ open, handleClose, mode }) {
               ))}
             </TextField>
           </Grid>
-          <Grid item xs={12} md={4}>
+
+          <Grid item xs={12} md={6}>
             <TextField
               fullWidth
               size="small"
-              label="Customer Name"
-              sx={fieldStyle}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Email Address"
-              sx={fieldStyle}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Contact Number"
+              label="Total Order Amount"
+              name="totalPrice"
+              type="number"
+              value={formData.totalPrice}
+              onChange={handleChange}
               sx={fieldStyle}
             />
           </Grid>
         </Grid>
 
-        {/* Item Selection Header */}
+        <Divider sx={{ mb: 3 }} />
+
+        {/* Section 3: Item Selection Table */}
         <Box
           sx={{
             display: "flex",
@@ -209,7 +267,7 @@ export default function CreatePOModal({ open, handleClose, mode }) {
                 </InputAdornment>
               ),
             }}
-            sx={{ width: 200, ...fieldStyle }}
+            sx={{ width: 250, ...fieldStyle }}
           />
         </Box>
 
@@ -218,7 +276,7 @@ export default function CreatePOModal({ open, handleClose, mode }) {
             border: "1px solid",
             borderColor: "divider",
             borderRadius: 2,
-            maxHeight: 350,
+            maxHeight: 300,
           }}
         >
           <Table stickyHeader size="small">
@@ -231,7 +289,7 @@ export default function CreatePOModal({ open, handleClose, mode }) {
                 <TableCell sx={tableHeaderStyle}>Category</TableCell>
                 <TableCell sx={tableHeaderStyle}>Unit</TableCell>
                 <TableCell align="right" sx={tableHeaderStyle}>
-                  Quantity to Order
+                  Quantity
                 </TableCell>
               </TableRow>
             </TableHead>
@@ -258,7 +316,7 @@ export default function CreatePOModal({ open, handleClose, mode }) {
                         {item.name}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Avail: {item.available}
+                        Available: {item.available}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -281,7 +339,7 @@ export default function CreatePOModal({ open, handleClose, mode }) {
                         disabled={selectedItems.indexOf(item.id) === -1}
                         defaultValue={1}
                         sx={{
-                          width: 80,
+                          width: 70,
                           "& .MuiInputBase-input": {
                             py: 0.5,
                             textAlign: "center",
@@ -305,6 +363,7 @@ export default function CreatePOModal({ open, handleClose, mode }) {
         </Button>
         <Button
           variant="contained"
+          onClick={handleSubmit}
           sx={{
             bgcolor: "primary.main",
             px: 4,
@@ -313,7 +372,7 @@ export default function CreatePOModal({ open, handleClose, mode }) {
             "&:hover": { bgcolor: "#d87d3a" },
           }}
         >
-          Create Order
+          Save Changes
         </Button>
       </DialogActions>
     </Dialog>

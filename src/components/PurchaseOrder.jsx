@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Box,
   Typography,
@@ -19,65 +19,92 @@ import {
 import {
   FileUpload,
   Add,
-  FilterList,
   Visibility,
   Edit,
   Delete,
   Search,
+  FilterList,
 } from "@mui/icons-material";
 import CreatePOModal from "./CreatePOModal";
+import UpdatePOModal from "./UpdatePOModal";
+import ViewPOModal from "./ViewPOModal";
 
-// Updated data structure
 const poData = [
   {
     id: 1,
-    poId: "PO-1001", // New PO ID column
+    poId: "PO-1001",
     customer: "John Doe",
+    email: "john@example.com",
+    contact: "09123456789",
     poNo: "PO-2024-001",
-    remarks: "Urgent", // Changed from Status
+    status: "Job Order", // Changed key from remarks to status
+    totalPrice: "1,200.00",
+    fullItems: [
+      {
+        name: "Macbook Pro M1",
+        category: "Electronics",
+        unit: "pcs",
+        quantity: 1,
+      },
+    ],
   },
   {
     id: 2,
     poId: "PO-1002",
     customer: "Sarah Williams",
+    email: "sarah@example.com",
+    contact: "09987654321",
     poNo: "PO-2024-002",
-    remarks: "Standard",
-  },
-  {
-    id: 3,
-    poId: "PO-1003",
-    customer: "TechCorp Solutions",
-    poNo: "PO-2024-003",
-    remarks: "Partial Delivery",
-  },
-  {
-    id: 4,
-    poId: "PO-1004",
-    customer: "Mike Johnson",
-    poNo: "PO-2024-004",
-    remarks: "Fragile Items",
+    status: "Done", // Changed key from remarks to status
+    totalPrice: "250.00",
+    fullItems: [
+      {
+        name: "Mechanical Keyboard",
+        category: "Accessories",
+        unit: "pcs",
+        quantity: 2,
+      },
+    ],
   },
 ];
 
 export default function PurchaseOrder({ mode }) {
-  const [openPOModal, setOpenPOModal] = React.useState(false);
+  const [openCreateModal, setOpenCreateModal] = useState(false);
+  const [openUpdateModal, setOpenUpdateModal] = useState(false);
+  const [openViewModal, setOpenViewModal] = useState(false);
+  const [selectedPO, setSelectedPO] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Helper for Remark colors
-  const getRemarkStyle = (remark) => {
-    if (remark === "Urgent") return { color: "error", variant: "filled" };
-    if (remark === "Partial Delivery")
-      return { color: "warning", variant: "outlined" };
+  const prepareModalData = (po) => ({
+    id: po.id,
+    poNumber: po.poNo,
+    customerName: po.customer,
+    email: po.email,
+    contact: po.contact,
+    status: po.status, // Renamed from remark
+    totalPrice: po.totalPrice,
+    fullItems: po.fullItems,
+  });
+
+  const handleEditClick = (po) => {
+    setSelectedPO(prepareModalData(po));
+    setOpenUpdateModal(true);
+  };
+
+  const handleViewClick = (po) => {
+    setSelectedPO(prepareModalData(po));
+    setOpenViewModal(true);
+  };
+
+  const getStatusStyle = (status) => {
+    if (status === "Job Order") return { color: "info", variant: "filled" };
+    if (status === "Done") return { color: "success", variant: "filled" };
     return { color: "default", variant: "soft" };
   };
 
   return (
     <Box
-      sx={{
-        p: 4,
-        mt: 8,
-        backgroundColor: "background.default",
-        minHeight: "100vh",
-      }}
+      sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
     >
       {/* Page Header */}
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
@@ -93,16 +120,21 @@ export default function PurchaseOrder({ mode }) {
           <Button
             variant="outlined"
             startIcon={<FileUpload />}
-            sx={{ color: "primary.main", borderColor: "primary.main" }}
+            sx={{
+              textTransform: "none",
+              borderColor: "primary.main",
+              color: "primary.main",
+            }}
           >
             Export
           </Button>
           <Button
             variant="contained"
             startIcon={<Add />}
-            onClick={() => setOpenPOModal(true)}
+            onClick={() => setOpenCreateModal(true)}
             sx={{
               bgcolor: "primary.main",
+              textTransform: "none",
               "&:hover": { bgcolor: "#d87d3a" },
               boxShadow: "none",
             }}
@@ -125,6 +157,7 @@ export default function PurchaseOrder({ mode }) {
               : "0px 2px 8px rgba(0,0,0,0.4)",
         }}
       >
+        {/* Table Toolbar: Label + Search */}
         <Box
           sx={{
             display: "flex",
@@ -138,14 +171,14 @@ export default function PurchaseOrder({ mode }) {
             fontWeight="bold"
             color="text.primary"
           >
-            Recent Orders
+            Purchase Order List
           </Typography>
-
           <Stack direction="row" spacing={1} alignItems="center">
             <TextField
               size="small"
-              placeholder="Search PO or Customer..."
-              variant="outlined"
+              placeholder="Search orders..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               sx={{
                 width: 250,
                 "& .MuiOutlinedInput-root": {
@@ -166,7 +199,6 @@ export default function PurchaseOrder({ mode }) {
             />
             <Button
               variant="outlined"
-              size="medium"
               startIcon={<FilterList />}
               sx={{
                 color: "text.primary",
@@ -188,108 +220,107 @@ export default function PurchaseOrder({ mode }) {
             }}
           >
             <TableRow>
-              <TableCell sx={{ fontWeight: "bold", color: "text.primary" }}>
-                PO ID
+              <TableCell sx={{ fontWeight: "bold" }}>PO ID</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Customer Name</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>PO No.</TableCell>
+              <TableCell align="center" sx={{ fontWeight: "bold" }}>
+                Status
               </TableCell>
-              <TableCell sx={{ fontWeight: "bold", color: "text.primary" }}>
-                Customer Name
-              </TableCell>
-              <TableCell sx={{ fontWeight: "bold", color: "text.primary" }}>
-                PO No.
-              </TableCell>
-              <TableCell
-                align="center"
-                sx={{ fontWeight: "bold", color: "text.primary" }}
-              >
-                Remarks
-              </TableCell>
-              <TableCell
-                align="right"
-                sx={{ fontWeight: "bold", color: "text.primary" }}
-              >
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
                 Action
               </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {poData.map((row) => (
-              <TableRow key={row.id} hover>
-                <TableCell sx={{ color: "text.primary", fontWeight: "medium" }}>
-                  {row.poId}
-                </TableCell>
-                <TableCell>
-                  <Typography
-                    variant="body2"
-                    fontWeight="bold"
-                    color="text.primary"
-                  >
-                    {row.customer}
-                  </Typography>
-                </TableCell>
-                <TableCell sx={{ color: "text.primary" }}>{row.poNo}</TableCell>
-                <TableCell align="center">
-                  <Chip
-                    label={row.remarks}
-                    size="small"
-                    color={getRemarkStyle(row.remarks).color}
-                    variant={getRemarkStyle(row.remarks).variant}
-                    sx={{ fontWeight: 600, borderRadius: 1.5 }}
-                  />
-                </TableCell>
-                <TableCell align="right">
-                  <Stack
-                    direction="row"
-                    spacing={0.5}
-                    justifyContent="flex-end"
-                  >
-                    <IconButton
+            {poData
+              .filter(
+                (row) =>
+                  row.customer
+                    .toLowerCase()
+                    .includes(searchQuery.toLowerCase()) ||
+                  row.poNo.toLowerCase().includes(searchQuery.toLowerCase()),
+              )
+              .map((row) => (
+                <TableRow key={row.id} hover>
+                  <TableCell sx={{ fontWeight: "medium" }}>
+                    {row.poId}
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight="bold">
+                      {row.customer}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{row.poNo}</TableCell>
+                  <TableCell align="center">
+                    <Chip
+                      label={row.status}
                       size="small"
-                      sx={{
-                        color: "#2ecc71",
-                        bgcolor:
-                          mode === "light"
-                            ? "rgba(46, 204, 113, 0.1)"
-                            : "rgba(46, 204, 113, 0.2)",
-                      }}
+                      {...getStatusStyle(row.status)}
+                      sx={{ fontWeight: 600, borderRadius: 1.5 }}
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      justifyContent="flex-end"
                     >
-                      <Visibility fontSize="inherit" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      sx={{
-                        color: "#3498db",
-                        bgcolor:
-                          mode === "light"
-                            ? "rgba(52, 152, 219, 0.1)"
-                            : "rgba(52, 152, 219, 0.2)",
-                      }}
-                    >
-                      <Edit fontSize="inherit" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      sx={{
-                        color: "#e74c3c",
-                        bgcolor:
-                          mode === "light"
-                            ? "rgba(231, 76, 60, 0.1)"
-                            : "rgba(231, 76, 60, 0.2)",
-                      }}
-                    >
-                      <Delete fontSize="inherit" />
-                    </IconButton>
-                  </Stack>
-                </TableCell>
-              </TableRow>
-            ))}
+                      <IconButton
+                        size="small"
+                        onClick={() => handleViewClick(row)}
+                        sx={{
+                          color: "#2ecc71",
+                          bgcolor: "rgba(46, 204, 113, 0.1)",
+                        }}
+                      >
+                        <Visibility fontSize="inherit" />
+                      </IconButton>
+
+                      <IconButton
+                        size="small"
+                        onClick={() => handleEditClick(row)}
+                        sx={{
+                          color: "#3498db",
+                          bgcolor: "rgba(52, 152, 219, 0.1)",
+                        }}
+                      >
+                        <Edit fontSize="inherit" />
+                      </IconButton>
+
+                      <IconButton
+                        size="small"
+                        sx={{
+                          color: "#e74c3c",
+                          bgcolor: "rgba(231, 76, 60, 0.1)",
+                        }}
+                      >
+                        <Delete fontSize="inherit" />
+                      </IconButton>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ))}
           </TableBody>
         </Table>
       </TableContainer>
 
+      {/* Modals */}
       <CreatePOModal
-        open={openPOModal}
-        handleClose={() => setOpenPOModal(false)}
+        open={openCreateModal}
+        handleClose={() => setOpenCreateModal(false)}
         mode={mode}
+      />
+      <UpdatePOModal
+        open={openUpdateModal}
+        handleClose={() => setOpenUpdateModal(false)}
+        mode={mode}
+        poData={selectedPO}
+      />
+      <ViewPOModal
+        open={openViewModal}
+        handleClose={() => setOpenViewModal(false)}
+        mode={mode}
+        poData={selectedPO}
       />
     </Box>
   );
