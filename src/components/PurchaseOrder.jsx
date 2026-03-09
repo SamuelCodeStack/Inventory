@@ -42,8 +42,8 @@ const poData = [
     fullItems: [
       {
         name: "Macbook Pro M1",
-        category: "Electronics",
-        unit: "pcs",
+        category: "Plastic",
+        unit: "Pieces",
         quantity: 1,
       },
     ],
@@ -60,8 +60,8 @@ const poData = [
     fullItems: [
       {
         name: "Mechanical Keyboard",
-        category: "Accessories",
-        unit: "pcs",
+        category: "Injection",
+        unit: "Bundle",
         quantity: 2,
       },
     ],

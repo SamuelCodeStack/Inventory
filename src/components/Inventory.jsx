@@ -15,12 +15,13 @@ import {
   Stack,
   TextField,
   InputAdornment,
+  Snackbar, // Added
+  Alert, // Added
 } from "@mui/material";
 import {
   FileUpload,
   Add,
   FilterList,
-  Visibility,
   Edit,
   Delete,
   Search,
@@ -28,11 +29,11 @@ import {
 import AddInventoryModal from "./AddInventoryModal";
 import EditInventoryModal from "./EditInventoryModal";
 
-const data = [
+const initialData = [
   {
     id: "01",
     name: "Macbook Pro M1 2020",
-    category: "Laptop",
+    category: "Plastic",
     uom: "Pieces",
     quantity: 120,
     status: "In Stock",
@@ -40,15 +41,15 @@ const data = [
   {
     id: "02",
     name: "Mechanical Keyboard",
-    category: "Accessories",
-    uom: "Boxes",
+    category: "Injection",
+    uom: "Box",
     quantity: 5,
     status: "Low Stock",
   },
   {
     id: "03",
     name: "Wired Mouse",
-    category: "Accessories",
+    category: "Paper",
     uom: "Pieces",
     quantity: 0,
     status: "Out of Stock",
@@ -56,25 +57,70 @@ const data = [
 ];
 
 export default function Inventory({ mode }) {
-  // Modal States
+  const [inventoryData, setInventoryData] = useState(initialData);
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditModal, setOpenEditModal] = useState(false);
-
-  // Data States
   const [selectedItem, setSelectedItem] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Open Edit Modal with selected row data
+  // Alert State
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success", // 'success' = green, 'info' = blue, 'error' = red
+  });
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  // 1. ADD Logic (Call this when Add Modal successfully saves)
+  const handleAddSuccess = () => {
+    setOpenAddModal(false);
+    setSnackbar({
+      open: true,
+      message: "New item added successfully!",
+      severity: "success", // GREEN
+    });
+  };
+
+  // 2. UPDATE Logic (Call this when Edit Modal successfully saves)
+  const handleEditSuccess = () => {
+    setOpenEditModal(false);
+    setSnackbar({
+      open: true,
+      message: "Item updated successfully!",
+      severity: "info", // BLUE (MUI 'info' is blue)
+    });
+  };
+
+  // 3. DELETE Logic
+  const handleDelete = (id) => {
+    setInventoryData(inventoryData.filter((item) => item.id !== id));
+    setSnackbar({
+      open: true,
+      message: `Item ${id} deleted successfully`,
+      severity: "error", // RED
+    });
+  };
+
+  const handleQuantityChange = (id, newQuantity) => {
+    const updatedData = inventoryData.map((item) => {
+      if (item.id === id) {
+        const qty = parseInt(newQuantity) || 0;
+        let newStatus = "In Stock";
+        if (qty === 0) newStatus = "Out of Stock";
+        else if (qty <= 10) newStatus = "Low Stock";
+        return { ...item, quantity: qty, status: newStatus };
+      }
+      return item;
+    });
+    setInventoryData(updatedData);
+  };
+
   const handleEditClick = (item) => {
     setSelectedItem(item);
     setOpenEditModal(true);
-  };
-
-  const handleDelete = (id) => {
-    if (window.confirm(`Are you sure you want to delete item ${id}?`)) {
-      console.log("Deleting item:", id);
-      // Logic to filter local state or call API would go here
-    }
   };
 
   const getStatusColor = (status) => {
@@ -94,10 +140,10 @@ export default function Inventory({ mode }) {
     <Box
       sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
     >
-      {/* Page Header */}
+      {/* Header & Table (logic remains same) */}
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Box>
-          <Typography variant="h5" fontWeight="bold" color="text.primary">
+          <Typography variant="h5" fontWeight="bold">
             Inventory
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -105,45 +151,22 @@ export default function Inventory({ mode }) {
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
-          <Button
-            variant="outlined"
-            startIcon={<FileUpload />}
-            sx={{
-              color: "primary.main",
-              borderColor: "primary.main",
-              textTransform: "none",
-            }}
-          >
+          <Button variant="outlined" startIcon={<FileUpload />}>
             Export
           </Button>
           <Button
             variant="contained"
             startIcon={<Add />}
             onClick={() => setOpenAddModal(true)}
-            sx={{
-              bgcolor: "primary.main",
-              textTransform: "none",
-              "&:hover": { bgcolor: "#d87d3a" },
-              boxShadow: "none",
-            }}
           >
             Add Inventory
           </Button>
         </Stack>
       </Box>
 
-      {/* Main Table Container */}
       <TableContainer
         component={Paper}
-        sx={{
-          borderRadius: 3,
-          p: 2,
-          backgroundImage: "none",
-          boxShadow:
-            mode === "light"
-              ? "0px 2px 8px rgba(0,0,0,0.05)"
-              : "0px 2px 8px rgba(0,0,0,0.4)",
-        }}
+        sx={{ borderRadius: 3, p: 2, backgroundImage: "none" }}
       >
         <Box
           sx={{
@@ -153,50 +176,21 @@ export default function Inventory({ mode }) {
             alignItems: "center",
           }}
         >
-          <Typography
-            variant="subtitle1"
-            fontWeight="bold"
-            color="text.primary"
-          >
+          <Typography variant="subtitle1" fontWeight="bold">
             Inventory List
           </Typography>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <TextField
-              size="small"
-              placeholder="Search items..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              sx={{
-                width: 250,
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: 2,
-                  bgcolor:
-                    mode === "light"
-                      ? "background.default"
-                      : "rgba(255,255,255,0.05)",
-                },
-              }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search fontSize="small" sx={{ color: "text.secondary" }} />
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <Button
-              variant="outlined"
-              startIcon={<FilterList />}
-              sx={{
-                color: "text.primary",
-                borderColor: "divider",
-                borderRadius: 2,
-                textTransform: "none",
-              }}
-            >
-              Filter
-            </Button>
-          </Stack>
+          <TextField
+            size="small"
+            placeholder="Search items..."
+            onChange={(e) => setSearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+          />
         </Box>
 
         <Table>
@@ -207,105 +201,126 @@ export default function Inventory({ mode }) {
             }}
           >
             <TableRow>
-              <TableCell sx={{ fontWeight: "bold" }}>No</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Product</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Unit</TableCell>
-              <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                Quantity
-              </TableCell>
-              <TableCell align="center" sx={{ fontWeight: "bold" }}>
-                Status
-              </TableCell>
-              <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                Action
-              </TableCell>
+              <TableCell>No</TableCell>
+              <TableCell>Item Name</TableCell>
+              <TableCell>Category</TableCell>
+              <TableCell>Unit</TableCell>
+              <TableCell align="right">Quantity</TableCell>
+              <TableCell align="center">Status</TableCell>
+              <TableCell align="right">Action</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {data.map((row) => (
-              <TableRow key={row.id} hover>
-                <TableCell>{row.id}</TableCell>
-                <TableCell>
-                  <Typography variant="body2" fontWeight="bold">
-                    {row.name}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    label={row.category}
-                    size="small"
-                    sx={{ borderRadius: 1.5, fontWeight: 600 }}
-                  />
-                </TableCell>
-                <TableCell color="text.secondary">{row.uom}</TableCell>
-                <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                  {row.quantity}
-                </TableCell>
-                <TableCell align="center">
-                  <Chip
-                    label={row.status}
-                    size="small"
-                    color={getStatusColor(row.status)}
-                    sx={{ fontWeight: 600, borderRadius: 1.5 }}
-                  />
-                </TableCell>
-                <TableCell align="right">
-                  <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    <IconButton
-                      size="small"
-                      sx={{
-                        color: "#2ecc71",
-                        bgcolor: "rgba(46, 204, 113, 0.1)",
+            {inventoryData
+              .filter((item) =>
+                item.name.toLowerCase().includes(searchQuery.toLowerCase()),
+              )
+              .map((row) => (
+                <TableRow key={row.id} hover>
+                  <TableCell>{row.id}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight="bold">
+                      {row.name}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={row.category} size="small" />
+                  </TableCell>
+                  <TableCell color="text.secondary">{row.uom}</TableCell>
+                  <TableCell align="right">
+                    <TextField
+                      type="number"
+                      variant="standard"
+                      value={row.quantity}
+                      onChange={(e) =>
+                        handleQuantityChange(row.id, e.target.value)
+                      }
+                      InputProps={{
+                        disableUnderline: true,
+                        sx: {
+                          fontWeight: "bold",
+                          textAlign: "right",
+                          "& input": { textAlign: "right" },
+                        },
                       }}
-                    >
-                      <Visibility fontSize="inherit" />
-                    </IconButton>
-
-                    {/* EDIT BUTTON */}
-                    <IconButton
+                      sx={{ width: "60px" }}
+                    />
+                  </TableCell>
+                  <TableCell align="center">
+                    <Chip
+                      label={row.status}
                       size="small"
-                      onClick={() => handleEditClick(row)}
-                      sx={{
-                        color: "#3498db",
-                        bgcolor: "rgba(52, 152, 219, 0.1)",
-                      }}
+                      color={getStatusColor(row.status)}
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      justifyContent="flex-end"
                     >
-                      <Edit fontSize="inherit" />
-                    </IconButton>
-
-                    {/* DELETE BUTTON */}
-                    <IconButton
-                      size="small"
-                      onClick={() => handleDelete(row.id)}
-                      sx={{
-                        color: "#e74c3c",
-                        bgcolor: "rgba(231, 76, 60, 0.1)",
-                      }}
-                    >
-                      <Delete fontSize="inherit" />
-                    </IconButton>
-                  </Stack>
-                </TableCell>
-              </TableRow>
-            ))}
+                      <IconButton
+                        size="small"
+                        sx={{ color: "#3498db" }}
+                        onClick={() => handleEditClick(row)}
+                      >
+                        <Edit fontSize="inherit" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        sx={{ color: "#e74c3c" }}
+                        onClick={() => handleDelete(row.id)}
+                      >
+                        <Delete fontSize="inherit" />
+                      </IconButton>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ))}
           </TableBody>
         </Table>
       </TableContainer>
 
-      {/* Modals */}
+      {/* MODALS - Added the success handlers */}
       <AddInventoryModal
         open={openAddModal}
         handleClose={() => setOpenAddModal(false)}
+        onSaveSuccess={handleAddSuccess} // Pass this to your Add modal
         mode={mode}
       />
 
       <EditInventoryModal
         open={openEditModal}
         handleClose={() => setOpenEditModal(false)}
+        onSaveSuccess={handleEditSuccess} // Pass this to your Edit modal
         mode={mode}
         itemData={selectedItem}
       />
+
+      {/* DYNAMIC NOTIFICATION (BOTTOM RIGHT) */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbar.severity}
+          variant="filled" // 'filled' makes the background color solid and vibrant
+          sx={{
+            width: "100%",
+            borderRadius: 2,
+            fontWeight: "bold",
+            // Customizing colors to be exactly what you want if default MUI isn't enough
+            ...(snackbar.severity === "info" && { bgcolor: "#3498db" }), // Blue
+            ...(snackbar.severity === "success" && { bgcolor: "#2ecc71" }), // Green
+            ...(snackbar.severity === "error" && { bgcolor: "#e74c3c" }), // Red
+          }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
