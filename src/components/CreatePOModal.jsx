@@ -15,14 +15,15 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Checkbox,
   Typography,
   InputAdornment,
   MenuItem,
   Chip,
+  Divider,
 } from "@mui/material";
-import { Close, Search } from "@mui/icons-material";
+import { Close, Search, ShoppingCart, Person } from "@mui/icons-material";
 
+// --- Constants ---
 const inventoryItems = [
   {
     id: 1,
@@ -54,23 +55,29 @@ const inventoryItems = [
   },
 ];
 
-// Changed options constant name
 const statusOptions = ["Job Order", "Pending", "Done"];
 
 export default function CreatePOModal({ open, handleClose, mode }) {
   const [selectedItems, setSelectedItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [status, setStatus] = useState("Job Order"); // Changed state name from remarks
+  const [status, setStatus] = useState("Job Order");
+  const [customerName, setCustomerName] = useState("");
 
-  const handleToggleItem = (itemId) => {
-    const currentIndex = selectedItems.indexOf(itemId);
-    const newChecked = [...selectedItems];
+  const handleToggleItem = (item) => {
+    const currentIndex = selectedItems.findIndex((i) => i.id === item.id);
     if (currentIndex === -1) {
-      newChecked.push(itemId);
+      setSelectedItems([...selectedItems, { ...item, qty: 1 }]);
     } else {
-      newChecked.splice(currentIndex, 1);
+      setSelectedItems(selectedItems.filter((i) => i.id !== item.id));
     }
-    setSelectedItems(newChecked);
+  };
+
+  const handleQtyChange = (itemId, newQty) => {
+    setSelectedItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId ? { ...item, qty: parseInt(newQty) || 1 } : item,
+      ),
+    );
   };
 
   const fieldStyle = {
@@ -80,31 +87,19 @@ export default function CreatePOModal({ open, handleClose, mode }) {
     },
   };
 
-  const tableHeaderStyle = {
-    fontWeight: "bold",
-    bgcolor: mode === "light" ? "action.hover" : "rgba(255,255,255,0.05)",
-  };
-
   return (
     <Dialog
       open={open}
       onClose={handleClose}
       fullWidth
-      maxWidth="md"
-      PaperProps={{
-        sx: {
-          borderRadius: 3,
-          backgroundImage: "none",
-          bgcolor: "background.paper",
-        },
-      }}
+      maxWidth="lg"
+      PaperProps={{ sx: { borderRadius: 3, backgroundImage: "none" } }}
     >
       <DialogTitle
         sx={{
           fontWeight: "bold",
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
         }}
       >
         Create New Purchase Order
@@ -114,204 +109,270 @@ export default function CreatePOModal({ open, handleClose, mode }) {
       </DialogTitle>
 
       <DialogContent dividers sx={{ py: 3 }}>
-        <Typography
-          variant="subtitle2"
-          color="primary"
-          fontWeight="bold"
-          gutterBottom
-        >
-          Order Information
-        </Typography>
-
-        <Grid container spacing={2} sx={{ mb: 4 }}>
-          <Grid item xs={6} md={3}>
-            <TextField
-              fullWidth
-              size="small"
-              label="PO Number"
-              placeholder="PO-2024-XXX"
-              sx={fieldStyle}
-            />
-          </Grid>
-          <Grid item xs={6} md={3}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Total Price"
-              type="number"
-              sx={fieldStyle}
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              select
-              size="small"
-              label="Status" // Changed Label
-              value={status} // Changed Value
-              onChange={(e) => setStatus(e.target.value)} // Changed Setter
-              sx={fieldStyle}
+        <Grid container spacing={4}>
+          {/* LEFT SIDE: SELECTION & INFO */}
+          <Grid item xs={12} md={7}>
+            <Typography
+              variant="subtitle2"
+              color="primary"
+              fontWeight="bold"
+              gutterBottom
             >
-              {statusOptions.map((option) => (
-                <MenuItem key={option} value={option}>
-                  {option}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Customer Name"
-              sx={fieldStyle}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Email Address"
-              sx={fieldStyle}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Contact Number"
-              sx={fieldStyle}
-            />
-          </Grid>
-        </Grid>
+              Order Information
+            </Typography>
 
-        {/* Item Selection Header */}
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            mb: 2,
-          }}
-        >
-          <Typography variant="subtitle2" color="primary" fontWeight="bold">
-            Select Items
-          </Typography>
-          <TextField
-            size="small"
-            placeholder="Search items..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ width: 200, ...fieldStyle }}
-          />
-        </Box>
+            <Grid container spacing={2} sx={{ mb: 4 }}>
+              <Grid item xs={12} md={8}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Customer Name"
+                  placeholder="Enter full name"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Person fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={fieldStyle}
+                />
+              </Grid>
 
-        <TableContainer
-          sx={{
-            border: "1px solid",
-            borderColor: "divider",
-            borderRadius: 2,
-            maxHeight: 350,
-          }}
-        >
-          <Table stickyHeader size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell padding="checkbox" sx={tableHeaderStyle}>
-                  <Checkbox size="small" />
-                </TableCell>
-                <TableCell sx={tableHeaderStyle}>Item Name</TableCell>
-                <TableCell sx={tableHeaderStyle}>Category</TableCell>
-                <TableCell sx={tableHeaderStyle}>Unit</TableCell>
-                <TableCell align="right" sx={tableHeaderStyle}>
-                  Quantity to Order
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {inventoryItems
-                .filter((item) =>
-                  item.name.toLowerCase().includes(searchQuery.toLowerCase()),
-                )
-                .map((item) => (
-                  <TableRow
-                    key={item.id}
-                    hover
-                    selected={selectedItems.indexOf(item.id) !== -1}
-                  >
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        size="small"
-                        checked={selectedItems.indexOf(item.id) !== -1}
-                        onChange={() => handleToggleItem(item.id)}
-                      />
+              <Grid item xs={12} md={4}>
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Status"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  sx={fieldStyle}
+                >
+                  {statusOptions.map((opt) => (
+                    <MenuItem key={opt} value={opt}>
+                      {opt}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+
+              <Grid item xs={6} md={6}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="PO Number"
+                  placeholder="PO-XXXX"
+                  sx={fieldStyle}
+                />
+              </Grid>
+              <Grid item xs={6} md={6}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Total Price"
+                  type="number"
+                  sx={fieldStyle}
+                />
+              </Grid>
+            </Grid>
+
+            <Box
+              sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}
+            >
+              <Typography variant="subtitle2" color="primary" fontWeight="bold">
+                Select Items
+              </Typography>
+              <TextField
+                size="small"
+                placeholder="Search..."
+                onChange={(e) => setSearchQuery(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{ width: 180, ...fieldStyle }}
+              />
+            </Box>
+
+            <TableContainer
+              sx={{
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: 2,
+                maxHeight: 300,
+              }}
+            >
+              <Table stickyHeader size="small">
+                <TableHead>
+                  <TableRow>
+                    {/* Checkbox column removed from here */}
+                    <TableCell
+                      sx={{ fontWeight: "bold", bgcolor: "action.hover" }}
+                    >
+                      Item Name
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={500}>
-                        {item.name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Avail: {item.available}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={item.category}
-                        size="small"
-                        variant="outlined"
-                        sx={{ fontSize: "0.7rem" }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {item.unit}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right">
-                      <TextField
-                        size="small"
-                        type="number"
-                        disabled={selectedItems.indexOf(item.id) === -1}
-                        defaultValue={1}
-                        sx={{
-                          width: 80,
-                          "& .MuiInputBase-input": {
-                            py: 0.5,
-                            textAlign: "center",
-                          },
-                        }}
-                      />
+                    <TableCell
+                      align="right"
+                      sx={{ fontWeight: "bold", bgcolor: "action.hover" }}
+                    >
+                      Action
                     </TableCell>
                   </TableRow>
-                ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {inventoryItems
+                    .filter((i) =>
+                      i.name.toLowerCase().includes(searchQuery.toLowerCase()),
+                    )
+                    .map((item) => {
+                      const isChecked = selectedItems.some(
+                        (i) => i.id === item.id,
+                      );
+                      return (
+                        <TableRow key={item.id} hover selected={isChecked}>
+                          {/* Checkbox cell removed from here */}
+                          <TableCell>
+                            <Typography variant="body2" fontWeight={500}>
+                              {item.name}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Avail: {item.available} {item.unit}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Button
+                              size="small"
+                              onClick={() => handleToggleItem(item)}
+                              color={isChecked ? "error" : "primary"}
+                              variant={isChecked ? "outlined" : "text"}
+                            >
+                              {isChecked ? "Remove" : "Add"}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Grid>
+
+          {/* RIGHT SIDE: SUMMARY */}
+          <Grid item xs={12} md={5}>
+            <Box
+              sx={{
+                p: 2,
+                bgcolor:
+                  mode === "light" ? "grey.50" : "rgba(255, 255, 255, 0.02)",
+                borderRadius: 3,
+                height: "100%",
+                border: "1px dashed",
+                borderColor: "divider",
+              }}
+            >
+              <Box
+                sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
+              >
+                <ShoppingCart color="primary" fontSize="small" />
+                <Typography variant="subtitle1" fontWeight="bold">
+                  Order Summary
+                </Typography>
+                <Chip
+                  label={selectedItems.length}
+                  size="small"
+                  color="primary"
+                  sx={{ ml: "auto" }}
+                />
+              </Box>
+
+              {customerName && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mb: 1 }}
+                >
+                  Ordering for: <b>{customerName}</b>
+                </Typography>
+              )}
+
+              <Divider sx={{ mb: 2 }} />
+
+              {selectedItems.length === 0 ? (
+                <Box sx={{ py: 10, textAlign: "center", opacity: 0.5 }}>
+                  <Typography variant="body2">
+                    No items selected yet.
+                  </Typography>
+                </Box>
+              ) : (
+                <Box sx={{ maxHeight: 400, overflow: "auto" }}>
+                  {selectedItems.map((item) => (
+                    <Box
+                      key={item.id}
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        mb: 1.5,
+                        p: 1.5,
+                        bgcolor: "background.paper",
+                        borderRadius: 2,
+                        boxShadow: "0px 2px 4px rgba(0,0,0,0.05)",
+                      }}
+                    >
+                      <Box>
+                        <Typography variant="body2" fontWeight="bold">
+                          {item.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.category}
+                        </Typography>
+                      </Box>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <TextField
+                          size="small"
+                          type="number"
+                          label="Qty"
+                          value={item.qty}
+                          onChange={(e) =>
+                            handleQtyChange(item.id, e.target.value)
+                          }
+                          sx={{
+                            width: 70,
+                            "& .MuiInputBase-input": {
+                              py: 0.5,
+                              textAlign: "center",
+                            },
+                          }}
+                        />
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          </Grid>
+        </Grid>
       </DialogContent>
 
       <DialogActions sx={{ p: 3 }}>
-        <Button
-          onClick={handleClose}
-          sx={{ color: "text.secondary", textTransform: "none" }}
-        >
+        <Button onClick={handleClose} sx={{ color: "text.secondary" }}>
           Cancel
         </Button>
         <Button
           variant="contained"
-          sx={{
-            bgcolor: "primary.main",
-            px: 4,
-            textTransform: "none",
-            fontWeight: "bold",
-            "&:hover": { bgcolor: "#d87d3a" },
-          }}
+          disabled={selectedItems.length === 0 || !customerName}
+          sx={{ px: 4, fontWeight: "bold" }}
         >
           Create Order
         </Button>

@@ -10,14 +10,19 @@ import {
   IconButton,
   Grid,
   Typography,
+  MenuItem,
 } from "@mui/material";
 import { Close } from "@mui/icons-material";
+
+// Options for dropdowns
+const categories = ["Plastic", "Injection", "Paper", "Trading"];
+const units = ["Pieces", "B undle", "Boxes"]; // Added Unit options
 
 export default function AddInventoryModal({ open, handleClose, mode }) {
   const [formData, setFormData] = useState({
     item_name: "",
-    category: "",
-    units_of_measure: "",
+    category: "Plastic",
+    units_of_measure: "Pieces", // Default value set
     quantity: "",
     mininum_stock: "",
   });
@@ -31,7 +36,6 @@ export default function AddInventoryModal({ open, handleClose, mode }) {
     handleClose();
   };
 
-  // Helper for Dark Mode TextField Styles
   const fieldStyle = {
     "& .MuiOutlinedInput-root": {
       bgcolor: mode === "light" ? "#fff" : "rgba(255, 255, 255, 0.03)",
@@ -89,7 +93,6 @@ export default function AddInventoryModal({ open, handleClose, mode }) {
         }}
       >
         <Grid container spacing={2.5}>
-          {/* Row 1: Item Name */}
           <Grid item xs={12}>
             <TextField
               fullWidth
@@ -101,30 +104,44 @@ export default function AddInventoryModal({ open, handleClose, mode }) {
             />
           </Grid>
 
-          {/* Row 2: Category and Unit of Measure */}
+          {/* Row 2: Category Dropdown */}
           <Grid item xs={6}>
             <TextField
               fullWidth
+              select
               label="Category"
               name="category"
-              placeholder="e.g. Electronics"
+              value={formData.category}
               onChange={handleChange}
               sx={fieldStyle}
-            />
+            >
+              {categories.map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
           </Grid>
 
+          {/* Row 2: Unit of Measure Dropdown */}
           <Grid item xs={6}>
             <TextField
               fullWidth
+              select // Changed to select
               label="Unit of Measure"
               name="units_of_measure"
-              placeholder="e.g. Pieces, Boxes"
+              value={formData.units_of_measure}
               onChange={handleChange}
               sx={fieldStyle}
-            />
+            >
+              {units.map((unit) => (
+                <MenuItem key={unit} value={unit}>
+                  {unit}
+                </MenuItem>
+              ))}
+            </TextField>
           </Grid>
 
-          {/* Row 3: Quantitative Data */}
           <Grid item xs={6}>
             <TextField
               fullWidth

@@ -12,10 +12,10 @@ import {
   Typography,
   Box,
 } from "@mui/material";
-import { Close, WarningAmber } from "@mui/icons-material"; // Added icon for visual cue
+import { Close } from "@mui/icons-material";
 
-const categories = ["Laptop", "Accessories", "Furniture", "Office Supplies"];
-const units = ["Pieces", "Boxes", "Kilograms", "Sets"];
+const categories = ["Plastic", "Injection", "Paper", "Trading"];
+const units = ["Pieces", "Bundle", "Box"];
 
 export default function EditInventoryModal({
   open,
@@ -24,19 +24,19 @@ export default function EditInventoryModal({
   itemData,
 }) {
   const [formData, setFormData] = useState({
+    item_name: "", // Added item_name
     category: "",
     uom: "",
-    quantity: "",
-    minStock: "", // New state field
+    minStock: "",
   });
 
   useEffect(() => {
     if (itemData) {
       setFormData({
+        item_name: itemData.name || "", // Syncing with 'name' from table row
         category: itemData.category || "",
         uom: itemData.uom || "",
-        quantity: itemData.quantity || 0,
-        minStock: itemData.minStock || 5, // Defaulting to 5 if not provided
+        minStock: itemData.minStock || 5,
       });
     }
   }, [itemData]);
@@ -56,9 +56,6 @@ export default function EditInventoryModal({
       borderRadius: 2,
     },
   };
-
-  // Logic to show a warning if current quantity is below min stock
-  const isLowStock = Number(formData.quantity) <= Number(formData.minStock);
 
   return (
     <Dialog
@@ -83,7 +80,7 @@ export default function EditInventoryModal({
             Edit Product
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {itemData?.name} (ID: {itemData?.id})
+            Product ID: {itemData?.id}
           </Typography>
         </Box>
         <IconButton onClick={handleClose} size="small">
@@ -93,6 +90,18 @@ export default function EditInventoryModal({
 
       <DialogContent dividers sx={{ py: 3 }}>
         <Grid container spacing={3}>
+          {/* Item Name Field - Replaced Quantity */}
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              label="Item Name"
+              name="item_name"
+              value={formData.item_name}
+              onChange={handleChange}
+              sx={fieldStyle}
+            />
+          </Grid>
+
           <Grid item xs={12}>
             <TextField
               select
@@ -129,21 +138,7 @@ export default function EditInventoryModal({
             </TextField>
           </Grid>
 
-          {/* Current Quantity */}
-          <Grid item xs={6}>
-            <TextField
-              fullWidth
-              type="number"
-              label="Current Quantity"
-              name="quantity"
-              value={formData.quantity}
-              onChange={handleChange}
-              sx={fieldStyle}
-            />
-          </Grid>
-
-          {/* Minimum Stock Level */}
-          <Grid item xs={6}>
+          <Grid item xs={12}>
             <TextField
               fullWidth
               type="number"
@@ -151,34 +146,10 @@ export default function EditInventoryModal({
               name="minStock"
               value={formData.minStock}
               onChange={handleChange}
-              helperText="Alert threshold"
+              helperText="Threshold for low stock alerts"
               sx={fieldStyle}
             />
           </Grid>
-
-          {/* Dynamic Warning Message */}
-          {isLowStock && (
-            <Grid item xs={12}>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                  p: 1.5,
-                  borderRadius: 2,
-                  bgcolor: "warning.lighter", // Ensure your theme has 'lighter' or use 'rgba(237, 108, 2, 0.1)'
-                  color: "warning.main",
-                  border: "1px solid",
-                  borderColor: "warning.light",
-                }}
-              >
-                <WarningAmber fontSize="small" />
-                <Typography variant="caption" fontWeight="bold">
-                  Low stock alert: Quantity is at or below minimum level.
-                </Typography>
-              </Box>
-            </Grid>
-          )}
         </Grid>
       </DialogContent>
 

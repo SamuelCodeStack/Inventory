@@ -24,39 +24,37 @@ import {
 } from "@mui/material";
 import { Close, Search, Person, ShoppingCart } from "@mui/icons-material";
 
-// Sample Inventory Data
 const inventoryItems = [
   {
     id: 1,
     name: "Macbook Pro M1",
     available: 120,
-    unit: "pcs",
-    category: "Electronics",
+    unit: "Pieces",
+    category: "Plastic",
   },
   {
     id: 2,
     name: "Mechanical Keyboard",
     available: 230,
-    unit: "pcs",
-    category: "Accessories",
+    unit: "Pieces",
+    category: "Plastic",
   },
   {
     id: 3,
     name: "Wired Mouse",
     available: 1230,
-    unit: "pcs",
-    category: "Accessories",
+    unit: "Bundle",
+    category: "Trading",
   },
   {
     id: 4,
     name: "Titan Watch",
     available: 600,
-    unit: "units",
-    category: "Wearables",
+    unit: "Box",
+    category: "Paper",
   },
 ];
 
-// Renamed from remarkOptions
 const statusOptions = ["Job Order", "Pending", "Done"];
 
 export default function UpdatePOModal({ open, handleClose, mode, poData }) {
@@ -66,33 +64,38 @@ export default function UpdatePOModal({ open, handleClose, mode, poData }) {
     customerName: "",
     email: "",
     contact: "",
-    status: "Job Order", // Renamed from remark
+    status: "Job Order",
     totalPrice: "",
   });
 
-  // Sync state when poData is passed
   useEffect(() => {
     if (poData) {
       setFormData({
         customerName: poData.customerName || "",
         email: poData.email || "",
         contact: poData.contact || "",
-        status: poData.status || poData.remark || "Job Order", // Handles both naming conventions
+        status: poData.status || poData.remark || "Job Order",
         totalPrice: poData.totalPrice || "",
       });
       setSelectedItems(poData.items || []);
     }
   }, [poData]);
 
-  const handleToggleItem = (itemId) => {
-    const currentIndex = selectedItems.indexOf(itemId);
-    const newChecked = [...selectedItems];
+  const handleToggleItem = (item) => {
+    const currentIndex = selectedItems.findIndex((i) => i.id === item.id);
     if (currentIndex === -1) {
-      newChecked.push(itemId);
+      setSelectedItems([...selectedItems, { ...item, qty: 1 }]);
     } else {
-      newChecked.splice(currentIndex, 1);
+      setSelectedItems(selectedItems.filter((i) => i.id !== item.id));
     }
-    setSelectedItems(newChecked);
+  };
+
+  const handleQtyChange = (itemId, newQty) => {
+    setSelectedItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId ? { ...item, qty: parseInt(newQty) || 1 } : item,
+      ),
+    );
   };
 
   const handleChange = (e) => {
@@ -106,14 +109,8 @@ export default function UpdatePOModal({ open, handleClose, mode, poData }) {
     },
   };
 
-  const tableHeaderStyle = {
-    fontWeight: "bold",
-    bgcolor: mode === "light" ? "action.hover" : "rgba(255,255,255,0.05)",
-  };
-
   const handleSubmit = () => {
-    const finalData = { ...formData, selectedItems };
-    console.log("Updating PO ID:", poData?.id, finalData);
+    const finalData = { ...formData, items: selectedItems };
     handleClose();
   };
 
@@ -122,17 +119,14 @@ export default function UpdatePOModal({ open, handleClose, mode, poData }) {
       open={open}
       onClose={handleClose}
       fullWidth
-      maxWidth="md"
-      PaperProps={{
-        sx: { borderRadius: 3, backgroundImage: "none" },
-      }}
+      maxWidth="md" // Reduced from 'lg' to 'md' to tighten the layout
+      PaperProps={{ sx: { borderRadius: 3, backgroundImage: "none" } }}
     >
       <DialogTitle
         sx={{
           fontWeight: "bold",
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
         }}
       >
         <Box>
@@ -140,7 +134,7 @@ export default function UpdatePOModal({ open, handleClose, mode, poData }) {
             Update Purchase Order
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            PO Number: {poData?.poNumber || poData?.id}
+            PO Number: {poData?.poNumber || poData?.id || "N/A"}
           </Typography>
         </Box>
         <IconButton onClick={handleClose} size="small">
@@ -149,212 +143,252 @@ export default function UpdatePOModal({ open, handleClose, mode, poData }) {
       </DialogTitle>
 
       <DialogContent dividers sx={{ py: 3 }}>
-        {/* Section 1: Customer Information */}
-        <Typography
-          variant="subtitle2"
-          color="primary"
-          fontWeight="bold"
-          sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}
-        >
-          <Person fontSize="small" /> Customer Details
-        </Typography>
-
-        <Grid container spacing={2} sx={{ mb: 4 }}>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Customer Name"
-              name="customerName"
-              value={formData.customerName}
-              onChange={handleChange}
-              sx={fieldStyle}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Email Address"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              sx={fieldStyle}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Contact Number"
-              name="contact"
-              value={formData.contact}
-              onChange={handleChange}
-              sx={fieldStyle}
-            />
-          </Grid>
-        </Grid>
-
-        <Divider sx={{ mb: 3 }} />
-
-        {/* Section 2: Order Information & Status */}
-        <Typography
-          variant="subtitle2"
-          color="primary"
-          fontWeight="bold"
-          sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}
-        >
-          <ShoppingCart fontSize="small" /> Order Specifications
-        </Typography>
-
-        <Grid container spacing={2} sx={{ mb: 4 }}>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              select
-              size="small"
-              label="Status" // Renamed Label
-              name="status" // Renamed Name
-              value={formData.status}
-              onChange={handleChange}
-              sx={fieldStyle}
+        <Grid container spacing={3}>
+          {/* LEFT SIDE: INPUTS AND INVENTORY */}
+          <Grid item xs={12} md={7}>
+            <Typography
+              variant="subtitle2"
+              color="primary"
+              fontWeight="bold"
+              sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}
             >
-              {statusOptions.map((option) => (
-                <MenuItem key={option} value={option}>
-                  {option}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
+              <Person fontSize="small" /> Customer Details
+            </Typography>
 
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              size="small"
-              label="Total Order Amount"
-              name="totalPrice"
-              type="number"
-              value={formData.totalPrice}
-              onChange={handleChange}
-              sx={fieldStyle}
-            />
-          </Grid>
-        </Grid>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={7}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Customer Name"
+                  name="customerName"
+                  value={formData.customerName}
+                  onChange={handleChange}
+                  sx={fieldStyle}
+                />
+              </Grid>
+              <Grid item xs={12} md={5}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Status"
+                  select
+                  name="status"
+                  value={formData.status}
+                  onChange={handleChange}
+                  sx={fieldStyle}
+                >
+                  {statusOptions.map((opt) => (
+                    <MenuItem key={opt} value={opt}>
+                      {opt}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+            </Grid>
 
-        <Divider sx={{ mb: 3 }} />
+            <Divider sx={{ mb: 3 }} />
 
-        {/* Section 3: Item Selection Table */}
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            mb: 2,
-          }}
-        >
-          <Typography variant="subtitle2" color="primary" fontWeight="bold">
-            Select Items
-          </Typography>
-          <TextField
-            size="small"
-            placeholder="Search items..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ width: 250, ...fieldStyle }}
-          />
-        </Box>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                mb: 2,
+              }}
+            >
+              <Typography variant="subtitle2" color="primary" fontWeight="bold">
+                Inventory
+              </Typography>
+              <TextField
+                size="small"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{ width: 160, ...fieldStyle }}
+              />
+            </Box>
 
-        <TableContainer
-          sx={{
-            border: "1px solid",
-            borderColor: "divider",
-            borderRadius: 2,
-            maxHeight: 300,
-          }}
-        >
-          <Table stickyHeader size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell padding="checkbox" sx={tableHeaderStyle}>
-                  <Checkbox size="small" />
-                </TableCell>
-                <TableCell sx={tableHeaderStyle}>Item Name</TableCell>
-                <TableCell sx={tableHeaderStyle}>Category</TableCell>
-                <TableCell sx={tableHeaderStyle}>Unit</TableCell>
-                <TableCell align="right" sx={tableHeaderStyle}>
-                  Quantity
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {inventoryItems
-                .filter((item) =>
-                  item.name.toLowerCase().includes(searchQuery.toLowerCase()),
-                )
-                .map((item) => (
-                  <TableRow
-                    key={item.id}
-                    hover
-                    selected={selectedItems.indexOf(item.id) !== -1}
-                  >
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        size="small"
-                        checked={selectedItems.indexOf(item.id) !== -1}
-                        onChange={() => handleToggleItem(item.id)}
-                      />
+            <TableContainer
+              sx={{
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: 2,
+                maxHeight: 300,
+              }}
+            >
+              <Table stickyHeader size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell
+                      sx={{ fontWeight: "bold", bgcolor: "action.hover" }}
+                    >
+                      Item Name
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={500}>
+                    <TableCell
+                      align="right"
+                      sx={{ fontWeight: "bold", bgcolor: "action.hover" }}
+                    >
+                      Action
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {inventoryItems
+                    .filter((item) =>
+                      item.name
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase()),
+                    )
+                    .map((item) => {
+                      const isChecked = selectedItems.some(
+                        (i) => i.id === item.id,
+                      );
+                      return (
+                        <TableRow key={item.id} hover selected={isChecked}>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight={500}>
+                              {item.name}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Avail: {item.available}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Button
+                              size="small"
+                              onClick={() => handleToggleItem(item)}
+                              color={isChecked ? "error" : "primary"}
+                            >
+                              {isChecked ? "Remove" : "Add"}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Grid>
+
+          {/* RIGHT SIDE: SUMMARY (Tightened) */}
+          <Grid item xs={12} md={5}>
+            <Box
+              sx={{
+                p: 2,
+                bgcolor:
+                  mode === "light" ? "grey.50" : "rgba(255,255,255,0.02)",
+                borderRadius: 3,
+                border: "1px dashed",
+                borderColor: "divider",
+                minHeight: 400, // Fixed height keeps the look consistent
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <Box
+                sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}
+              >
+                <ShoppingCart color="primary" fontSize="small" />
+                <Typography variant="subtitle2" fontWeight="bold">
+                  Order Summary
+                </Typography>
+                <Chip
+                  label={selectedItems.length}
+                  size="small"
+                  color="primary"
+                  sx={{ ml: "auto" }}
+                />
+              </Box>
+
+              <Box sx={{ flexGrow: 1, overflow: "auto", maxHeight: 320 }}>
+                {selectedItems.length === 0 ? (
+                  <Typography
+                    variant="body2"
+                    sx={{ textAlign: "center", py: 5, opacity: 0.5 }}
+                  >
+                    No items selected.
+                  </Typography>
+                ) : (
+                  selectedItems.map((item) => (
+                    <Box
+                      key={item.id}
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        mb: 1,
+                        p: 1,
+                        bgcolor: "background.paper",
+                        borderRadius: 1,
+                        border: "1px solid",
+                        borderColor: "divider",
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        fontWeight="bold"
+                        noWrap
+                        sx={{ maxWidth: 100 }}
+                      >
                         {item.name}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Available: {item.available}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={item.category}
-                        size="small"
-                        variant="outlined"
-                        sx={{ fontSize: "0.7rem" }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {item.unit}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right">
                       <TextField
                         size="small"
                         type="number"
-                        disabled={selectedItems.indexOf(item.id) === -1}
-                        defaultValue={1}
+                        value={item.qty}
+                        onChange={(e) =>
+                          handleQtyChange(item.id, e.target.value)
+                        }
                         sx={{
-                          width: 70,
+                          width: 60,
                           "& .MuiInputBase-input": {
                             py: 0.5,
                             textAlign: "center",
+                            fontSize: "0.75rem",
                           },
                         }}
                       />
-                    </TableCell>
-                  </TableRow>
-                ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                    </Box>
+                  ))
+                )}
+              </Box>
+
+              <Box
+                sx={{
+                  mt: 2,
+                  pt: 2,
+                  borderTop: "1px solid",
+                  borderColor: "divider",
+                }}
+              >
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Total Amount"
+                  name="totalPrice"
+                  type="number"
+                  value={formData.totalPrice}
+                  onChange={handleChange}
+                  sx={fieldStyle}
+                />
+              </Box>
+            </Box>
+          </Grid>
+        </Grid>
       </DialogContent>
 
-      <DialogActions sx={{ p: 3 }}>
+      <DialogActions sx={{ p: 2.5 }}>
         <Button
           onClick={handleClose}
           sx={{ color: "text.secondary", textTransform: "none" }}
@@ -364,13 +398,8 @@ export default function UpdatePOModal({ open, handleClose, mode, poData }) {
         <Button
           variant="contained"
           onClick={handleSubmit}
-          sx={{
-            bgcolor: "primary.main",
-            px: 4,
-            textTransform: "none",
-            fontWeight: "bold",
-            "&:hover": { bgcolor: "#d87d3a" },
-          }}
+          disabled={selectedItems.length === 0}
+          sx={{ px: 4, textTransform: "none", fontWeight: "bold" }}
         >
           Save Changes
         </Button>
