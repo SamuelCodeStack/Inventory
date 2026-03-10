@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -8,7 +8,7 @@ import {
   TextField,
   Box,
   IconButton,
-  Grid,
+  Grid, // Using Grid2 for the latest MUI standards
   Table,
   TableBody,
   TableCell,
@@ -16,68 +16,140 @@ import {
   TableHead,
   TableRow,
   Typography,
-  InputAdornment,
   MenuItem,
-  Chip,
   Divider,
+  Paper,
+  InputAdornment,
 } from "@mui/material";
-import { Close, Search, ShoppingCart, Person } from "@mui/icons-material";
-
-// --- Constants ---
-const inventoryItems = [
-  {
-    id: 1,
-    name: "Macbook Pro M1",
-    available: 120,
-    unit: "pcs",
-    category: "Electronics",
-  },
-  {
-    id: 2,
-    name: "Mechanical Keyboard",
-    available: 230,
-    unit: "pcs",
-    category: "Accessories",
-  },
-  {
-    id: 3,
-    name: "Wired Mouse",
-    available: 1230,
-    unit: "pcs",
-    category: "Accessories",
-  },
-  {
-    id: 4,
-    name: "Titan Watch",
-    available: 600,
-    unit: "units",
-    category: "Wearables",
-  },
-];
+import {
+  Close,
+  Person,
+  ShoppingCart,
+  DeleteOutline,
+  Search,
+} from "@mui/icons-material";
 
 const statusOptions = ["Job Order", "Pending", "Done"];
 
-export default function CreatePOModal({ open, handleClose, mode }) {
+export default function CreatePOModal({
+  open,
+  handleClose,
+  mode,
+  onSaveSuccess,
+}) {
+  // --- DATABASE DATA STATE ---
+  const [dbInventory, setDbInventory] = useState([]);
+
+  // --- FORM STATE ---
   const [selectedItems, setSelectedItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [status, setStatus] = useState("Job Order");
-  const [customerName, setCustomerName] = useState("");
+  const [formData, setFormData] = useState({
+    customerName: "",
+    company: "",
+    email: "",
+    contact: "",
+    address: "",
+    poNumber: "",
+    status: "Job Order",
+    totalPrice: 0,
+  });
+
+  // 1. Fetch Inventory when Modal opens
+  useEffect(() => {
+    if (open) {
+      fetch("http://localhost:3000/api/inventory")
+        .then((res) => res.json())
+        .then((data) => setDbInventory(data))
+        .catch((err) => console.error("Error fetching inventory:", err));
+    }
+  }, [open]);
+
+  // 2. Auto-calculate Total Price whenever selectedItems change
+  useEffect(() => {
+    const calculated = selectedItems.reduce(
+      (sum, item) => sum + item.qty * (item.price || 0),
+      0,
+    );
+    setFormData((prev) => ({ ...prev, totalPrice: calculated }));
+  }, [selectedItems]);
 
   const handleToggleItem = (item) => {
     const currentIndex = selectedItems.findIndex((i) => i.id === item.id);
     if (currentIndex === -1) {
-      setSelectedItems([...selectedItems, { ...item, qty: 1 }]);
+      // Adding a new item with default qty 1 and using its base price if available
+      setSelectedItems([
+        ...selectedItems,
+        { ...item, qty: 1, price: item.price || 0 },
+      ]);
     } else {
       setSelectedItems(selectedItems.filter((i) => i.id !== item.id));
     }
   };
 
-  const handleQtyChange = (itemId, newQty) => {
+  const handleItemChange = (itemId, field, value) => {
     setSelectedItems((prev) =>
       prev.map((item) =>
-        item.id === itemId ? { ...item, qty: parseInt(newQty) || 1 } : item,
+        item.id === itemId
+          ? { ...item, [field]: parseFloat(value) || 0 }
+          : item,
       ),
     );
+  };
+
+  const handleInputChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async () => {
+    const payload = {
+      customer_name: formData.customerName,
+      company: formData.company,
+      email: formData.email,
+      contact: formData.contact,
+      address: formData.address,
+      po_number: formData.poNumber,
+      status: formData.status,
+      total_price: formData.totalPrice, // Changed from price to total_price
+      items: selectedItems,
+    };
+
+    try {
+      const response = await fetch(
+        "http://localhost:3000/api/purchase-orders",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+
+      if (response.ok) {
+        onSaveSuccess();
+        handleReset();
+      } else {
+        const errorData = await response.json();
+        alert(`Error: ${errorData.error}`);
+      }
+    } catch (error) {
+      console.error("Save Error:", error);
+      alert("Network error. Could not save order.");
+    }
+  };
+
+  const handleReset = () => {
+    setSelectedItems([]);
+    setFormData({
+      customerName: "",
+      company: "",
+      email: "",
+      contact: "",
+      address: "",
+      poNumber: "",
+      status: "Job Order",
+      totalPrice: 0,
+    });
+    setSearchQuery("");
+    handleClose();
   };
 
   const fieldStyle = {
@@ -90,7 +162,7 @@ export default function CreatePOModal({ open, handleClose, mode }) {
   return (
     <Dialog
       open={open}
-      onClose={handleClose}
+      onClose={handleReset}
       fullWidth
       maxWidth="lg"
       PaperProps={{ sx: { borderRadius: 3, backgroundImage: "none" } }}
@@ -100,55 +172,105 @@ export default function CreatePOModal({ open, handleClose, mode }) {
           fontWeight: "bold",
           display: "flex",
           justifyContent: "space-between",
+          alignItems: "center",
         }}
       >
         Create New Purchase Order
-        <IconButton onClick={handleClose} size="small">
+        <IconButton onClick={handleReset} size="small">
           <Close />
         </IconButton>
       </DialogTitle>
 
       <DialogContent dividers sx={{ py: 3 }}>
-        <Grid container spacing={4}>
-          {/* LEFT SIDE: SELECTION & INFO */}
-          <Grid item xs={12} md={7}>
+        <Grid container spacing={3}>
+          {/* LEFT SIDE: INPUT FORM & INVENTORY */}
+          <Grid size={{ xs: 12, md: 7 }}>
             <Typography
               variant="subtitle2"
               color="primary"
               fontWeight="bold"
-              gutterBottom
+              sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}
             >
-              Order Information
+              <Person fontSize="small" /> Customer & Business Info
             </Typography>
 
-            <Grid container spacing={2} sx={{ mb: 4 }}>
-              <Grid item xs={12} md={8}>
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField
                   fullWidth
                   size="small"
                   label="Customer Name"
-                  placeholder="Enter full name"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Person fontSize="small" />
-                      </InputAdornment>
-                    ),
-                  }}
+                  name="customerName"
+                  value={formData.customerName}
+                  onChange={handleInputChange}
                   sx={fieldStyle}
                 />
               </Grid>
-
-              <Grid item xs={12} md={4}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Company"
+                  name="company"
+                  value={formData.company}
+                  onChange={handleInputChange}
+                  sx={fieldStyle}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  sx={fieldStyle}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Contact Number"
+                  name="contact"
+                  value={formData.contact}
+                  onChange={handleInputChange}
+                  sx={fieldStyle}
+                />
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Address"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleInputChange}
+                  sx={fieldStyle}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 8 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="PO Number"
+                  name="poNumber"
+                  placeholder="PO-2026-XXX"
+                  value={formData.poNumber}
+                  onChange={handleInputChange}
+                  sx={fieldStyle}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
                 <TextField
                   select
                   fullWidth
                   size="small"
                   label="Status"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
+                  name="status"
+                  value={formData.status}
+                  onChange={handleInputChange}
                   sx={fieldStyle}
                 >
                   {statusOptions.map((opt) => (
@@ -158,45 +280,31 @@ export default function CreatePOModal({ open, handleClose, mode }) {
                   ))}
                 </TextField>
               </Grid>
-
-              <Grid item xs={6} md={6}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="PO Number"
-                  placeholder="PO-XXXX"
-                  sx={fieldStyle}
-                />
-              </Grid>
-              <Grid item xs={6} md={6}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Total Price"
-                  type="number"
-                  sx={fieldStyle}
-                />
-              </Grid>
             </Grid>
+
+            <Divider sx={{ mb: 2 }} />
 
             <Box
               sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}
             >
               <Typography variant="subtitle2" color="primary" fontWeight="bold">
-                Select Items
+                Select Items from Inventory
               </Typography>
               <TextField
                 size="small"
                 placeholder="Search..."
+                value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search fontSize="small" />
-                    </InputAdornment>
-                  ),
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Search fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  },
                 }}
-                sx={{ width: 180, ...fieldStyle }}
+                sx={{ width: 220, ...fieldStyle }}
               />
             </Box>
 
@@ -205,13 +313,12 @@ export default function CreatePOModal({ open, handleClose, mode }) {
                 border: "1px solid",
                 borderColor: "divider",
                 borderRadius: 2,
-                maxHeight: 300,
+                maxHeight: 250,
               }}
             >
               <Table stickyHeader size="small">
                 <TableHead>
                   <TableRow>
-                    {/* Checkbox column removed from here */}
                     <TableCell
                       sx={{ fontWeight: "bold", bgcolor: "action.hover" }}
                     >
@@ -226,34 +333,24 @@ export default function CreatePOModal({ open, handleClose, mode }) {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {inventoryItems
-                    .filter((i) =>
-                      i.name.toLowerCase().includes(searchQuery.toLowerCase()),
+                  {dbInventory
+                    .filter((item) =>
+                      item.name
+                        .toLowerCase()
+                        .includes(searchQuery.toLowerCase()),
                     )
                     .map((item) => {
                       const isChecked = selectedItems.some(
                         (i) => i.id === item.id,
                       );
                       return (
-                        <TableRow key={item.id} hover selected={isChecked}>
-                          {/* Checkbox cell removed from here */}
-                          <TableCell>
-                            <Typography variant="body2" fontWeight={500}>
-                              {item.name}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              Avail: {item.available} {item.unit}
-                            </Typography>
-                          </TableCell>
+                        <TableRow key={item.id} hover>
+                          <TableCell>{item.name}</TableCell>
                           <TableCell align="right">
                             <Button
                               size="small"
                               onClick={() => handleToggleItem(item)}
                               color={isChecked ? "error" : "primary"}
-                              variant={isChecked ? "outlined" : "text"}
                             >
                               {isChecked ? "Remove" : "Add"}
                             </Button>
@@ -266,113 +363,138 @@ export default function CreatePOModal({ open, handleClose, mode }) {
             </TableContainer>
           </Grid>
 
-          {/* RIGHT SIDE: SUMMARY */}
-          <Grid item xs={12} md={5}>
+          {/* RIGHT SIDE: SUMMARY & QTY EDITING */}
+          <Grid size={{ xs: 12, md: 5 }}>
             <Box
               sx={{
                 p: 2,
                 bgcolor:
-                  mode === "light" ? "grey.50" : "rgba(255, 255, 255, 0.02)",
+                  mode === "light" ? "grey.50" : "rgba(255,255,255,0.02)",
                 borderRadius: 3,
                 height: "100%",
-                border: "1px dashed",
+                border: "1px solid",
                 borderColor: "divider",
+                display: "flex",
+                flexDirection: "column",
               }}
             >
-              <Box
-                sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
+              <Typography
+                variant="subtitle2"
+                fontWeight="bold"
+                sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}
               >
-                <ShoppingCart color="primary" fontSize="small" />
-                <Typography variant="subtitle1" fontWeight="bold">
-                  Order Summary
-                </Typography>
-                <Chip
-                  label={selectedItems.length}
-                  size="small"
-                  color="primary"
-                  sx={{ ml: "auto" }}
-                />
-              </Box>
+                <ShoppingCart fontSize="small" color="primary" /> Order Summary
+              </Typography>
 
-              {customerName && (
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: "block", mb: 1 }}
-                >
-                  Ordering for: <b>{customerName}</b>
-                </Typography>
-              )}
-
-              <Divider sx={{ mb: 2 }} />
-
-              {selectedItems.length === 0 ? (
-                <Box sx={{ py: 10, textAlign: "center", opacity: 0.5 }}>
-                  <Typography variant="body2">
-                    No items selected yet.
+              <Box
+                sx={{ flexGrow: 1, maxHeight: 400, overflow: "auto", mb: 2 }}
+              >
+                {selectedItems.length === 0 ? (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    textAlign="center"
+                    sx={{ mt: 4 }}
+                  >
+                    No items selected
                   </Typography>
-                </Box>
-              ) : (
-                <Box sx={{ maxHeight: 400, overflow: "auto" }}>
-                  {selectedItems.map((item) => (
-                    <Box
-                      key={item.id}
+                ) : (
+                  selectedItems.map((item) => (
+                    <Paper
+                      key={`summary-${item.id}`}
+                      variant="outlined"
                       sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        mb: 1.5,
                         p: 1.5,
-                        bgcolor: "background.paper",
+                        mb: 1,
                         borderRadius: 2,
-                        boxShadow: "0px 2px 4px rgba(0,0,0,0.05)",
+                        position: "relative",
                       }}
                     >
-                      <Box>
-                        <Typography variant="body2" fontWeight="bold">
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          mb: 1,
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          fontWeight="bold"
+                          sx={{ pr: 4 }}
+                        >
                           {item.name}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {item.category}
-                        </Typography>
-                      </Box>
-                      <Box
-                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
-                      >
-                        <TextField
+                        <IconButton
                           size="small"
-                          type="number"
-                          label="Qty"
-                          value={item.qty}
-                          onChange={(e) =>
-                            handleQtyChange(item.id, e.target.value)
-                          }
-                          sx={{
-                            width: 70,
-                            "& .MuiInputBase-input": {
-                              py: 0.5,
-                              textAlign: "center",
-                            },
-                          }}
-                        />
+                          color="error"
+                          onClick={() => handleToggleItem(item)}
+                          sx={{ position: "absolute", top: 4, right: 4 }}
+                        >
+                          <DeleteOutline fontSize="small" />
+                        </IconButton>
                       </Box>
-                    </Box>
-                  ))}
-                </Box>
-              )}
+                      <Grid container spacing={1}>
+                        <Grid size={{ xs: 6 }}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            label="Qty"
+                            type="number"
+                            value={item.qty}
+                            onChange={(e) =>
+                              handleItemChange(item.id, "qty", e.target.value)
+                            }
+                          />
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            label="Price"
+                            type="number"
+                            value={item.price}
+                            onChange={(e) =>
+                              handleItemChange(item.id, "price", e.target.value)
+                            }
+                          />
+                        </Grid>
+                      </Grid>
+                    </Paper>
+                  ))
+                )}
+              </Box>
+
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: "primary.main",
+                  color: "white",
+                  borderRadius: 2,
+                }}
+              >
+                <Typography variant="caption">Total Amount</Typography>
+                <Typography variant="h5" fontWeight="900">
+                  ₱{formData.totalPrice.toLocaleString()}
+                </Typography>
+              </Box>
             </Box>
           </Grid>
         </Grid>
       </DialogContent>
 
-      <DialogActions sx={{ p: 3 }}>
-        <Button onClick={handleClose} sx={{ color: "text.secondary" }}>
+      <DialogActions sx={{ p: 2.5 }}>
+        <Button onClick={handleReset} color="inherit">
           Cancel
         </Button>
         <Button
           variant="contained"
-          disabled={selectedItems.length === 0 || !customerName}
-          sx={{ px: 4, fontWeight: "bold" }}
+          onClick={handleSubmit}
+          disabled={
+            selectedItems.length === 0 ||
+            !formData.customerName.trim() ||
+            !formData.poNumber.trim()
+          }
+          sx={{ px: 4, fontWeight: "bold", borderRadius: 2 }}
         >
           Create Order
         </Button>

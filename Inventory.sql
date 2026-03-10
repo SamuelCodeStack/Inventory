@@ -1,32 +1,35 @@
 CREATE TABLE inventory (
     item_id SERIAL PRIMARY KEY,
     item_name VARCHAR(255) NOT NULL,
-    category VARCHAR(100),
-    unit VARCHAR(50),
+    category VARCHAR(255),
+    unit VARCHAR(255),
     quantity INTEGER DEFAULT 0,
     minimum_stock INTEGER DEFAULT 10
 );
 
--- CREATE TABLE purchase_order(
--- 	po_id SERIAL PRIMARY KEY,	
--- 	po_number VARCHAR(255) NOT NULL,
---     customer_name VARCHAR(255) NOT NULL,
--- 	price INT NOT NULL,
---     status VARCHAR(50) NOT NULL,
--- 	created_at TIMESTAMPTZ DEFAULT NOW()
--- );
+CREATE TABLE purchase_order(
+	po_id SERIAL PRIMARY KEY,	
+	po_number VARCHAR(255) UNIQUE NOT NULL,
+    customer_name VARCHAR(255) NOT NULL,
+	email VARCHAR(255) NOT NULL,
+	contact BIGINT NOT NULL,
+	company VARCHAR(255) NOT NULL,
+	address VARCHAR(255) NOT NULL,
+	total_price INT NOT NULL,
+    status VARCHAR(255) NOT NULL,
+	created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- CREATE TABLE item_order(
--- 	po_id INT REFERENCES purchase_order(po_id) ON DELETE SET NULL,
--- 	po_number VARCHAR(255) NOT NULL,
---     customer_name VARCHAR(255) NOT NULL,
--- 	item_id INT REFERENCES inventory(item_id) ON DELETE SET NULL,
--- 	item_name VARCHAR(255) NOT NULL,
---     category VARCHAR(50) NOT NULL,
---     unit VARCHAR(50) NOT NULL,
--- 	quantity INT NOT NULL 
--- );
-
+CREATE TABLE item_order(
+	po_id INT REFERENCES purchase_order(po_id) ON DELETE SET NULL,
+	po_number VARCHAR(255) NOT NULL,
+	item_id INT REFERENCES inventory(item_id) ON DELETE SET NULL,
+	item_name VARCHAR(255) NOT NULL,
+    category VARCHAR(255) NOT NULL,
+    unit VARCHAR(255) NOT NULL,
+	quantity INTEGER NOT NULL,
+	price INT NOT NULL
+);
 
 
 -- CREATE TABLE activity_log (
