@@ -6,34 +6,68 @@ import {
   DialogActions,
   Button,
   TextField,
-  Box,
   IconButton,
-  Grid,
   Typography,
   MenuItem,
+  Grid, // Use the standard Grid
 } from "@mui/material";
 import { Close } from "@mui/icons-material";
 
-// Options for dropdowns
 const categories = ["Plastic", "Injection", "Paper", "Trading"];
-const units = ["Pieces", "B undle", "Boxes"]; // Added Unit options
+const units = ["Pieces", "Bundle", "Boxes"];
 
-export default function AddInventoryModal({ open, handleClose, mode }) {
+export default function AddInventoryModal({
+  open,
+  handleClose,
+  onSaveSuccess,
+  mode,
+}) {
   const [formData, setFormData] = useState({
     item_name: "",
     category: "Plastic",
-    units_of_measure: "Pieces", // Default value set
-    quantity: "",
-    mininum_stock: "",
+    unit: "Pieces",
+    quantity: 0,
+    minimum_stock: 10,
   });
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    // Convert numbers correctly for the DB
+    setFormData({
+      ...formData,
+      [name]:
+        name === "quantity" || name === "minimum_stock"
+          ? parseInt(value) || 0
+          : value,
+    });
   };
 
-  const handleSubmit = () => {
-    console.log("Saving to Database:", formData);
-    handleClose();
+  const handleSubmit = async () => {
+    if (!formData.item_name) return alert("Item name is required");
+
+    try {
+      const response = await fetch("http://localhost:3000/api/inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        onSaveSuccess();
+        setFormData({
+          item_name: "",
+          category: "Plastic",
+          unit: "Pieces",
+          quantity: 0,
+          minimum_stock: 10,
+        });
+      } else {
+        const errorData = await response.json();
+        alert("Server Error: " + errorData.error);
+      }
+    } catch (error) {
+      alert("Network Error: Could not connect to server.");
+    }
   };
 
   const fieldStyle = {
@@ -41,71 +75,39 @@ export default function AddInventoryModal({ open, handleClose, mode }) {
       bgcolor: mode === "light" ? "#fff" : "rgba(255, 255, 255, 0.03)",
       borderRadius: 2,
     },
-    "& .MuiInputLabel-root": {
-      color: "text.secondary",
-    },
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      fullWidth
-      maxWidth="sm"
-      PaperProps={{
-        sx: {
-          borderRadius: 4,
-          backgroundImage: "none",
-          bgcolor: "background.paper",
-          boxShadow:
-            mode === "light"
-              ? "0px 10px 40px rgba(0,0,0,0.1)"
-              : "0px 10px 40px rgba(0,0,0,0.6)",
-        },
-      }}
-    >
+    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
       <DialogTitle
+        component="div"
         sx={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          pb: 1,
         }}
       >
-        <Typography variant="h6" fontWeight="bold" color="text.primary">
+        <Typography variant="h6" fontWeight="bold">
           Add New Item
         </Typography>
-        <IconButton
-          onClick={handleClose}
-          size="small"
-          sx={{ color: "text.secondary" }}
-        >
-          <Close fontSize="small" />
+        <IconButton onClick={handleClose} size="small">
+          <Close />
         </IconButton>
       </DialogTitle>
 
-      <DialogContent
-        dividers
-        sx={{
-          borderColor:
-            mode === "light" ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.08)",
-          py: 3,
-        }}
-      >
-        <Grid container spacing={2.5}>
-          <Grid item xs={12}>
+      <DialogContent dividers>
+        <Grid container spacing={2} sx={{ mt: 0.5 }}>
+          <Grid size={12}>
             <TextField
               fullWidth
               label="Item Name"
               name="item_name"
-              placeholder="Enter product name"
+              value={formData.item_name}
               onChange={handleChange}
               sx={fieldStyle}
             />
           </Grid>
-
-          {/* Row 2: Category Dropdown */}
-          <Grid item xs={6}>
+          <Grid size={6}>
             <TextField
               fullWidth
               select
@@ -115,52 +117,48 @@ export default function AddInventoryModal({ open, handleClose, mode }) {
               onChange={handleChange}
               sx={fieldStyle}
             >
-              {categories.map((option) => (
-                <MenuItem key={option} value={option}>
-                  {option}
+              {categories.map((opt) => (
+                <MenuItem key={opt} value={opt}>
+                  {opt}
                 </MenuItem>
               ))}
             </TextField>
           </Grid>
-
-          {/* Row 2: Unit of Measure Dropdown */}
-          <Grid item xs={6}>
+          <Grid size={6}>
             <TextField
               fullWidth
-              select // Changed to select
-              label="Unit of Measure"
-              name="units_of_measure"
-              value={formData.units_of_measure}
+              select
+              label="Unit"
+              name="unit"
+              value={formData.unit}
               onChange={handleChange}
               sx={fieldStyle}
             >
-              {units.map((unit) => (
-                <MenuItem key={unit} value={unit}>
-                  {unit}
+              {units.map((u) => (
+                <MenuItem key={u} value={u}>
+                  {u}
                 </MenuItem>
               ))}
             </TextField>
           </Grid>
-
-          <Grid item xs={6}>
+          <Grid size={6}>
             <TextField
               fullWidth
               type="number"
               label="Initial Quantity"
               name="quantity"
-              placeholder="0"
+              value={formData.quantity}
               onChange={handleChange}
               sx={fieldStyle}
             />
           </Grid>
-
-          <Grid item xs={6}>
+          <Grid size={6}>
             <TextField
               fullWidth
               type="number"
-              label="Minimum Stock Level"
-              name="mininum_stock"
-              placeholder="Threshold for alerts"
+              label="Min Stock Level"
+              name="minimum_stock"
+              value={formData.minimum_stock}
               onChange={handleChange}
               sx={fieldStyle}
             />
@@ -169,29 +167,13 @@ export default function AddInventoryModal({ open, handleClose, mode }) {
       </DialogContent>
 
       <DialogActions sx={{ p: 3 }}>
-        <Button
-          onClick={handleClose}
-          sx={{
-            color: "text.secondary",
-            textTransform: "none",
-            fontWeight: 600,
-          }}
-        >
+        <Button onClick={handleClose} sx={{ color: "text.secondary" }}>
           Cancel
         </Button>
         <Button
           variant="contained"
           onClick={handleSubmit}
-          sx={{
-            bgcolor: "primary.main",
-            borderRadius: 2,
-            px: 4,
-            py: 1,
-            textTransform: "none",
-            fontWeight: "bold",
-            boxShadow: "0px 4px 12px rgba(241, 145, 73, 0.3)",
-            "&:hover": { bgcolor: "#d87d3a" },
-          }}
+          sx={{ bgcolor: "primary.main", fontWeight: "bold" }}
         >
           Add to Inventory
         </Button>

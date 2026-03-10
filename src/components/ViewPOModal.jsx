@@ -24,7 +24,6 @@ import { Close, ReceiptLong, Person, ListAlt } from "@mui/icons-material";
 export default function ViewPOModal({ open, handleClose, mode, poData }) {
   if (!poData) return null;
 
-  // Helper to determine status chip color
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
       case "done":
@@ -77,7 +76,7 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
         dividers
         sx={{ py: 3, bgcolor: mode === "light" ? "#fcfcfc" : "inherit" }}
       >
-        {/* Top Header Section: PO No and Status */}
+        {/* Header Section */}
         <Box
           sx={{
             mb: 4,
@@ -117,7 +116,7 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
 
         <Grid container spacing={3}>
           {/* Section 1: Customer Details Card */}
-          <Grid item xs={12} md={5}>
+          <Grid item xs={12} md={6}>
             <Paper
               variant="outlined"
               sx={{
@@ -125,44 +124,27 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
                 borderRadius: 2,
                 height: "100%",
                 bgcolor: "background.paper",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
               }}
             >
               <Typography
                 variant="subtitle2"
                 color="primary"
                 fontWeight="bold"
-                sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}
+                sx={{ mb: 1, display: "flex", alignItems: "center", gap: 1 }}
               >
-                <Person fontSize="small" /> Customer Information
+                <Person fontSize="small" /> Customer Name
               </Typography>
-
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" color="text.secondary">
-                  Name
-                </Typography>
-                <Typography variant="body1" fontWeight="500">
-                  {poData.customerName || "—"}
-                </Typography>
-              </Box>
-
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" color="text.secondary">
-                  Email Address
-                </Typography>
-                <Typography variant="body2">{poData.email || "—"}</Typography>
-              </Box>
-
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Contact Number
-                </Typography>
-                <Typography variant="body2">{poData.contact || "—"}</Typography>
-              </Box>
+              <Typography variant="h6" fontWeight="500">
+                {poData.customerName || "—"}
+              </Typography>
             </Paper>
           </Grid>
 
           {/* Section 2: Financial Summary Card */}
-          <Grid item xs={12} md={7}>
+          <Grid item xs={12} md={6}>
             <Paper
               variant="outlined"
               sx={{
@@ -176,38 +158,46 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
                 variant="subtitle2"
                 color="primary"
                 fontWeight="bold"
-                sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}
+                sx={{ mb: 1.5, display: "flex", alignItems: "center", gap: 1 }}
               >
                 <ListAlt fontSize="small" /> Order Summary
               </Typography>
-
-              <Box
-                sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}
-              >
-                <Typography variant="body2" color="text.secondary">
-                  Total Items Ordered:
-                </Typography>
-                <Typography variant="body2" fontWeight="bold">
-                  {poData.items?.length || 0} Items
-                </Typography>
-              </Box>
-
-              <Divider sx={{ my: 1.5 }} />
 
               <Box
                 sx={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  mt: 2,
                 }}
               >
-                <Typography variant="h6" fontWeight="bold">
-                  Total Amount:
-                </Typography>
-                <Typography variant="h5" color="primary.main" fontWeight="900">
-                  ₱{poData.totalPrice || "0.00"}
-                </Typography>
+                <Box>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block" }}
+                  >
+                    Total Amount
+                  </Typography>
+                  <Typography
+                    variant="h5"
+                    color="primary.main"
+                    fontWeight="900"
+                  >
+                    ₱{poData.totalPrice || "0.00"}
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: "right" }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block" }}
+                  >
+                    Items Count
+                  </Typography>
+                  <Typography variant="body1" fontWeight="bold">
+                    {poData.fullItems?.length || 0} pcs
+                  </Typography>
+                </Box>
               </Box>
             </Paper>
           </Grid>
@@ -242,10 +232,11 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {/* Note: In a real app, you would map poData.items which contains the full item objects */}
                   {(poData.fullItems || []).map((item, index) => (
                     <TableRow key={index} hover>
-                      <TableCell fontWeight="500">{item.name}</TableCell>
+                      <TableCell sx={{ fontWeight: 500 }}>
+                        {item.name}
+                      </TableCell>
                       <TableCell>
                         <Chip
                           label={item.category}

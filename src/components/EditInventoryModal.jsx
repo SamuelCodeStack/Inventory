@@ -7,47 +7,74 @@ import {
   Button,
   TextField,
   IconButton,
-  Grid,
-  MenuItem,
   Typography,
-  Box,
+  MenuItem,
+  Grid,
 } from "@mui/material";
 import { Close } from "@mui/icons-material";
 
 const categories = ["Plastic", "Injection", "Paper", "Trading"];
-const units = ["Pieces", "Bundle", "Box"];
+const units = ["Pieces", "Bundle", "Boxes"];
 
 export default function EditInventoryModal({
   open,
   handleClose,
+  onSaveSuccess,
   mode,
   itemData,
 }) {
   const [formData, setFormData] = useState({
-    item_name: "", // Added item_name
-    category: "",
-    uom: "",
-    minStock: "",
+    item_name: "",
+    category: "Plastic",
+    unit: "Pieces",
+    minimum_stock: 10, // Fixed spelling
   });
 
   useEffect(() => {
     if (itemData) {
       setFormData({
-        item_name: itemData.name || "", // Syncing with 'name' from table row
-        category: itemData.category || "",
-        uom: itemData.uom || "",
-        minStock: itemData.minStock || 5,
+        item_name: itemData.name || "",
+        category: itemData.category || "Plastic",
+        unit: itemData.uom || "Pieces",
+        minimum_stock: itemData.minStock || 10,
       });
     }
   }, [itemData]);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: name === "minimum_stock" ? parseInt(value) || 0 : value,
+    });
   };
 
-  const handleSubmit = () => {
-    console.log("Saving Changes for ID:", itemData.id, formData);
-    handleClose();
+  const handleSubmit = async () => {
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/inventory/${itemData.id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          // Note: If your backend PUT route expects 'quantity',
+          // ensure it handles updates where quantity isn't sent
+          // or pass itemData.quantity here.
+          body: JSON.stringify({
+            ...formData,
+            quantity: itemData.quantity, // Keeping the existing quantity
+          }),
+        },
+      );
+
+      if (response.ok) {
+        onSaveSuccess();
+      } else {
+        const errorData = await response.json();
+        alert("Update Error: " + errorData.error);
+      }
+    } catch (error) {
+      alert("Network Error: Could not connect to server.");
+    }
   };
 
   const fieldStyle = {
@@ -58,39 +85,25 @@ export default function EditInventoryModal({
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      fullWidth
-      maxWidth="xs"
-      PaperProps={{
-        sx: { borderRadius: 3, backgroundImage: "none" },
-      }}
-    >
+    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
       <DialogTitle
+        component="div"
         sx={{
-          fontWeight: "bold",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
         }}
       >
-        <Box>
-          <Typography variant="h6" fontWeight="bold">
-            Edit Product
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Product ID: {itemData?.id}
-          </Typography>
-        </Box>
+        <Typography variant="h6" fontWeight="bold">
+          Edit Item Details
+        </Typography>
         <IconButton onClick={handleClose} size="small">
           <Close />
         </IconButton>
       </DialogTitle>
 
-      <DialogContent dividers sx={{ py: 3 }}>
-        <Grid container spacing={3}>
-          {/* Item Name Field - Replaced Quantity */}
+      <DialogContent dividers>
+        <Grid container spacing={2} sx={{ mt: 0.5 }}>
           <Grid item xs={12}>
             <TextField
               fullWidth
@@ -101,52 +114,49 @@ export default function EditInventoryModal({
               sx={fieldStyle}
             />
           </Grid>
-
-          <Grid item xs={12}>
+          <Grid item xs={6}>
             <TextField
-              select
               fullWidth
+              select
               label="Category"
               name="category"
               value={formData.category}
               onChange={handleChange}
               sx={fieldStyle}
             >
-              {categories.map((option) => (
-                <MenuItem key={option} value={option}>
-                  {option}
+              {categories.map((opt) => (
+                <MenuItem key={opt} value={opt}>
+                  {opt}
                 </MenuItem>
               ))}
             </TextField>
           </Grid>
-
-          <Grid item xs={12}>
+          <Grid item xs={6}>
             <TextField
-              select
               fullWidth
-              label="Unit of Measure"
-              name="uom"
-              value={formData.uom}
+              select
+              label="Unit"
+              name="unit"
+              value={formData.unit}
               onChange={handleChange}
               sx={fieldStyle}
             >
-              {units.map((option) => (
-                <MenuItem key={option} value={option}>
-                  {option}
+              {units.map((u) => (
+                <MenuItem key={u} value={u}>
+                  {u}
                 </MenuItem>
               ))}
             </TextField>
           </Grid>
-
           <Grid item xs={12}>
+            {/* Expanded to full width since Quantity is gone */}
             <TextField
               fullWidth
               type="number"
-              label="Min Stock Level"
-              name="minStock"
-              value={formData.minStock}
+              label="Minimum Stock Level"
+              name="minimum_stock"
+              value={formData.minimum_stock}
               onChange={handleChange}
-              helperText="Threshold for low stock alerts"
               sx={fieldStyle}
             />
           </Grid>
@@ -154,22 +164,13 @@ export default function EditInventoryModal({
       </DialogContent>
 
       <DialogActions sx={{ p: 3 }}>
-        <Button
-          onClick={handleClose}
-          sx={{ color: "text.secondary", textTransform: "none" }}
-        >
+        <Button onClick={handleClose} sx={{ color: "text.secondary" }}>
           Cancel
         </Button>
         <Button
           variant="contained"
           onClick={handleSubmit}
-          sx={{
-            bgcolor: "primary.main",
-            px: 4,
-            textTransform: "none",
-            fontWeight: "bold",
-            "&:hover": { bgcolor: "#d87d3a" },
-          }}
+          sx={{ fontWeight: "bold" }}
         >
           Update Item
         </Button>

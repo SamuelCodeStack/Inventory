@@ -118,7 +118,6 @@ export default function UpdatePOModal({ open, handleClose, mode, poData }) {
     <Dialog
       open={open}
       onClose={handleClose}
-      fullWidth
       maxWidth="md" // Reduced from 'lg' to 'md' to tighten the layout
       PaperProps={{ sx: { borderRadius: 3, backgroundImage: "none" } }}
     >
@@ -338,7 +337,7 @@ export default function UpdatePOModal({ open, handleClose, mode, poData }) {
                       <Typography
                         variant="caption"
                         fontWeight="bold"
-                        noWrap
+                        Wrap
                         sx={{ maxWidth: 100 }}
                       >
                         {item.name}
@@ -351,7 +350,7 @@ export default function UpdatePOModal({ open, handleClose, mode, poData }) {
                           handleQtyChange(item.id, e.target.value)
                         }
                         sx={{
-                          width: 60,
+                          width: 100,
                           "& .MuiInputBase-input": {
                             py: 0.5,
                             textAlign: "center",

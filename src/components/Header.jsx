@@ -69,13 +69,10 @@ export default function Header({ mode }) {
               cursor: "pointer",
             }}
           >
-            <Avatar
-              src="https://i.pravatar.cc/150?u=samsad"
-              sx={{ width: 32, height: 32 }}
-            />
+            <Avatar src="" sx={{ width: 32, height: 32 }} />
             <Box sx={{ display: { xs: "none", sm: "block" } }}>
               <Typography variant="body2" fontWeight="bold">
-                Samsad
+                Sam
               </Typography>
             </Box>
             <KeyboardArrowDown
