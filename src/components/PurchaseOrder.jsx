@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -29,87 +29,94 @@ import CreatePOModal from "./CreatePOModal";
 import UpdatePOModal from "./UpdatePOModal";
 import ViewPOModal from "./ViewPOModal";
 
-const poData = [
-  {
-    id: 1,
-    poId: "PO-1001",
-    customer: "John Doe",
-    email: "john@example.com",
-    contact: "09123456789",
-    poNo: "PO-2024-001",
-    status: "Job Order", // Changed key from remarks to status
-    totalPrice: "1,200.00",
-    fullItems: [
-      {
-        name: "Macbook Pro M1",
-        category: "Plastic",
-        unit: "Pieces",
-        quantity: 1,
-      },
-    ],
-  },
-  {
-    id: 2,
-    poId: "PO-1002",
-    customer: "Sarah Williams",
-    email: "sarah@example.com",
-    contact: "09987654321",
-    poNo: "PO-2024-002",
-    status: "Done", // Changed key from remarks to status
-    totalPrice: "250.00",
-    fullItems: [
-      {
-        name: "Mechanical Keyboard",
-        category: "Injection",
-        unit: "Bundle",
-        quantity: 2,
-      },
-    ],
-  },
-];
-
 export default function PurchaseOrder({ mode }) {
+  const [poData, setPoData] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [openUpdateModal, setOpenUpdateModal] = useState(false);
   const [openViewModal, setOpenViewModal] = useState(false);
   const [selectedPO, setSelectedPO] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const prepareModalData = (po) => ({
-    id: po.id,
-    poNumber: po.poNo,
-    customerName: po.customer,
-    email: po.email,
-    contact: po.contact,
-    status: po.status, // Renamed from remark
-    totalPrice: po.totalPrice,
-    fullItems: po.fullItems,
-  });
+  const fetchPurchaseOrders = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("http://localhost:3000/api/purchase-orders");
+      if (!response.ok) throw new Error("Failed to fetch");
+      const data = await response.json();
+      setPoData(data);
+    } catch (error) {
+      console.error("Error fetching POs:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPurchaseOrders();
+  }, []);
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const getStatusStyle = (status) => {
+    switch (status) {
+      case "Job Order":
+        return { color: "info", variant: "filled" };
+      case "Done":
+        return { color: "success", variant: "filled" };
+      case "Pending":
+        return { color: "warning", variant: "filled" };
+      default:
+        return { color: "default", variant: "outlined" };
+    }
+  };
+
+  const handleSaveSuccess = () => {
+    setOpenCreateModal(false);
+    setOpenUpdateModal(false);
+    fetchPurchaseOrders();
+  };
 
   const handleEditClick = (po) => {
-    setSelectedPO(prepareModalData(po));
+    setSelectedPO(po);
     setOpenUpdateModal(true);
   };
 
   const handleViewClick = (po) => {
-    setSelectedPO(prepareModalData(po));
+    setSelectedPO(po);
     setOpenViewModal(true);
   };
 
-  const getStatusStyle = (status) => {
-    if (status === "Job Order") return { color: "info", variant: "filled" };
-    if (status === "Done") return { color: "success", variant: "filled" };
-    return { color: "default", variant: "soft" };
+  const handleDelete = async (id) => {
+    if (window.confirm("Are you sure you want to delete this order?")) {
+      try {
+        const response = await fetch(
+          `http://localhost:3000/api/purchase-orders/${id}`,
+          {
+            method: "DELETE",
+          },
+        );
+        if (response.ok) fetchPurchaseOrders();
+      } catch (error) {
+        alert("Error deleting record");
+      }
+    }
   };
 
   return (
     <Box
       sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
     >
-      {/* Page Header */}
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Box>
-          <Typography variant="h5" fontWeight="bold" color="text.primary">
+          <Typography variant="h5" fontWeight="bold">
             Purchase Order
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -117,47 +124,23 @@ export default function PurchaseOrder({ mode }) {
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
-          <Button
-            variant="outlined"
-            startIcon={<FileUpload />}
-            sx={{
-              textTransform: "none",
-              borderColor: "primary.main",
-              color: "primary.main",
-            }}
-          >
+          <Button variant="outlined" startIcon={<FileUpload />}>
             Export
           </Button>
           <Button
             variant="contained"
             startIcon={<Add />}
             onClick={() => setOpenCreateModal(true)}
-            sx={{
-              bgcolor: "primary.main",
-              textTransform: "none",
-              "&:hover": { bgcolor: "#d87d3a" },
-              boxShadow: "none",
-            }}
           >
             Create PO
           </Button>
         </Stack>
       </Box>
 
-      {/* Main Table Container */}
       <TableContainer
         component={Paper}
-        sx={{
-          borderRadius: 3,
-          p: 2,
-          backgroundImage: "none",
-          boxShadow:
-            mode === "light"
-              ? "0px 2px 8px rgba(0,0,0,0.05)"
-              : "0px 2px 8px rgba(0,0,0,0.4)",
-        }}
+        sx={{ borderRadius: 3, p: 2, backgroundImage: "none" }}
       >
-        {/* Table Toolbar: Label + Search */}
         <Box
           sx={{
             display: "flex",
@@ -166,50 +149,22 @@ export default function PurchaseOrder({ mode }) {
             alignItems: "center",
           }}
         >
-          <Typography
-            variant="subtitle1"
-            fontWeight="bold"
-            color="text.primary"
-          >
+          <Typography variant="subtitle1" fontWeight="bold">
             Purchase Order List
           </Typography>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <TextField
-              size="small"
-              placeholder="Search orders..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              sx={{
-                width: 250,
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: 2,
-                  bgcolor:
-                    mode === "light"
-                      ? "background.default"
-                      : "rgba(255,255,255,0.05)",
-                },
-              }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search fontSize="small" sx={{ color: "text.secondary" }} />
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <Button
-              variant="outlined"
-              startIcon={<FilterList />}
-              sx={{
-                color: "text.primary",
-                borderColor: "divider",
-                borderRadius: 2,
-                textTransform: "none",
-              }}
-            >
-              Filter
-            </Button>
-          </Stack>
+          <TextField
+            size="small"
+            placeholder="Search orders..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+          />
         </Box>
 
         <Table>
@@ -223,6 +178,7 @@ export default function PurchaseOrder({ mode }) {
               <TableCell sx={{ fontWeight: "bold" }}>PO ID</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Customer Name</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>PO No.</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Date Created</TableCell>
               <TableCell align="center" sx={{ fontWeight: "bold" }}>
                 Status
               </TableCell>
@@ -242,21 +198,21 @@ export default function PurchaseOrder({ mode }) {
               )
               .map((row) => (
                 <TableRow key={row.id} hover>
-                  <TableCell sx={{ fontWeight: "medium" }}>
-                    {row.poId}
-                  </TableCell>
+                  {/* FIX: Using row.id here */}
+                  <TableCell sx={{ fontWeight: "medium" }}>{row.id}</TableCell>
                   <TableCell>
                     <Typography variant="body2" fontWeight="bold">
                       {row.customer}
                     </Typography>
                   </TableCell>
                   <TableCell>{row.poNo}</TableCell>
+                  <TableCell>{formatDate(row.date)}</TableCell>
                   <TableCell align="center">
                     <Chip
                       label={row.status}
                       size="small"
                       {...getStatusStyle(row.status)}
-                      sx={{ fontWeight: 600, borderRadius: 1.5 }}
+                      sx={{ fontWeight: 600 }}
                     />
                   </TableCell>
                   <TableCell align="right">
@@ -275,7 +231,6 @@ export default function PurchaseOrder({ mode }) {
                       >
                         <Visibility fontSize="inherit" />
                       </IconButton>
-
                       <IconButton
                         size="small"
                         onClick={() => handleEditClick(row)}
@@ -286,9 +241,9 @@ export default function PurchaseOrder({ mode }) {
                       >
                         <Edit fontSize="inherit" />
                       </IconButton>
-
                       <IconButton
                         size="small"
+                        onClick={() => handleDelete(row.id)}
                         sx={{
                           color: "#e74c3c",
                           bgcolor: "rgba(231, 76, 60, 0.1)",
@@ -304,24 +259,30 @@ export default function PurchaseOrder({ mode }) {
         </Table>
       </TableContainer>
 
-      {/* Modals */}
       <CreatePOModal
         open={openCreateModal}
         handleClose={() => setOpenCreateModal(false)}
+        onSaveSuccess={handleSaveSuccess}
         mode={mode}
       />
-      <UpdatePOModal
-        open={openUpdateModal}
-        handleClose={() => setOpenUpdateModal(false)}
-        mode={mode}
-        poData={selectedPO}
-      />
-      <ViewPOModal
-        open={openViewModal}
-        handleClose={() => setOpenViewModal(false)}
-        mode={mode}
-        poData={selectedPO}
-      />
+
+      {selectedPO && (
+        <>
+          <UpdatePOModal
+            open={openUpdateModal}
+            handleClose={() => setOpenUpdateModal(false)}
+            onUpdateSuccess={handleSaveSuccess} // FIX: Prop name match
+            mode={mode}
+            poData={selectedPO}
+          />
+          <ViewPOModal
+            open={openViewModal}
+            handleClose={() => setOpenViewModal(false)}
+            mode={mode}
+            poData={selectedPO}
+          />
+        </>
+      )}
     </Box>
   );
 }

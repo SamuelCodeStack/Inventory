@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react"; // Added useEffect here
 import {
   Box,
   Typography,
@@ -15,107 +15,114 @@ import {
   Stack,
   TextField,
   InputAdornment,
-  Snackbar, // Added
-  Alert, // Added
+  Snackbar,
+  Alert,
 } from "@mui/material";
-import {
-  FileUpload,
-  Add,
-  FilterList,
-  Edit,
-  Delete,
-  Search,
-} from "@mui/icons-material";
+import { FileUpload, Add, Edit, Delete, Search } from "@mui/icons-material";
 import AddInventoryModal from "./AddInventoryModal";
 import EditInventoryModal from "./EditInventoryModal";
 
-const initialData = [
-  {
-    id: "01",
-    name: "Macbook Pro M1 2020",
-    category: "Plastic",
-    uom: "Pieces",
-    quantity: 120,
-    status: "In Stock",
-  },
-  {
-    id: "02",
-    name: "Mechanical Keyboard",
-    category: "Injection",
-    uom: "Box",
-    quantity: 5,
-    status: "Low Stock",
-  },
-  {
-    id: "03",
-    name: "Wired Mouse",
-    category: "Paper",
-    uom: "Pieces",
-    quantity: 0,
-    status: "Out of Stock",
-  },
-];
-
 export default function Inventory({ mode }) {
-  const [inventoryData, setInventoryData] = useState(initialData);
+  // --- 1. HOOKS MUST BE INSIDE THE FUNCTION ---
+  const [inventoryData, setInventoryData] = useState([]);
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditModal, setOpenEditModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Alert State
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
-    severity: "success", // 'success' = green, 'info' = blue, 'error' = red
+    severity: "success",
   });
 
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
+  // --- 2. FETCH LOGIC INSIDE THE FUNCTION ---
+  const fetchInventory = async () => {
+    try {
+      const response = await fetch("http://localhost:3000/api/inventory");
+      const data = await response.json();
+      setInventoryData(data);
+    } catch (error) {
+      console.error("Fetch error:", error);
+    }
   };
 
-  // 1. ADD Logic (Call this when Add Modal successfully saves)
+  useEffect(() => {
+    fetchInventory();
+  }, []);
+
+  // --- 3. HANDLERS ---
+  const handleCloseSnackbar = () => setSnackbar({ ...snackbar, open: false });
+
   const handleAddSuccess = () => {
     setOpenAddModal(false);
+    fetchInventory(); // Refresh data from server
     setSnackbar({
       open: true,
       message: "New item added successfully!",
-      severity: "success", // GREEN
+      severity: "success",
     });
   };
 
-  // 2. UPDATE Logic (Call this when Edit Modal successfully saves)
   const handleEditSuccess = () => {
     setOpenEditModal(false);
+    fetchInventory(); // Refresh data from server
     setSnackbar({
       open: true,
       message: "Item updated successfully!",
-      severity: "info", // BLUE (MUI 'info' is blue)
+      severity: "info",
     });
   };
 
-  // 3. DELETE Logic
-  const handleDelete = (id) => {
-    setInventoryData(inventoryData.filter((item) => item.id !== id));
-    setSnackbar({
-      open: true,
-      message: `Item ${id} deleted successfully`,
-      severity: "error", // RED
-    });
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this item?")) return;
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/inventory/${id}`,
+        {
+          method: "DELETE",
+        },
+      );
+      if (response.ok) {
+        setInventoryData(inventoryData.filter((item) => item.id !== id));
+        setSnackbar({ open: true, message: `Item deleted`, severity: "error" });
+      }
+    } catch (error) {
+      setSnackbar({ open: true, message: "Server error", severity: "error" });
+    }
   };
 
-  const handleQuantityChange = (id, newQuantity) => {
+  const handleQuantityChange = async (id, newQuantity) => {
+    const qty = parseInt(newQuantity) || 0;
+
+    // Optimistic UI Update
     const updatedData = inventoryData.map((item) => {
       if (item.id === id) {
-        const qty = parseInt(newQuantity) || 0;
+        // Use the item's specific minimum stock threshold
+        const threshold = item.minStock || 10;
+
         let newStatus = "In Stock";
         if (qty === 0) newStatus = "Out of Stock";
-        else if (qty <= 10) newStatus = "Low Stock";
+        else if (qty <= threshold) newStatus = "Low Stock";
+
         return { ...item, quantity: qty, status: newStatus };
       }
       return item;
     });
+
     setInventoryData(updatedData);
+
+    try {
+      // You are missing the PATCH route in your server.js snippet!
+      // Make sure the backend endpoint exists (see Step 2 below)
+      await fetch(`http://localhost:3000/api/inventory/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantity: qty }),
+      });
+    } catch (error) {
+      console.error("Sync failed");
+      fetchInventory(); // Revert on error
+    }
   };
 
   const handleEditClick = (item) => {
@@ -124,23 +131,17 @@ export default function Inventory({ mode }) {
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case "In Stock":
-        return "success";
-      case "Low Stock":
-        return "warning";
-      case "Out of Stock":
-        return "error";
-      default:
-        return "default";
-    }
+    if (status === "In Stock") return "success";
+    if (status === "Low Stock") return "warning";
+    if (status === "Out of Stock") return "error";
+    return "default";
   };
 
   return (
     <Box
       sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
     >
-      {/* Header & Table (logic remains same) */}
+      {/* Header */}
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Box>
           <Typography variant="h5" fontWeight="bold">
@@ -164,6 +165,7 @@ export default function Inventory({ mode }) {
         </Stack>
       </Box>
 
+      {/* Table */}
       <TableContainer
         component={Paper}
         sx={{ borderRadius: 3, p: 2, backgroundImage: "none" }}
@@ -239,7 +241,6 @@ export default function Inventory({ mode }) {
                         disableUnderline: true,
                         sx: {
                           fontWeight: "bold",
-                          textAlign: "right",
                           "& input": { textAlign: "right" },
                         },
                       }}
@@ -281,23 +282,21 @@ export default function Inventory({ mode }) {
         </Table>
       </TableContainer>
 
-      {/* MODALS - Added the success handlers */}
+      {/* Modals & Snackbar */}
       <AddInventoryModal
         open={openAddModal}
         handleClose={() => setOpenAddModal(false)}
-        onSaveSuccess={handleAddSuccess} // Pass this to your Add modal
+        onSaveSuccess={handleAddSuccess}
         mode={mode}
       />
-
       <EditInventoryModal
         open={openEditModal}
         handleClose={() => setOpenEditModal(false)}
-        onSaveSuccess={handleEditSuccess} // Pass this to your Edit modal
+        onSaveSuccess={handleEditSuccess}
         mode={mode}
         itemData={selectedItem}
       />
 
-      {/* DYNAMIC NOTIFICATION (BOTTOM RIGHT) */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={3000}
@@ -307,16 +306,8 @@ export default function Inventory({ mode }) {
         <Alert
           onClose={handleCloseSnackbar}
           severity={snackbar.severity}
-          variant="filled" // 'filled' makes the background color solid and vibrant
-          sx={{
-            width: "100%",
-            borderRadius: 2,
-            fontWeight: "bold",
-            // Customizing colors to be exactly what you want if default MUI isn't enough
-            ...(snackbar.severity === "info" && { bgcolor: "#3498db" }), // Blue
-            ...(snackbar.severity === "success" && { bgcolor: "#2ecc71" }), // Green
-            ...(snackbar.severity === "error" && { bgcolor: "#e74c3c" }), // Red
-          }}
+          variant="filled"
+          sx={{ width: "100%", borderRadius: 2, fontWeight: "bold" }}
         >
           {snackbar.message}
         </Alert>
