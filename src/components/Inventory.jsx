@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react"; // Added useEffect here
+import React, { useState, useEffect, useRef } from "react";
+import { useReactToPrint } from "react-to-print";
 import {
   Box,
   Typography,
@@ -17,14 +18,25 @@ import {
   InputAdornment,
   Snackbar,
   Alert,
+  Divider,
 } from "@mui/material";
-import { FileUpload, Add, Edit, Delete, Search } from "@mui/icons-material";
+import {
+  Add,
+  Edit,
+  Delete,
+  Search,
+  Save,
+  RestartAlt,
+  EditNote,
+  Print, // Added Print Icon
+} from "@mui/icons-material";
 import AddInventoryModal from "./AddInventoryModal";
 import EditInventoryModal from "./EditInventoryModal";
 
 export default function Inventory({ mode }) {
-  // --- 1. HOOKS MUST BE INSIDE THE FUNCTION ---
   const [inventoryData, setInventoryData] = useState([]);
+  const [originalData, setOriginalData] = useState([]);
+  const [isEditingQty, setIsEditingQty] = useState(false);
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditModal, setOpenEditModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -35,12 +47,14 @@ export default function Inventory({ mode }) {
     severity: "success",
   });
 
-  // --- 2. FETCH LOGIC INSIDE THE FUNCTION ---
+  const componentRef = useRef(); // Ref for printing
+
   const fetchInventory = async () => {
     try {
       const response = await fetch("http://localhost:3000/api/inventory");
       const data = await response.json();
       setInventoryData(data);
+      setOriginalData(JSON.parse(JSON.stringify(data)));
     } catch (error) {
       console.error("Fetch error:", error);
     }
@@ -50,84 +64,86 @@ export default function Inventory({ mode }) {
     fetchInventory();
   }, []);
 
-  // --- 3. HANDLERS ---
+  // Print Logic
+  const handlePrint = useReactToPrint({
+    contentRef: componentRef,
+    documentTitle: "Kimwin_Corporation_Inventory_Report",
+  });
+
+  const hasChanges = inventoryData.some((item) => {
+    const originalItem = originalData.find((orig) => orig.id === item.id);
+    return originalItem && item.quantity !== originalItem.quantity;
+  });
+
   const handleCloseSnackbar = () => setSnackbar({ ...snackbar, open: false });
 
-  const handleAddSuccess = () => {
-    setOpenAddModal(false);
-    fetchInventory(); // Refresh data from server
-    setSnackbar({
-      open: true,
-      message: "New item added successfully!",
-      severity: "success",
-    });
-  };
-
-  const handleEditSuccess = () => {
-    setOpenEditModal(false);
-    fetchInventory(); // Refresh data from server
-    setSnackbar({
-      open: true,
-      message: "Item updated successfully!",
-      severity: "info",
-    });
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this item?")) return;
-    try {
-      const response = await fetch(
-        `http://localhost:3000/api/inventory/${id}`,
-        {
-          method: "DELETE",
-        },
-      );
-      if (response.ok) {
-        setInventoryData(inventoryData.filter((item) => item.id !== id));
-        setSnackbar({ open: true, message: `Item deleted`, severity: "error" });
-      }
-    } catch (error) {
-      setSnackbar({ open: true, message: "Server error", severity: "error" });
-    }
-  };
-
-  const handleQuantityChange = async (id, newQuantity) => {
+  const handleQuantityChangeLocal = (id, newQuantity) => {
     const qty = parseInt(newQuantity) || 0;
-
-    // Optimistic UI Update
     const updatedData = inventoryData.map((item) => {
       if (item.id === id) {
-        // Use the item's specific minimum stock threshold
         const threshold = item.minStock || 10;
-
         let newStatus = "In Stock";
         if (qty === 0) newStatus = "Out of Stock";
         else if (qty <= threshold) newStatus = "Low Stock";
-
         return { ...item, quantity: qty, status: newStatus };
       }
       return item;
     });
-
     setInventoryData(updatedData);
+  };
+
+  const handleBulkSave = async () => {
+    const modifiedItems = inventoryData.filter((item) => {
+      const original = originalData.find((o) => o.id === item.id);
+      return original && item.quantity !== original.quantity;
+    });
+
+    const payload = {
+      items: modifiedItems.map((item) => ({
+        id: item.id,
+        quantity: item.quantity,
+      })),
+    };
 
     try {
-      // You are missing the PATCH route in your server.js snippet!
-      // Make sure the backend endpoint exists (see Step 2 below)
-      await fetch(`http://localhost:3000/api/inventory/${id}`, {
+      const response = await fetch(`http://localhost:3000/api/inventory/bulk`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quantity: qty }),
+        body: JSON.stringify(payload),
       });
+
+      if (response.ok) {
+        setOriginalData(JSON.parse(JSON.stringify(inventoryData)));
+        setIsEditingQty(false);
+        setSnackbar({
+          open: true,
+          message: "All quantities updated in database!",
+          severity: "success",
+        });
+      }
     } catch (error) {
-      console.error("Sync failed");
-      fetchInventory(); // Revert on error
+      setSnackbar({ open: true, message: "Error saving", severity: "error" });
     }
   };
 
-  const handleEditClick = (item) => {
-    setSelectedItem(item);
-    setOpenEditModal(true);
+  const handleResetChanges = () => {
+    setInventoryData(JSON.parse(JSON.stringify(originalData)));
+    setIsEditingQty(false);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure?")) return;
+    try {
+      const res = await fetch(`http://localhost:3000/api/inventory/${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setInventoryData(inventoryData.filter((item) => item.id !== id));
+        setSnackbar({ open: true, message: "Deleted", severity: "error" });
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -152,8 +168,20 @@ export default function Inventory({ mode }) {
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
-          <Button variant="outlined" startIcon={<FileUpload />}>
-            Export
+          <Button
+            variant="outlined"
+            startIcon={<Print />}
+            onClick={() => handlePrint()}
+          >
+            Print Report
+          </Button>
+          <Button
+            variant={isEditingQty ? "contained" : "outlined"}
+            color={isEditingQty ? "warning" : "primary"}
+            startIcon={<EditNote />}
+            onClick={() => setIsEditingQty(!isEditingQty)}
+          >
+            {isEditingQty ? "Lock Editing" : "Enable Qty Edit"}
           </Button>
           <Button
             variant="contained"
@@ -165,10 +193,10 @@ export default function Inventory({ mode }) {
         </Stack>
       </Box>
 
-      {/* Table */}
+      {/* Main Table */}
       <TableContainer
         component={Paper}
-        sx={{ borderRadius: 3, p: 2, backgroundImage: "none" }}
+        sx={{ borderRadius: 3, p: 2, position: "relative" }}
       >
         <Box
           sx={{
@@ -183,7 +211,7 @@ export default function Inventory({ mode }) {
           </Typography>
           <TextField
             size="small"
-            placeholder="Search items..."
+            placeholder="Search..."
             onChange={(e) => setSearchQuery(e.target.value)}
             InputProps={{
               startAdornment: (
@@ -229,22 +257,25 @@ export default function Inventory({ mode }) {
                     <Chip label={row.category} size="small" />
                   </TableCell>
                   <TableCell color="text.secondary">{row.uom}</TableCell>
-                  <TableCell align="right">
+                  <TableCell align="right" sx={{ width: "120px" }}>
                     <TextField
                       type="number"
-                      variant="standard"
+                      variant={isEditingQty ? "outlined" : "standard"}
+                      size="small"
+                      disabled={!isEditingQty}
                       value={row.quantity}
                       onChange={(e) =>
-                        handleQuantityChange(row.id, e.target.value)
+                        handleQuantityChangeLocal(row.id, e.target.value)
                       }
                       InputProps={{
                         disableUnderline: true,
                         sx: {
                           fontWeight: "bold",
+                          width: "100px",
+                          textAlign: "right",
                           "& input": { textAlign: "right" },
                         },
                       }}
-                      sx={{ width: "60px" }}
                     />
                   </TableCell>
                   <TableCell align="center">
@@ -262,14 +293,17 @@ export default function Inventory({ mode }) {
                     >
                       <IconButton
                         size="small"
-                        sx={{ color: "#3498db" }}
-                        onClick={() => handleEditClick(row)}
+                        color="primary"
+                        onClick={() => {
+                          setSelectedItem(row);
+                          setOpenEditModal(true);
+                        }}
                       >
                         <Edit fontSize="inherit" />
                       </IconButton>
                       <IconButton
                         size="small"
-                        sx={{ color: "#e74c3c" }}
+                        color="error"
                         onClick={() => handleDelete(row.id)}
                       >
                         <Delete fontSize="inherit" />
@@ -280,23 +314,180 @@ export default function Inventory({ mode }) {
               ))}
           </TableBody>
         </Table>
+
+        {hasChanges && (
+          <Box
+            sx={{
+              mt: 2,
+              p: 2,
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: 2,
+              borderTop: "1px solid",
+              borderColor: "divider",
+            }}
+          >
+            <Button
+              variant="text"
+              color="inherit"
+              startIcon={<RestartAlt />}
+              onClick={handleResetChanges}
+            >
+              Discard
+            </Button>
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<Save />}
+              onClick={handleBulkSave}
+            >
+              Save All
+            </Button>
+          </Box>
+        )}
       </TableContainer>
 
+      {/* --- HIDDEN PRINT TEMPLATE --- */}
+      <Box sx={{ display: "none" }}>
+        <Box
+          ref={componentRef}
+          sx={{
+            p: "10mm", // Use mm for consistent print sizing
+            bgcolor: "white",
+            color: "black",
+            width: "210mm", // Standard A4 Width
+            // Remove minHeight to prevent forcing extra pages
+            "& *": {
+              color: "black !important",
+              borderColor: "rgba(0, 0, 0, 0.2) !important",
+            },
+          }}
+        >
+          <style>{`
+      @media print {
+        @page { 
+          size: A4; 
+          margin: 0; /* Let the Box handle padding instead */
+        }
+        body { 
+          margin: 0; 
+          -webkit-print-color-adjust: exact; 
+        }
+        /* Ensure no extra space at the end of the document */
+        html, body { height: auto !important; overflow: visible !important; }
+      }
+    `}</style>
+
+          {/* Header */}
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 2,
+            }}
+          >
+            <Box>
+              <Typography
+                variant="h4"
+                fontWeight="bold"
+                sx={{ color: "#1a237e !important" }}
+              >
+                KIMWIN CORPORATION
+              </Typography>
+              <Typography variant="h6">Inventory Assets Report</Typography>
+            </Box>
+            <Box sx={{ textAlign: "right" }}>
+              <Typography variant="body2">
+                Date: {new Date().toLocaleDateString()}
+              </Typography>
+            </Box>
+          </Box>
+
+          <Divider
+            sx={{
+              mb: 3,
+              borderBottomWidth: 2,
+              borderColor: "black !important",
+            }}
+          />
+
+          <Table size="small">
+            <TableHead>
+              <TableRow
+                sx={{
+                  "& th": {
+                    fontWeight: "bold",
+                    borderBottom: "2px solid black !important",
+                  },
+                }}
+              >
+                <TableCell>ID</TableCell>
+                <TableCell>Item Name</TableCell>
+                <TableCell>Category</TableCell>
+                <TableCell align="right">Qty</TableCell>
+                <TableCell>Unit</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {inventoryData.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{row.id}</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>{row.name}</TableCell>
+                  <TableCell>{row.category}</TableCell>
+                  <TableCell align="right">{row.quantity}</TableCell>
+                  <TableCell>{row.uom}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          {/* Signatures */}
+          <Box
+            sx={{
+              mt: 6,
+              display: "flex",
+              justifyContent: "space-between",
+              px: 4,
+            }}
+          >
+            <Box
+              sx={{
+                borderTop: "1px solid black !important",
+                width: 180,
+                textAlign: "center",
+                pt: 1,
+              }}
+            >
+              <Typography variant="caption">Prepared By</Typography>
+            </Box>
+            <Box
+              sx={{
+                borderTop: "1px solid black !important",
+                width: 180,
+                textAlign: "center",
+                pt: 1,
+              }}
+            >
+              <Typography variant="caption">Verified By</Typography>
+            </Box>
+          </Box>
+        </Box>
+      </Box>
       {/* Modals & Snackbar */}
       <AddInventoryModal
         open={openAddModal}
         handleClose={() => setOpenAddModal(false)}
-        onSaveSuccess={handleAddSuccess}
+        onSaveSuccess={fetchInventory}
         mode={mode}
       />
       <EditInventoryModal
         open={openEditModal}
         handleClose={() => setOpenEditModal(false)}
-        onSaveSuccess={handleEditSuccess}
+        onSaveSuccess={fetchInventory}
         mode={mode}
         itemData={selectedItem}
       />
-
       <Snackbar
         open={snackbar.open}
         autoHideDuration={3000}
@@ -307,7 +498,6 @@ export default function Inventory({ mode }) {
           onClose={handleCloseSnackbar}
           severity={snackbar.severity}
           variant="filled"
-          sx={{ width: "100%", borderRadius: 2, fontWeight: "bold" }}
         >
           {snackbar.message}
         </Alert>
