@@ -49,7 +49,10 @@ function App() {
             {/* ROUTES DEFINITION */}
             <Routes>
               <Route path="/" element={<Inventory />} />
-              <Route path="/purchase-order" element={<PurchaseOrder />} />
+              <Route
+                path="/purchase-order"
+                element={<PurchaseOrder mode={mode} />}
+              />
               {/* Add other routes here as you build them */}
             </Routes>
           </Box>

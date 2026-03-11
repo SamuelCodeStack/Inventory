@@ -27,7 +27,7 @@ const pool = new pg.Pool({
 app.get("/api/inventory", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM inventory ORDER BY item_id ASC",
+      "SELECT * FROM inventory ORDER BY item_id DESC",
     );
 
     const mappedData = result.rows.map((item) => {
@@ -194,12 +194,13 @@ app.post("/api/purchase-orders", async (req, res) => {
   }
 });
 
-// GET: Fetch individual items for a specific PO (used by ViewPOModal)
+// GET: Fetch individual items for a specific PO (FIXED to include item_id)
 app.get("/api/purchase-orders/:id/items", async (req, res) => {
   const { id } = req.params;
   try {
     const result = await pool.query(
-      "SELECT item_name as name, category, unit, quantity, price FROM item_order WHERE po_id = $1",
+      // Added item_id to the SELECT statement
+      "SELECT item_id, item_name as name, category, unit, quantity, price FROM item_order WHERE po_id = $1",
       [id],
     );
     res.json(result.rows);
@@ -283,6 +284,52 @@ app.put("/api/purchase-orders/:id", async (req, res) => {
     res.status(500).json({ error: error.message });
   } finally {
     client.release();
+  }
+});
+
+// ==========================================
+// 3. NEW: PATCH ENDPOINTS FOR QUANTITY
+// ==========================================
+
+// BULK PATCH: Update multiple quantities at once
+app.patch("/api/inventory/bulk", async (req, res) => {
+  const { items } = req.body; // Expects an array of { id, quantity }
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    for (const item of items) {
+      await client.query(
+        "UPDATE inventory SET quantity = $1 WHERE item_id = $2",
+        [item.quantity, item.id],
+      );
+    }
+
+    await client.query("COMMIT");
+    res.json({ message: "Bulk update successful" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("BULK UPDATE ERROR:", err.message);
+    res.status(500).json({ error: "Failed to update items" });
+  } finally {
+    client.release();
+  }
+});
+
+// SINGLE PATCH: Update a single item's quantity
+app.patch("/api/inventory/:id", async (req, res) => {
+  const { id } = req.params;
+  const { quantity } = req.body;
+  try {
+    await pool.query("UPDATE inventory SET quantity = $1 WHERE item_id = $2", [
+      quantity,
+      id,
+    ]);
+    res.json({ message: "Quantity updated" });
+  } catch (err) {
+    console.error("PATCH ERROR:", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

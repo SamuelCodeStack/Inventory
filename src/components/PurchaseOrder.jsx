@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useReactToPrint } from "react-to-print";
 import {
   Box,
   Typography,
@@ -15,6 +16,7 @@ import {
   Stack,
   TextField,
   InputAdornment,
+  Divider,
 } from "@mui/material";
 import {
   FileUpload,
@@ -23,7 +25,7 @@ import {
   Edit,
   Delete,
   Search,
-  FilterList,
+  Print, // Added Print Icon
 } from "@mui/icons-material";
 import CreatePOModal from "./CreatePOModal";
 import UpdatePOModal from "./UpdatePOModal";
@@ -38,11 +40,18 @@ export default function PurchaseOrder({ mode }) {
   const [selectedPO, setSelectedPO] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
 
+  const componentRef = useRef(); // Ref for printing
+
+  // Print Logic
+  const handlePrint = useReactToPrint({
+    contentRef: componentRef,
+    documentTitle: "Kimwin_Corporation_PO_Report",
+  });
+
   const fetchPurchaseOrders = async () => {
     try {
       setLoading(true);
       const response = await fetch("http://localhost:3000/api/purchase-orders");
-      if (!response.ok) throw new Error("Failed to fetch");
       const data = await response.json();
       setPoData(data);
     } catch (error) {
@@ -95,17 +104,15 @@ export default function PurchaseOrder({ mode }) {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this order?")) {
+    if (window.confirm("Are you sure?")) {
       try {
         const response = await fetch(
           `http://localhost:3000/api/purchase-orders/${id}`,
-          {
-            method: "DELETE",
-          },
+          { method: "DELETE" },
         );
         if (response.ok) fetchPurchaseOrders();
       } catch (error) {
-        alert("Error deleting record");
+        alert("Error deleting");
       }
     }
   };
@@ -114,6 +121,7 @@ export default function PurchaseOrder({ mode }) {
     <Box
       sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
     >
+      {/* Header Section */}
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Box>
           <Typography variant="h5" fontWeight="bold">
@@ -124,8 +132,12 @@ export default function PurchaseOrder({ mode }) {
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
-          <Button variant="outlined" startIcon={<FileUpload />}>
-            Export
+          <Button
+            variant="outlined"
+            startIcon={<Print />}
+            onClick={() => handlePrint()}
+          >
+            Print All
           </Button>
           <Button
             variant="contained"
@@ -137,6 +149,7 @@ export default function PurchaseOrder({ mode }) {
         </Stack>
       </Box>
 
+      {/* Visible Dashboard Table */}
       <TableContainer
         component={Paper}
         sx={{ borderRadius: 3, p: 2, backgroundImage: "none" }}
@@ -198,8 +211,7 @@ export default function PurchaseOrder({ mode }) {
               )
               .map((row) => (
                 <TableRow key={row.id} hover>
-                  {/* FIX: Using row.id here */}
-                  <TableCell sx={{ fontWeight: "medium" }}>{row.id}</TableCell>
+                  <TableCell>{row.id}</TableCell>
                   <TableCell>
                     <Typography variant="body2" fontWeight="bold">
                       {row.customer}
@@ -259,19 +271,134 @@ export default function PurchaseOrder({ mode }) {
         </Table>
       </TableContainer>
 
+      {/* --- HIDDEN PRINT TEMPLATE --- */}
+      <Box sx={{ display: "none" }}>
+        <Box
+          ref={componentRef}
+          sx={{ p: "10mm", bgcolor: "white", color: "black", width: "210mm" }}
+        >
+          <style>{`
+            @media print {
+              @page { size: A4; margin: 0; }
+              body { margin: 0; -webkit-print-color-adjust: exact; }
+              * { color: black !important; border-color: #ddd !important; }
+            }
+          `}</style>
+
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 2,
+            }}
+          >
+            <Box>
+              <Typography
+                variant="h4"
+                fontWeight="bold"
+                sx={{ color: "#1a237e !important" }}
+              >
+                KIMWIN CORPORATION
+              </Typography>
+              <Typography variant="h6">Purchase Order Master List</Typography>
+            </Box>
+            <Box sx={{ textAlign: "right" }}>
+              <Typography variant="body2">
+                Report Date: {new Date().toLocaleDateString()}
+              </Typography>
+              <Typography variant="body2">
+                Total Records: {poData.length}
+              </Typography>
+            </Box>
+          </Box>
+
+          <Divider
+            sx={{
+              mb: 3,
+              borderBottomWidth: 2,
+              borderColor: "black !important",
+            }}
+          />
+
+          <Table size="small">
+            <TableHead>
+              <TableRow
+                sx={{
+                  "& th": {
+                    fontWeight: "bold",
+                    borderBottom: "2px solid black !important",
+                    bgcolor: "#f5f5f5 !important",
+                  },
+                }}
+              >
+                <TableCell>ID</TableCell>
+                <TableCell>Customer</TableCell>
+                <TableCell>PO No.</TableCell>
+                <TableCell>Date Created</TableCell>
+                <TableCell align="center">Status</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {poData.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{row.id}</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>
+                    {row.customer}
+                  </TableCell>
+                  <TableCell>{row.poNo}</TableCell>
+                  <TableCell>{formatDate(row.date)}</TableCell>
+                  <TableCell align="center">{row.status}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          <Box
+            sx={{
+              mt: 10,
+              display: "flex",
+              justifyContent: "space-between",
+              px: 4,
+            }}
+          >
+            <Box
+              sx={{
+                borderTop: "1px solid black !important",
+                width: 200,
+                textAlign: "center",
+                pt: 1,
+              }}
+            >
+              <Typography variant="body2">Prepared By</Typography>
+            </Box>
+            <Box
+              sx={{
+                borderTop: "1px solid black !important",
+                width: 200,
+                textAlign: "center",
+                pt: 1,
+              }}
+            >
+              <Typography variant="body2">Authorized By</Typography>
+            </Box>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Modals */}
       <CreatePOModal
         open={openCreateModal}
         handleClose={() => setOpenCreateModal(false)}
         onSaveSuccess={handleSaveSuccess}
         mode={mode}
       />
-
       {selectedPO && (
         <>
           <UpdatePOModal
             open={openUpdateModal}
             handleClose={() => setOpenUpdateModal(false)}
-            onUpdateSuccess={handleSaveSuccess} // FIX: Prop name match
+            onUpdateSuccess={handleSaveSuccess}
             mode={mode}
             poData={selectedPO}
           />
