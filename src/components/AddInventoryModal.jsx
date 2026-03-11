@@ -53,7 +53,13 @@ export default function AddInventoryModal({
       });
 
       if (response.ok) {
+        // 1. Notify the parent to refresh the data
         onSaveSuccess();
+
+        // 2. IMPORTANT: Close the dialog
+        handleClose();
+
+        // 3. Reset form for the next time it opens
         setFormData({
           item_name: "",
           category: "Plastic",

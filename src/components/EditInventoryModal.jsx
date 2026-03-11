@@ -56,18 +56,19 @@ export default function EditInventoryModal({
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          // Note: If your backend PUT route expects 'quantity',
-          // ensure it handles updates where quantity isn't sent
-          // or pass itemData.quantity here.
           body: JSON.stringify({
             ...formData,
-            quantity: itemData.quantity, // Keeping the existing quantity
+            quantity: itemData.quantity,
           }),
         },
       );
 
       if (response.ok) {
+        // 1. Refresh the data in the parent component
         onSaveSuccess();
+
+        // 2. Close this modal
+        handleClose();
       } else {
         const errorData = await response.json();
         alert("Update Error: " + errorData.error);
@@ -76,7 +77,6 @@ export default function EditInventoryModal({
       alert("Network Error: Could not connect to server.");
     }
   };
-
   const fieldStyle = {
     "& .MuiOutlinedInput-root": {
       bgcolor: mode === "light" ? "#fff" : "rgba(255, 255, 255, 0.03)",

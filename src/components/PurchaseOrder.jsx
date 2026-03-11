@@ -41,7 +41,6 @@ export default function PurchaseOrder({ mode }) {
   const [selectedPO, setSelectedPO] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // --- SNACKBAR STATE ---
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
@@ -50,11 +49,14 @@ export default function PurchaseOrder({ mode }) {
 
   const componentRef = useRef();
 
-  // Print Logic
-  const handlePrint = useReactToPrint({
-    contentRef: componentRef,
-    documentTitle: "Kimwin_Corporation_PO_Report",
-  });
+  const showSnackbar = (message, severity = "success") => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = (event, reason) => {
+    if (reason === "clickaway") return;
+    setSnackbar({ ...snackbar, open: false });
+  };
 
   const fetchPurchaseOrders = async () => {
     try {
@@ -74,15 +76,11 @@ export default function PurchaseOrder({ mode }) {
     fetchPurchaseOrders();
   }, []);
 
-  // --- HANDLERS ---
-  const showSnackbar = (message, severity = "success") => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleCloseSnackbar = (event, reason) => {
-    if (reason === "clickaway") return;
-    setSnackbar({ ...snackbar, open: false });
-  };
+  const handlePrint = useReactToPrint({
+    contentRef: componentRef,
+    documentTitle: "Kimwin_Corporation_PO_Report",
+    onAfterPrint: () => showSnackbar("Master list report generated!", "info"),
+  });
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
@@ -110,11 +108,16 @@ export default function PurchaseOrder({ mode }) {
     }
   };
 
-  const handleSaveSuccess = (message) => {
+  const handleCreateSuccess = () => {
     setOpenCreateModal(false);
+    fetchPurchaseOrders();
+    showSnackbar("New Purchase Order created successfully!", "success");
+  };
+
+  const handleUpdateSuccess = () => {
     setOpenUpdateModal(false);
     fetchPurchaseOrders();
-    showSnackbar(message || "Operation successful!");
+    showSnackbar("Purchase Order updated successfully!", "info");
   };
 
   const handleEditClick = (po) => {
@@ -128,23 +131,22 @@ export default function PurchaseOrder({ mode }) {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this PO?")) {
-      try {
-        const response = await fetch(
-          `http://localhost:3000/api/purchase-orders/${id}`,
-          {
-            method: "DELETE",
-          },
-        );
-        if (response.ok) {
-          fetchPurchaseOrders();
-          showSnackbar("Purchase Order deleted successfully", "info");
-        } else {
-          showSnackbar("Failed to delete order", "error");
-        }
-      } catch (error) {
-        showSnackbar("Error connecting to server", "error");
+    if (!window.confirm("Are you sure you want to delete this PO?")) return;
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/purchase-orders/${id}`,
+        {
+          method: "DELETE",
+        },
+      );
+      if (response.ok) {
+        fetchPurchaseOrders();
+        showSnackbar("Purchase Order deleted successfully", "error");
+      } else {
+        showSnackbar("Failed to delete order", "error");
       }
+    } catch (error) {
+      showSnackbar("Error connecting to server", "error");
     }
   };
 
@@ -180,7 +182,7 @@ export default function PurchaseOrder({ mode }) {
         </Stack>
       </Box>
 
-      {/* Main Table Dashboard */}
+      {/* Main Table */}
       <TableContainer
         component={Paper}
         sx={{ borderRadius: 3, p: 2, backgroundImage: "none" }}
@@ -222,9 +224,7 @@ export default function PurchaseOrder({ mode }) {
               <TableCell sx={{ fontWeight: "bold" }}>PO ID</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Customer Name</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>PO No.</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>
-                Date & Time Created
-              </TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Date Created</TableCell>
               <TableCell align="center" sx={{ fontWeight: "bold" }}>
                 Status
               </TableCell>
@@ -304,49 +304,47 @@ export default function PurchaseOrder({ mode }) {
         </Table>
       </TableContainer>
 
-      {/* --- HIDDEN PRINT TEMPLATE --- */}
+      {/* --- HIDDEN PRINT TEMPLATE (FIXED FOR DARKMODE) --- */}
       <Box sx={{ display: "none" }}>
         <Box
           ref={componentRef}
-          sx={{ p: "10mm", bgcolor: "white", color: "black", width: "210mm" }}
+          sx={{
+            p: "10mm",
+            bgcolor: "white",
+            color: "black",
+            width: "210mm",
+            // Force text black for all children during print
+            "& *": { color: "black !important" },
+          }}
         >
           <style>{`
             @media print {
-              @page { size: A4; margin: 0; }
-              body { margin: 0; -webkit-print-color-adjust: exact; }
-              * { color: black !important; border-color: #ddd !important; }
+              @page { size: A4; margin: 15mm; }
+              body { background-color: white !important; -webkit-print-color-adjust: exact; }
+              * { 
+                color: black !important; 
+                background-color: transparent !important; 
+                border-color: #333 !important; 
+              }
+              .print-divider { border-bottom: 2px solid black !important; }
+              .print-header { color: #1a237e !important; }
             }
           `}</style>
 
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              mb: 2,
-            }}
+          <Typography
+            variant="h4"
+            fontWeight="bold"
+            className="print-header"
+            sx={{ color: "#1a237e !important" }}
           >
-            <Box>
-              <Typography
-                variant="h4"
-                fontWeight="bold"
-                sx={{ color: "#1a237e !important" }}
-              >
-                KIMWIN CORPORATION
-              </Typography>
-              <Typography variant="h6">Purchase Order Master List</Typography>
-            </Box>
-            <Box sx={{ textAlign: "right" }}>
-              <Typography variant="body2">
-                Report Date: {new Date().toLocaleDateString()}
-              </Typography>
-              <Typography variant="body2">
-                Total Records: {poData.length}
-              </Typography>
-            </Box>
-          </Box>
+            KIMWIN CORPORATION
+          </Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Purchase Order Master List
+          </Typography>
 
           <Divider
+            className="print-divider"
             sx={{
               mb: 3,
               borderBottomWidth: 2,
@@ -361,14 +359,13 @@ export default function PurchaseOrder({ mode }) {
                   "& th": {
                     fontWeight: "bold",
                     borderBottom: "2px solid black !important",
-                    bgcolor: "#f5f5f5 !important",
                   },
                 }}
               >
                 <TableCell>ID</TableCell>
                 <TableCell>Customer</TableCell>
                 <TableCell>PO No.</TableCell>
-                <TableCell>Date & Time Created</TableCell>
+                <TableCell>Created At</TableCell>
                 <TableCell align="center">Status</TableCell>
               </TableRow>
             </TableHead>
@@ -393,9 +390,7 @@ export default function PurchaseOrder({ mode }) {
       <CreatePOModal
         open={openCreateModal}
         handleClose={() => setOpenCreateModal(false)}
-        onSaveSuccess={() =>
-          handleSaveSuccess("New Purchase Order created successfully!")
-        }
+        onSaveSuccess={handleCreateSuccess}
         mode={mode}
       />
       {selectedPO && (
@@ -403,9 +398,7 @@ export default function PurchaseOrder({ mode }) {
           <UpdatePOModal
             open={openUpdateModal}
             handleClose={() => setOpenUpdateModal(false)}
-            onUpdateSuccess={() =>
-              handleSaveSuccess("Purchase Order updated successfully!")
-            }
+            onUpdateSuccess={handleUpdateSuccess}
             mode={mode}
             poData={selectedPO}
           />
@@ -418,7 +411,7 @@ export default function PurchaseOrder({ mode }) {
         </>
       )}
 
-      {/* GLOBAL SNACKBAR */}
+      {/* Snackbar */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}
@@ -429,7 +422,7 @@ export default function PurchaseOrder({ mode }) {
           onClose={handleCloseSnackbar}
           severity={snackbar.severity}
           variant="filled"
-          sx={{ width: "100%", borderRadius: 2 }}
+          sx={{ width: "100%", borderRadius: 2, boxShadow: 6 }}
         >
           {snackbar.message}
         </Alert>

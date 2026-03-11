@@ -28,7 +28,7 @@ import {
   Save,
   RestartAlt,
   EditNote,
-  Print, // Added Print Icon
+  Print,
 } from "@mui/icons-material";
 import AddInventoryModal from "./AddInventoryModal";
 import EditInventoryModal from "./EditInventoryModal";
@@ -41,13 +41,20 @@ export default function Inventory({ mode }) {
   const [openEditModal, setOpenEditModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // --- SNACKBAR STATE ---
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
-    severity: "success",
+    severity: "success", // success=green, error=red, info=blue
   });
 
-  const componentRef = useRef(); // Ref for printing
+  const componentRef = useRef();
+
+  // Helper for Snackbar
+  const showMessage = (msg, sev = "success") => {
+    setSnackbar({ open: true, message: msg, severity: sev });
+  };
 
   const fetchInventory = async () => {
     try {
@@ -57,6 +64,7 @@ export default function Inventory({ mode }) {
       setOriginalData(JSON.parse(JSON.stringify(data)));
     } catch (error) {
       console.error("Fetch error:", error);
+      showMessage("Failed to fetch inventory data", "error"); // Red
     }
   };
 
@@ -68,6 +76,7 @@ export default function Inventory({ mode }) {
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
     documentTitle: "Kimwin_Corporation_Inventory_Report",
+    onAfterPrint: () => showMessage("Report generated successfully!", "info"), // Blue
   });
 
   const hasChanges = inventoryData.some((item) => {
@@ -75,7 +84,10 @@ export default function Inventory({ mode }) {
     return originalItem && item.quantity !== originalItem.quantity;
   });
 
-  const handleCloseSnackbar = () => setSnackbar({ ...snackbar, open: false });
+  const handleCloseSnackbar = (event, reason) => {
+    if (reason === "clickaway") return;
+    setSnackbar({ ...snackbar, open: false });
+  };
 
   const handleQuantityChangeLocal = (id, newQuantity) => {
     const qty = parseInt(newQuantity) || 0;
@@ -115,20 +127,17 @@ export default function Inventory({ mode }) {
       if (response.ok) {
         setOriginalData(JSON.parse(JSON.stringify(inventoryData)));
         setIsEditingQty(false);
-        setSnackbar({
-          open: true,
-          message: "All quantities updated in database!",
-          severity: "success",
-        });
+        showMessage("All quantities updated successfully!", "info"); // blue
       }
     } catch (error) {
-      setSnackbar({ open: true, message: "Error saving", severity: "error" });
+      showMessage("Error saving changes", "error"); // Red
     }
   };
 
   const handleResetChanges = () => {
     setInventoryData(JSON.parse(JSON.stringify(originalData)));
     setIsEditingQty(false);
+    showMessage("Changes discarded", "info"); // Blue
   };
 
   const handleDelete = async (id) => {
@@ -139,10 +148,10 @@ export default function Inventory({ mode }) {
       });
       if (res.ok) {
         setInventoryData(inventoryData.filter((item) => item.id !== id));
-        setSnackbar({ open: true, message: "Deleted", severity: "error" });
+        showMessage("Item deleted successfully", "error"); // Red
       }
     } catch (e) {
-      console.error(e);
+      showMessage("Delete failed", "error"); // Red
     }
   };
 
@@ -151,6 +160,17 @@ export default function Inventory({ mode }) {
     if (status === "Low Stock") return "warning";
     if (status === "Out of Stock") return "error";
     return "default";
+  };
+
+  // Modal Handlers
+  const handleAddSuccess = () => {
+    fetchInventory();
+    showMessage("New item added successfully!", "success"); // Green
+  };
+
+  const handleEditSuccess = () => {
+    fetchInventory();
+    showMessage("Item details updated successfully!", "info"); // Green
   };
 
   return (
@@ -194,10 +214,7 @@ export default function Inventory({ mode }) {
       </Box>
 
       {/* Main Table */}
-      <TableContainer
-        component={Paper}
-        sx={{ borderRadius: 3, p: 2, position: "relative" }}
-      >
+      <TableContainer component={Paper} sx={{ borderRadius: 3, p: 2 }}>
         <Box
           sx={{
             display: "flex",
@@ -211,7 +228,7 @@ export default function Inventory({ mode }) {
           </Typography>
           <TextField
             size="small"
-            placeholder="Search..."
+            placeholder="Search items..."
             onChange={(e) => setSearchQuery(e.target.value)}
             InputProps={{
               startAdornment: (
@@ -231,7 +248,7 @@ export default function Inventory({ mode }) {
             }}
           >
             <TableRow>
-              <TableCell>No</TableCell>
+              <TableCell>ID</TableCell>
               <TableCell>Item Name</TableCell>
               <TableCell>Category</TableCell>
               <TableCell>Unit</TableCell>
@@ -256,8 +273,8 @@ export default function Inventory({ mode }) {
                   <TableCell>
                     <Chip label={row.category} size="small" />
                   </TableCell>
-                  <TableCell color="text.secondary">{row.uom}</TableCell>
-                  <TableCell align="right" sx={{ width: "120px" }}>
+                  <TableCell>{row.uom}</TableCell>
+                  <TableCell align="right">
                     <TextField
                       type="number"
                       variant={isEditingQty ? "outlined" : "standard"}
@@ -271,8 +288,7 @@ export default function Inventory({ mode }) {
                         disableUnderline: true,
                         sx: {
                           fontWeight: "bold",
-                          width: "100px",
-                          textAlign: "right",
+                          width: "80px",
                           "& input": { textAlign: "right" },
                         },
                       }}
@@ -293,7 +309,7 @@ export default function Inventory({ mode }) {
                     >
                       <IconButton
                         size="small"
-                        color="primary"
+                        color="info"
                         onClick={() => {
                           setSelectedItem(row);
                           setOpenEditModal(true);
@@ -341,7 +357,7 @@ export default function Inventory({ mode }) {
               startIcon={<Save />}
               onClick={handleBulkSave}
             >
-              Save All
+              Save All Changes
             </Button>
           </Box>
         )}
@@ -352,63 +368,57 @@ export default function Inventory({ mode }) {
         <Box
           ref={componentRef}
           sx={{
-            p: "10mm", // Use mm for consistent print sizing
+            p: "10mm",
             bgcolor: "white",
             color: "black",
-            width: "210mm", // Standard A4 Width
-            // Remove minHeight to prevent forcing extra pages
-            "& *": {
-              color: "black !important",
-              borderColor: "rgba(0, 0, 0, 0.2) !important",
-            },
+            width: "210mm",
+            // This ensures MUI Typography components inside this box default to black
+            "& *": { color: "black !important" },
           }}
         >
+          {/* CRITICAL: CSS to override Dark Mode styles during printing */}
           <style>{`
-      @media print {
-        @page { 
-          size: A4; 
-          margin: 0; /* Let the Box handle padding instead */
-        }
-        body { 
-          margin: 0; 
-          -webkit-print-color-adjust: exact; 
-        }
-        /* Ensure no extra space at the end of the document */
-        html, body { height: auto !important; overflow: visible !important; }
-      }
-    `}</style>
+            @media print {
+              @page { 
+                size: A4; 
+                margin: 15mm; 
+              }
+              body { 
+                background-color: white !important; 
+                color: black !important;
+              }
+              /* Force all elements to black and borders to be visible */
+              * { 
+                color: black !important; 
+                background-color: transparent !important;
+                border-color: #333 !important;
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact;
+              }
+              /* Ensure the header text is dark blue even in print */
+              .print-header {
+                color: #1a237e !important;
+              }
+            }
+          `}</style>
 
-          {/* Header */}
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              mb: 2,
-            }}
+          <Typography
+            variant="h4"
+            fontWeight="bold"
+            className="print-header"
+            sx={{ color: "#1a237e !important" }}
           >
-            <Box>
-              <Typography
-                variant="h4"
-                fontWeight="bold"
-                sx={{ color: "#1a237e !important" }}
-              >
-                KIMWIN CORPORATION
-              </Typography>
-              <Typography variant="h6">Inventory Assets Report</Typography>
-            </Box>
-            <Box sx={{ textAlign: "right" }}>
-              <Typography variant="body2">
-                Date: {new Date().toLocaleDateString()}
-              </Typography>
-            </Box>
-          </Box>
+            KIMWIN CORPORATION
+          </Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Inventory Assets Report
+          </Typography>
 
           <Divider
             sx={{
               mb: 3,
-              borderBottomWidth: 2,
               borderColor: "black !important",
+              borderBottomWidth: 1,
             }}
           />
 
@@ -418,6 +428,7 @@ export default function Inventory({ mode }) {
                 sx={{
                   "& th": {
                     fontWeight: "bold",
+                    color: "black !important",
                     borderBottom: "2px solid black !important",
                   },
                 }}
@@ -442,55 +453,33 @@ export default function Inventory({ mode }) {
             </TableBody>
           </Table>
 
-          {/* Signatures */}
-          <Box
-            sx={{
-              mt: 6,
-              display: "flex",
-              justifyContent: "space-between",
-              px: 4,
-            }}
-          >
-            <Box
-              sx={{
-                borderTop: "1px solid black !important",
-                width: 180,
-                textAlign: "center",
-                pt: 1,
-              }}
-            >
-              <Typography variant="caption">Prepared By</Typography>
-            </Box>
-            <Box
-              sx={{
-                borderTop: "1px solid black !important",
-                width: 180,
-                textAlign: "center",
-                pt: 1,
-              }}
-            >
-              <Typography variant="caption">Verified By</Typography>
-            </Box>
+          <Box sx={{ mt: 4, textAlign: "right" }}>
+            <Typography variant="caption" sx={{ color: "black !important" }}>
+              Report Generated: {new Date().toLocaleString()}
+            </Typography>
           </Box>
         </Box>
       </Box>
-      {/* Modals & Snackbar */}
+
+      {/* Modals */}
       <AddInventoryModal
         open={openAddModal}
         handleClose={() => setOpenAddModal(false)}
-        onSaveSuccess={fetchInventory}
+        onSaveSuccess={handleAddSuccess}
         mode={mode}
       />
       <EditInventoryModal
         open={openEditModal}
         handleClose={() => setOpenEditModal(false)}
-        onSaveSuccess={fetchInventory}
+        onSaveSuccess={handleEditSuccess}
         mode={mode}
         itemData={selectedItem}
       />
+
+      {/* --- REFINED SNACKBAR --- */}
       <Snackbar
         open={snackbar.open}
-        autoHideDuration={3000}
+        autoHideDuration={4000}
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       >
@@ -498,6 +487,7 @@ export default function Inventory({ mode }) {
           onClose={handleCloseSnackbar}
           severity={snackbar.severity}
           variant="filled"
+          sx={{ width: "100%", borderRadius: 2, boxShadow: 6 }}
         >
           {snackbar.message}
         </Alert>
