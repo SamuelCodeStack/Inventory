@@ -217,7 +217,7 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
                   gap: 1,
                 }}
               >
-                <Payments fontSize="small" /> Grand Total
+                <Payments fontSize="small" /> Total Amount
               </Typography>
               <Typography variant="h3" fontWeight="900">
                 ₱{Number(poData.totalPrice).toLocaleString()}

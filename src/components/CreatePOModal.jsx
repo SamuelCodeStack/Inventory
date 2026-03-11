@@ -76,7 +76,6 @@ export default function CreatePOModal({
   const handleToggleItem = (item) => {
     const currentIndex = selectedItems.findIndex((i) => i.id === item.id);
     if (currentIndex === -1) {
-      // Adding a new item with default qty 1 and using its base price if available
       setSelectedItems([
         ...selectedItems,
         { ...item, qty: 1, price: item.price || 0 },
@@ -109,7 +108,7 @@ export default function CreatePOModal({
       address: formData.address,
       po_number: formData.poNumber,
       status: formData.status,
-      total_price: formData.totalPrice, // Changed from price to total_price
+      total_price: formData.totalPrice,
       items: selectedItems,
     };
 
@@ -320,6 +319,15 @@ export default function CreatePOModal({
                 <TableHead>
                   <TableRow>
                     <TableCell
+                      sx={{
+                        fontWeight: "bold",
+                        bgcolor: "action.hover",
+                        width: "100px",
+                      }}
+                    >
+                      Item ID
+                    </TableCell>
+                    <TableCell
                       sx={{ fontWeight: "bold", bgcolor: "action.hover" }}
                     >
                       Item Name
@@ -345,6 +353,15 @@ export default function CreatePOModal({
                       );
                       return (
                         <TableRow key={item.id} hover>
+                          <TableCell
+                            sx={{
+                              fontSize: "0.75rem",
+                              fontFamily: "monospace",
+                              color: "text.secondary",
+                            }}
+                          >
+                            {item.id}
+                          </TableCell>
                           <TableCell>{item.name}</TableCell>
                           <TableCell align="right">
                             <Button
@@ -413,12 +430,22 @@ export default function CreatePOModal({
                       <Box
                         sx={{
                           display: "flex",
-                          justifyContent: "space-between",
+                          flexDirection: "column",
                           mb: 1,
                         }}
                       >
                         <Typography
                           variant="caption"
+                          sx={{
+                            color: "primary.main",
+                            fontWeight: "bold",
+                            fontSize: "0.65rem",
+                          }}
+                        >
+                          ID: {item.id}
+                        </Typography>
+                        <Typography
+                          variant="body2"
                           fontWeight="bold"
                           sx={{ pr: 4 }}
                         >

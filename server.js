@@ -194,12 +194,13 @@ app.post("/api/purchase-orders", async (req, res) => {
   }
 });
 
-// GET: Fetch individual items for a specific PO (used by ViewPOModal)
+// GET: Fetch individual items for a specific PO (FIXED to include item_id)
 app.get("/api/purchase-orders/:id/items", async (req, res) => {
   const { id } = req.params;
   try {
     const result = await pool.query(
-      "SELECT item_name as name, category, unit, quantity, price FROM item_order WHERE po_id = $1",
+      // Added item_id to the SELECT statement
+      "SELECT item_id, item_name as name, category, unit, quantity, price FROM item_order WHERE po_id = $1",
       [id],
     );
     res.json(result.rows);
