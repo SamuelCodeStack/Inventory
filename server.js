@@ -147,9 +147,9 @@ app.post("/api/purchase-orders", async (req, res) => {
     // 1. Insert into main purchase_order table
     const poResult = await client.query(
       `INSERT INTO purchase_order 
-       (po_number, customer_name, email, contact, company, address, total_price, status) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-       RETURNING po_id`,
+        (po_number, customer_name, email, contact, company, address, total_price, status) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+        RETURNING po_id`,
       [
         po_number,
         customer_name,
@@ -179,7 +179,7 @@ app.post("/api/purchase-orders", async (req, res) => {
         item.category,
         item.uom || item.unit,
         item.qty,
-        item.price, // Individual item price at time of order
+        item.price,
       ]);
     }
 
@@ -187,8 +187,19 @@ app.post("/api/purchase-orders", async (req, res) => {
     res.status(201).json({ success: true, poId: newPoId });
   } catch (err) {
     await client.query("ROLLBACK");
+
+    // SPECIFIC CHECK FOR DUPLICATE PO NUMBER (Postgres error code 23505)
+    if (err.code === "23505") {
+      console.error("DUPLICATE PO ATTEMPTED:", po_number);
+      return res.status(409).json({
+        error: `The PO Number "${po_number}" is already taken. Please use a unique number.`,
+      });
+    }
+
     console.error("PO CREATION TRANSACTION ERROR:", err.message);
-    res.status(500).json({ error: err.message });
+    res
+      .status(500)
+      .json({ error: "Internal server error during PO creation." });
   } finally {
     client.release();
   }

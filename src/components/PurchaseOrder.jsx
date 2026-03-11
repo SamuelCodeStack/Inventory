@@ -17,15 +17,16 @@ import {
   TextField,
   InputAdornment,
   Divider,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import {
-  FileUpload,
   Add,
   Visibility,
   Edit,
   Delete,
   Search,
-  Print, // Added Print Icon
+  Print,
 } from "@mui/icons-material";
 import CreatePOModal from "./CreatePOModal";
 import UpdatePOModal from "./UpdatePOModal";
@@ -40,7 +41,14 @@ export default function PurchaseOrder({ mode }) {
   const [selectedPO, setSelectedPO] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const componentRef = useRef(); // Ref for printing
+  // --- SNACKBAR STATE ---
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+
+  const componentRef = useRef();
 
   // Print Logic
   const handlePrint = useReactToPrint({
@@ -56,6 +64,7 @@ export default function PurchaseOrder({ mode }) {
       setPoData(data);
     } catch (error) {
       console.error("Error fetching POs:", error);
+      showSnackbar("Failed to load data", "error");
     } finally {
       setLoading(false);
     }
@@ -65,12 +74,26 @@ export default function PurchaseOrder({ mode }) {
     fetchPurchaseOrders();
   }, []);
 
+  // --- HANDLERS ---
+  const showSnackbar = (message, severity = "success") => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = (event, reason) => {
+    if (reason === "clickaway") return;
+    setSnackbar({ ...snackbar, open: false });
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("en-US", {
+    const date = new Date(dateString);
+    return date.toLocaleString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
     });
   };
 
@@ -87,10 +110,11 @@ export default function PurchaseOrder({ mode }) {
     }
   };
 
-  const handleSaveSuccess = () => {
+  const handleSaveSuccess = (message) => {
     setOpenCreateModal(false);
     setOpenUpdateModal(false);
     fetchPurchaseOrders();
+    showSnackbar(message || "Operation successful!");
   };
 
   const handleEditClick = (po) => {
@@ -104,15 +128,22 @@ export default function PurchaseOrder({ mode }) {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("Are you sure?")) {
+    if (window.confirm("Are you sure you want to delete this PO?")) {
       try {
         const response = await fetch(
           `http://localhost:3000/api/purchase-orders/${id}`,
-          { method: "DELETE" },
+          {
+            method: "DELETE",
+          },
         );
-        if (response.ok) fetchPurchaseOrders();
+        if (response.ok) {
+          fetchPurchaseOrders();
+          showSnackbar("Purchase Order deleted successfully", "info");
+        } else {
+          showSnackbar("Failed to delete order", "error");
+        }
       } catch (error) {
-        alert("Error deleting");
+        showSnackbar("Error connecting to server", "error");
       }
     }
   };
@@ -149,7 +180,7 @@ export default function PurchaseOrder({ mode }) {
         </Stack>
       </Box>
 
-      {/* Visible Dashboard Table */}
+      {/* Main Table Dashboard */}
       <TableContainer
         component={Paper}
         sx={{ borderRadius: 3, p: 2, backgroundImage: "none" }}
@@ -191,7 +222,9 @@ export default function PurchaseOrder({ mode }) {
               <TableCell sx={{ fontWeight: "bold" }}>PO ID</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Customer Name</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>PO No.</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Date Created</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>
+                Date & Time Created
+              </TableCell>
               <TableCell align="center" sx={{ fontWeight: "bold" }}>
                 Status
               </TableCell>
@@ -335,7 +368,7 @@ export default function PurchaseOrder({ mode }) {
                 <TableCell>ID</TableCell>
                 <TableCell>Customer</TableCell>
                 <TableCell>PO No.</TableCell>
-                <TableCell>Date Created</TableCell>
+                <TableCell>Date & Time Created</TableCell>
                 <TableCell align="center">Status</TableCell>
               </TableRow>
             </TableHead>
@@ -353,36 +386,6 @@ export default function PurchaseOrder({ mode }) {
               ))}
             </TableBody>
           </Table>
-
-          <Box
-            sx={{
-              mt: 10,
-              display: "flex",
-              justifyContent: "space-between",
-              px: 4,
-            }}
-          >
-            <Box
-              sx={{
-                borderTop: "1px solid black !important",
-                width: 200,
-                textAlign: "center",
-                pt: 1,
-              }}
-            >
-              <Typography variant="body2">Prepared By</Typography>
-            </Box>
-            <Box
-              sx={{
-                borderTop: "1px solid black !important",
-                width: 200,
-                textAlign: "center",
-                pt: 1,
-              }}
-            >
-              <Typography variant="body2">Authorized By</Typography>
-            </Box>
-          </Box>
         </Box>
       </Box>
 
@@ -390,7 +393,9 @@ export default function PurchaseOrder({ mode }) {
       <CreatePOModal
         open={openCreateModal}
         handleClose={() => setOpenCreateModal(false)}
-        onSaveSuccess={handleSaveSuccess}
+        onSaveSuccess={() =>
+          handleSaveSuccess("New Purchase Order created successfully!")
+        }
         mode={mode}
       />
       {selectedPO && (
@@ -398,7 +403,9 @@ export default function PurchaseOrder({ mode }) {
           <UpdatePOModal
             open={openUpdateModal}
             handleClose={() => setOpenUpdateModal(false)}
-            onUpdateSuccess={handleSaveSuccess}
+            onUpdateSuccess={() =>
+              handleSaveSuccess("Purchase Order updated successfully!")
+            }
             mode={mode}
             poData={selectedPO}
           />
@@ -410,6 +417,23 @@ export default function PurchaseOrder({ mode }) {
           />
         </>
       )}
+
+      {/* GLOBAL SNACKBAR */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: "100%", borderRadius: 2 }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
