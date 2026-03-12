@@ -229,10 +229,10 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
               </Typography>
 
               <Typography variant="body2">
-                Deliver to: <b>{poData.address || "Office Address"}</b>
+                Address: <b>{poData.address || "Office Address"}</b>
               </Typography>
               <Typography variant="body2" sx={{ mt: 1 }}>
-                Current Status: <b>{poData.status}</b>
+                Status: <b>{poData.status}</b>
               </Typography>
             </Grid>
           </Grid>

@@ -258,7 +258,13 @@ export default function UpdatePOModal({
             <Divider sx={{ mb: 2 }} />
 
             <Box
-              sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                mb: 2,
+                alignItems: "center", // Ensures text and search bar align vertically
+                px: 0.5, // Slight padding so it doesn't touch the edges
+              }}
             >
               <Typography variant="subtitle2" color="primary" fontWeight="bold">
                 Add Items
@@ -268,7 +274,11 @@ export default function UpdatePOModal({
                 placeholder="Search items..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                sx={{ width: 220, ...fieldStyle }}
+                sx={{
+                  width: 220,
+                  ...fieldStyle,
+                  "& .MuiInputBase-root": { height: 35 }, // Makes search bar slightly more compact
+                }}
               />
             </Box>
 
@@ -285,21 +295,31 @@ export default function UpdatePOModal({
                   <TableRow>
                     <TableCell
                       sx={{
-                        bgcolor: "action.hover",
+                        // Use a solid color based on mode to prevent transparency issues
+                        bgcolor: mode === "light" ? "#f5f5f5" : "#1e1e1e",
                         fontWeight: "bold",
                         width: 80,
+                        zIndex: 2, // Ensures it stays above body rows
                       }}
                     >
                       ID
                     </TableCell>
                     <TableCell
-                      sx={{ bgcolor: "action.hover", fontWeight: "bold" }}
+                      sx={{
+                        bgcolor: mode === "light" ? "#f5f5f5" : "#1e1e1e",
+                        fontWeight: "bold",
+                        zIndex: 2,
+                      }}
                     >
                       Item Name
                     </TableCell>
                     <TableCell
                       align="right"
-                      sx={{ bgcolor: "action.hover", fontWeight: "bold" }}
+                      sx={{
+                        bgcolor: mode === "light" ? "#f5f5f5" : "#1e1e1e",
+                        fontWeight: "bold",
+                        zIndex: 2,
+                      }}
                     >
                       Action
                     </TableCell>
