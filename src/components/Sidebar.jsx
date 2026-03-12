@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useLocation } from "react-router-dom"; // Added these
+import { Link, useLocation } from "react-router-dom";
 import {
   Drawer,
   Box,
@@ -18,10 +18,12 @@ import {
   People,
   Receipt,
   Settings,
+  Assignment, // Icon for Job Order
+  Layers, // Icon for Raw Materials
 } from "@mui/icons-material";
 
 export default function Sidebar({ toggleDarkMode, mode }) {
-  const location = useLocation(); // Gets the current URL path
+  const location = useLocation();
 
   const menuItems = [
     {
@@ -30,7 +32,11 @@ export default function Sidebar({ toggleDarkMode, mode }) {
       section: "Main Menu",
       path: "/dashboard",
     },
-    { text: "Inventory", icon: <Inventory />, path: "/" }, // Home path
+    { text: "Inventory", icon: <Inventory />, path: "/" },
+    // --- Added Items ---
+    { text: "Job Order", icon: <Assignment />, path: "/job-order" },
+    { text: "Raw Materials", icon: <Layers />, path: "/raw-materials" },
+    // -------------------
     { text: "Purchase Order", icon: <ShoppingCart />, path: "/purchase-order" },
     {
       text: "Supplier",
@@ -88,7 +94,6 @@ export default function Sidebar({ toggleDarkMode, mode }) {
 
       <List sx={{ px: 2 }}>
         {menuItems.map((item, index) => {
-          // Check if the current URL matches this item's path
           const isActive = location.pathname === item.path;
 
           return (
@@ -110,7 +115,6 @@ export default function Sidebar({ toggleDarkMode, mode }) {
                 </Typography>
               )}
               <ListItem disablePadding sx={{ mb: 0.5 }}>
-                {/* Link component makes it navigate without refreshing */}
                 <ListItemButton
                   component={Link}
                   to={item.path}

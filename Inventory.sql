@@ -1,4 +1,5 @@
 
+
 CREATE TABLE inventory (
     item_id SERIAL PRIMARY KEY,
     item_name VARCHAR(255) NOT NULL,
@@ -31,6 +32,19 @@ CREATE TABLE item_order(
 	quantity INTEGER NOT NULL,
 	price INT NOT NULL
 );
+
+CREATE TABLE raw_materials(
+	rm_id SERIAL PRIMARY KEY,
+	material_name VARCHAR(255) NOT NULL,
+    category VARCHAR(255),
+    unit VARCHAR(255),
+    stock DECIMAl DEFAULT 0.0,
+    min_stock DECIMAl DEFAULT 0.0
+);
+
+-- CREATE TABLE job_order(
+
+-- );
 
 
 -- CREATE TABLE activity_log (
