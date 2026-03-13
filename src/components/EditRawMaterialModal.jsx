@@ -10,8 +10,9 @@ import {
   Typography,
   MenuItem,
   Grid,
+  Box,
 } from "@mui/material";
-import { Close } from "@mui/icons-material";
+import { Close, EditNote } from "@mui/icons-material";
 
 const categories = ["Plastic", "Injection", "Paper", "Metals", "Trading"];
 const units = ["Pieces", "Bundle", "Boxes", "kg", "L"];
@@ -21,7 +22,7 @@ export default function EditRawMaterialModal({
   handleClose,
   onSaveSuccess,
   mode,
-  itemData, // This is the row object passed from RawMaterials.jsx
+  itemData,
 }) {
   const [formData, setFormData] = useState({
     material_name: "",
@@ -32,7 +33,7 @@ export default function EditRawMaterialModal({
 
   // Sync modal state with the selected item when it opens
   useEffect(() => {
-    if (itemData) {
+    if (itemData && open) {
       setFormData({
         material_name: itemData.material_name || "",
         category: itemData.category || "Plastic",
@@ -40,7 +41,7 @@ export default function EditRawMaterialModal({
         min_stock: itemData.min_stock || 0,
       });
     }
-  }, [itemData]);
+  }, [itemData, open]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -59,9 +60,10 @@ export default function EditRawMaterialModal({
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
+          // We only update details; stock is managed via the main table or Job Orders
           body: JSON.stringify({
             ...formData,
-            stock: itemData.stock, // Keep existing stock level during detail edit
+            stock: itemData.stock,
           }),
         },
       );
@@ -78,33 +80,59 @@ export default function EditRawMaterialModal({
     }
   };
 
+  const isDark = mode === "dark";
+
   const fieldStyle = {
     "& .MuiOutlinedInput-root": {
-      bgcolor: mode === "light" ? "#fff" : "rgba(255, 255, 255, 0.05)",
+      bgcolor: isDark ? "rgba(255, 255, 255, 0.03)" : "#fff",
       borderRadius: 2,
+    },
+    "& .MuiInputLabel-root": {
+      color: isDark ? "rgba(255,255,255,0.7)" : "inherit",
     },
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      fullWidth
+      maxWidth="sm"
+      PaperProps={{
+        sx: {
+          borderRadius: 3,
+          backgroundImage: "none",
+          bgcolor: isDark ? "#1e1e1e" : "#fff",
+        },
+      }}
+    >
       <DialogTitle
         component="div"
         sx={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          pb: 1,
         }}
       >
-        <Typography variant="h6" fontWeight="bold">
-          Edit Raw Material
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <EditNote sx={{ color: "#f2994a" }} />
+          <Typography variant="h6" fontWeight="bold">
+            Edit Material Details
+          </Typography>
+        </Box>
         <IconButton onClick={handleClose} size="small">
           <Close />
         </IconButton>
       </DialogTitle>
 
-      <DialogContent dividers>
-        <Grid container spacing={2} sx={{ mt: 0.5 }}>
+      <DialogContent
+        dividers
+        sx={{
+          borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)",
+        }}
+      >
+        <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
           <Grid item xs={12}>
             <TextField
               fullWidth
@@ -158,19 +186,30 @@ export default function EditRawMaterialModal({
               value={formData.min_stock}
               onChange={handleChange}
               sx={fieldStyle}
+              inputProps={{ min: 0 }}
             />
           </Grid>
         </Grid>
       </DialogContent>
 
-      <DialogActions sx={{ p: 3 }}>
-        <Button onClick={handleClose} sx={{ color: "text.secondary" }}>
+      <DialogActions sx={{ p: 3, bgcolor: isDark ? "#1e1e1e" : "#fff" }}>
+        <Button
+          onClick={handleClose}
+          sx={{ color: "text.secondary", fontWeight: "bold" }}
+        >
           Cancel
         </Button>
         <Button
           variant="contained"
           onClick={handleSubmit}
-          sx={{ fontWeight: "bold", px: 3 }}
+          sx={{
+            fontWeight: "bold",
+            px: 4,
+            borderRadius: 2,
+            bgcolor: "#f2994a",
+            color: "#000",
+            "&:hover": { bgcolor: "#d8853a" },
+          }}
         >
           Update Details
         </Button>

@@ -29,26 +29,44 @@ export default function Sidebar({ toggleDarkMode, mode }) {
     {
       text: "Dashboard",
       icon: <Dashboard />,
-      section: "Main Menu",
+      section: "Main Menu", // Section Header starts here
       path: "/dashboard",
     },
-    { text: "Inventory", icon: <Inventory />, path: "/" },
-    // --- Added Items ---
-    { text: "Job Order", icon: <Assignment />, path: "/job-order" },
-    { text: "Raw Materials", icon: <Layers />, path: "/raw-materials" },
-    // -------------------
-    { text: "Purchase Order", icon: <ShoppingCart />, path: "/purchase-order" },
+    {
+      text: "Inventory",
+      icon: <Inventory />,
+      path: "/",
+    },
+    {
+      text: "Job Order",
+      icon: <Assignment />,
+      path: "/job-order",
+    },
+    {
+      text: "Raw Materials",
+      icon: <Layers />,
+      path: "/raw-materials",
+    },
+    {
+      text: "Purchase Order",
+      icon: <ShoppingCart />,
+      path: "/purchase-order",
+    },
     {
       text: "Supplier",
       icon: <People />,
-      section: "Other Menu",
+      section: "Other Menu", // Section Header starts here
       path: "/supplier",
     },
-    { text: "Invoice", icon: <Receipt />, path: "/invoice" },
+    {
+      text: "Invoice",
+      icon: <Receipt />,
+      path: "/invoice",
+    },
     {
       text: "Settings",
       icon: <Settings />,
-      section: "Help & Settings",
+      section: "Help & Settings", // Section Header starts here
       path: "/settings",
     },
   ];

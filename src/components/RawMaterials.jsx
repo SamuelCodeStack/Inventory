@@ -28,11 +28,13 @@ import {
   RestartAlt,
   EditNote,
   Print,
+  HistoryToggleOff,
 } from "@mui/icons-material";
 
 // Import your Modal components
 import AddRawMaterialModal from "./AddRawMaterialModal.jsx";
 import EditRawMaterialModal from "./EditRawMaterialModal.jsx";
+import LeftoverModal from "./LeftoverModal.jsx";
 
 export default function RawMaterials({ mode }) {
   const [materialsData, setMaterialsData] = useState([]);
@@ -40,6 +42,7 @@ export default function RawMaterials({ mode }) {
   const [isEditingQty, setIsEditingQty] = useState(false);
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditModal, setOpenEditModal] = useState(false);
+  const [openLeftoverModal, setOpenLeftoverModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -60,29 +63,11 @@ export default function RawMaterials({ mode }) {
       const response = await fetch("http://localhost:3000/api/raw-materials");
       const data = await response.json();
       setMaterialsData(data);
+      // Deep copy to track local changes
       setOriginalData(JSON.parse(JSON.stringify(data)));
     } catch (error) {
       console.error("Fetch error:", error);
-      const dummy = [
-        {
-          rm_id: 1,
-          material_name: "Aluminum Rod",
-          category: "Metals",
-          unit: "kg",
-          stock: 150.5,
-          min_stock: 50.0,
-        },
-        {
-          rm_id: 2,
-          material_name: "PVC Pipe 2in",
-          category: "Plastics",
-          unit: "pcs",
-          stock: 12.0,
-          min_stock: 20.0,
-        },
-      ];
-      setMaterialsData(dummy);
-      setOriginalData(JSON.parse(JSON.stringify(dummy)));
+      showMessage("Failed to load materials from server", "error");
     }
   };
 
@@ -90,11 +75,10 @@ export default function RawMaterials({ mode }) {
     fetchMaterials();
   }, []);
 
-  // DELETE FUNCTION
   const handleDelete = async (id) => {
     if (
       window.confirm(
-        "Are you sure you want to delete this material? This action cannot be undone.",
+        "Are you sure you want to delete this material? This may affect Job Orders using it.",
       )
     ) {
       try {
@@ -105,10 +89,8 @@ export default function RawMaterials({ mode }) {
           },
         );
         if (response.ok) {
-          showMessage("Material deleted successfully", "success");
+          showMessage("Material deleted successfully");
           fetchMaterials();
-        } else {
-          showMessage("Failed to delete material", "error");
         }
       } catch (error) {
         showMessage("Network error while deleting", "error");
@@ -116,7 +98,6 @@ export default function RawMaterials({ mode }) {
     }
   };
 
-  // BULK STOCK UPDATE
   const handleBulkUpdate = async () => {
     const changedItems = materialsData.filter((item) => {
       const original = originalData.find((o) => o.rm_id === item.rm_id);
@@ -124,12 +105,13 @@ export default function RawMaterials({ mode }) {
     });
 
     try {
+      // Note: Using PATCH as it's more standard for partial updates
       await Promise.all(
         changedItems.map((item) =>
           fetch(`http://localhost:3000/api/raw-materials/${item.rm_id}`, {
-            method: "PUT",
+            method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ stock: item.stock }),
+            body: JSON.stringify({ stock: parseFloat(item.stock) }),
           }),
         ),
       );
@@ -143,9 +125,17 @@ export default function RawMaterials({ mode }) {
 
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
-    documentTitle: "Raw_Materials_Report",
+    documentTitle: `Raw_Materials_Report_${new Date().toLocaleDateString()}`,
     onAfterPrint: () => showMessage("Report generated successfully!", "info"),
   });
+
+  const handleQuantityChangeLocal = (id, newStock) => {
+    setMaterialsData((prev) =>
+      prev.map((item) =>
+        item.rm_id === id ? { ...item, stock: newStock } : item,
+      ),
+    );
+  };
 
   const hasChanges = materialsData.some((item) => {
     const originalItem = originalData.find((orig) => orig.rm_id === item.rm_id);
@@ -154,16 +144,9 @@ export default function RawMaterials({ mode }) {
     );
   });
 
-  const handleQuantityChangeLocal = (id, newStock) => {
-    const qty = parseFloat(newStock) || 0;
-    setMaterialsData((prev) =>
-      prev.map((item) => (item.rm_id === id ? { ...item, stock: qty } : item)),
-    );
-  };
-
   const getStatus = (stock, min_stock) => {
-    const s = parseFloat(stock);
-    const m = parseFloat(min_stock);
+    const s = parseFloat(stock) || 0;
+    const m = parseFloat(min_stock) || 0;
     if (s <= 0) return { label: "Out of Stock", color: "error" };
     if (s <= m) return { label: "Low Stock", color: "warning" };
     return { label: "In Stock", color: "success" };
@@ -173,44 +156,94 @@ export default function RawMaterials({ mode }) {
     <Box
       sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
     >
-      {/* Header Section */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
+      {/* Print Styles */}
+      <style>
+        {`
+          @media print {
+            .no-print { display: none !important; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          }
+        `}
+      </style>
+
+      {/* HEADER SECTION */}
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          mb: 4,
+          alignItems: "center",
+        }}
+      >
         <Box>
           <Typography variant="h5" fontWeight="bold">
-            Raw Materials
+            Raw Materials Inventory
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Inventory Management
+            Monitor and manage your factory raw stock
           </Typography>
         </Box>
+
         <Stack direction="row" spacing={2}>
           <Button
             variant="outlined"
             startIcon={<Print />}
             onClick={() => handlePrint()}
           >
-            Print
+            Print Report
           </Button>
+
+          <Button
+            variant="outlined"
+            color="secondary"
+            startIcon={<HistoryToggleOff />}
+            onClick={() => setOpenLeftoverModal(true)}
+            sx={{ fontWeight: "bold" }}
+          >
+            Leftovers
+          </Button>
+
           <Button
             variant={isEditingQty ? "contained" : "outlined"}
             color={isEditingQty ? "warning" : "primary"}
-            startIcon={<EditNote />}
-            onClick={() => setIsEditingQty(!isEditingQty)}
+            startIcon={isEditingQty ? <Save /> : <EditNote />}
+            onClick={() => {
+              if (isEditingQty && hasChanges) {
+                handleBulkUpdate();
+              } else {
+                setIsEditingQty(!isEditingQty);
+              }
+            }}
           >
-            {isEditingQty ? "Lock Editing" : "Quick Stock Update"}
+            {isEditingQty
+              ? hasChanges
+                ? "Save Changes"
+                : "Lock Edit"
+              : "Quick Edit Qty"}
           </Button>
+
           <Button
             variant="contained"
             startIcon={<Add />}
             onClick={() => setOpenAddModal(true)}
+            sx={{
+              bgcolor: "#f2994a",
+              "&:hover": { bgcolor: "#d8853a" },
+              color: "#000",
+              fontWeight: "bold",
+            }}
           >
             Add Material
           </Button>
         </Stack>
       </Box>
 
-      {/* Main Table Container */}
-      <TableContainer component={Paper} sx={{ borderRadius: 3, p: 2 }}>
+      {/* TABLE SECTION */}
+      <TableContainer
+        component={Paper}
+        sx={{ borderRadius: 3, p: 3, backgroundImage: "none" }}
+      >
         <Box
           sx={{
             display: "flex",
@@ -220,11 +253,12 @@ export default function RawMaterials({ mode }) {
           }}
         >
           <Typography variant="subtitle1" fontWeight="bold">
-            Materials List
+            Active Stock List
           </Typography>
           <TextField
             size="small"
-            placeholder="Search material..."
+            placeholder="Search material or category..."
+            value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             InputProps={{
               startAdornment: (
@@ -233,121 +267,132 @@ export default function RawMaterials({ mode }) {
                 </InputAdornment>
               ),
             }}
+            sx={{ width: 300 }}
           />
         </Box>
 
-        <Table ref={componentRef}>
-          <TableHead
-            sx={{
-              bgcolor:
-                mode === "light" ? "action.hover" : "rgba(255,255,255,0.02)",
-            }}
-          >
-            <TableRow>
-              <TableCell>RM ID</TableCell>
-              <TableCell>Material Name</TableCell>
-              <TableCell>Category</TableCell>
-              <TableCell align="right">Stock</TableCell>
-              <TableCell>Unit</TableCell>
-              <TableCell align="center">Status</TableCell>
-              <TableCell align="right" className="no-print">
-                Action
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {materialsData
-              .filter((item) =>
-                item.material_name
-                  .toLowerCase()
-                  .includes(searchQuery.toLowerCase()),
-              )
-              .map((row) => {
-                const status = getStatus(row.stock, row.min_stock);
-                return (
-                  <TableRow key={row.rm_id} hover>
-                    <TableCell>#{row.rm_id}</TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight="bold">
-                        {row.material_name}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={row.category}
-                        size="small"
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <TextField
-                        type="number"
-                        variant={isEditingQty ? "outlined" : "standard"}
-                        size="small"
-                        disabled={!isEditingQty}
-                        value={row.stock}
-                        onChange={(e) =>
-                          handleQuantityChangeLocal(row.rm_id, e.target.value)
-                        }
-                        InputProps={{
-                          disableUnderline: true,
-                          sx: {
-                            fontWeight: "bold",
-                            width: "80px",
-                            "& input": { textAlign: "right" },
-                          },
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>{row.unit}</TableCell>
-                    <TableCell align="center">
-                      <Chip
-                        label={status.label}
-                        size="small"
-                        color={status.color}
-                      />
-                    </TableCell>
-                    <TableCell align="right" className="no-print">
-                      <Stack
-                        direction="row"
-                        spacing={1}
-                        justifyContent="flex-end"
-                      >
-                        <IconButton
+        <Box ref={componentRef}>
+          <Table>
+            <TableHead
+              sx={{
+                bgcolor:
+                  mode === "light" ? "action.hover" : "rgba(255,255,255,0.05)",
+              }}
+            >
+              <TableRow>
+                <TableCell>RM ID</TableCell>
+                <TableCell>Material Name</TableCell>
+                <TableCell>Category</TableCell>
+                <TableCell align="right">Stock Level</TableCell>
+                <TableCell>Unit</TableCell>
+                <TableCell align="center">Status</TableCell>
+                <TableCell align="right" className="no-print">
+                  Action
+                </TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {materialsData
+                .filter(
+                  (item) =>
+                    item.material_name
+                      .toLowerCase()
+                      .includes(searchQuery.toLowerCase()) ||
+                    item.category
+                      .toLowerCase()
+                      .includes(searchQuery.toLowerCase()),
+                )
+                .map((row) => {
+                  const status = getStatus(row.stock, row.min_stock);
+                  return (
+                    <TableRow key={row.rm_id} hover>
+                      <TableCell>#{row.rm_id}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight="bold">
+                          {row.material_name}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={row.category}
                           size="small"
-                          color="info"
-                          onClick={() => {
-                            setSelectedItem(row);
-                            setOpenEditModal(true);
-                          }}
-                        >
-                          <Edit fontSize="inherit" />
-                        </IconButton>
-                        <IconButton
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        {isEditingQty ? (
+                          <TextField
+                            type="number"
+                            size="small"
+                            value={row.stock}
+                            onChange={(e) =>
+                              handleQuantityChangeLocal(
+                                row.rm_id,
+                                e.target.value,
+                              )
+                            }
+                            sx={{
+                              width: "90px",
+                              "& input": { textAlign: "right", py: 0.5 },
+                            }}
+                          />
+                        ) : (
+                          <Typography variant="body2" fontWeight="bold">
+                            {row.stock}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>{row.unit}</TableCell>
+                      <TableCell align="center">
+                        <Chip
+                          label={status.label}
                           size="small"
-                          color="error"
-                          onClick={() => handleDelete(row.rm_id)}
+                          color={status.color}
+                          sx={{ fontWeight: "bold", minWidth: 90 }}
+                        />
+                      </TableCell>
+                      <TableCell align="right" className="no-print">
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          justifyContent="flex-end"
                         >
-                          <Delete fontSize="inherit" />
-                        </IconButton>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-          </TableBody>
-        </Table>
+                          <IconButton
+                            size="small"
+                            color="info"
+                            onClick={() => {
+                              setSelectedItem(row);
+                              setOpenEditModal(true);
+                            }}
+                          >
+                            <Edit fontSize="inherit" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => handleDelete(row.rm_id)}
+                          >
+                            <Delete fontSize="inherit" />
+                          </IconButton>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+            </TableBody>
+          </Table>
+        </Box>
 
+        {/* BULK UPDATE ACTIONS */}
         {hasChanges && (
           <Box
             sx={{
-              mt: 2,
+              mt: 3,
               p: 2,
               display: "flex",
               justifyContent: "flex-end",
               gap: 2,
-              borderTop: "1px solid",
-              borderColor: "divider",
+              borderTop: "1px solid divider",
             }}
           >
             <Button
@@ -358,7 +403,7 @@ export default function RawMaterials({ mode }) {
                 setMaterialsData(JSON.parse(JSON.stringify(originalData)))
               }
             >
-              Discard
+              Discard Changes
             </Button>
             <Button
               variant="contained"
@@ -366,13 +411,13 @@ export default function RawMaterials({ mode }) {
               startIcon={<Save />}
               onClick={handleBulkUpdate}
             >
-              Save Changes
+              Save Stock Levels
             </Button>
           </Box>
         )}
       </TableContainer>
 
-      {/* Add Modal */}
+      {/* MODALS */}
       <AddRawMaterialModal
         open={openAddModal}
         handleClose={() => setOpenAddModal(false)}
@@ -383,7 +428,6 @@ export default function RawMaterials({ mode }) {
         mode={mode}
       />
 
-      {/* Edit Modal */}
       <EditRawMaterialModal
         open={openEditModal}
         handleClose={() => {
@@ -398,13 +442,24 @@ export default function RawMaterials({ mode }) {
         mode={mode}
       />
 
+      <LeftoverModal
+        open={openLeftoverModal}
+        handleClose={() => setOpenLeftoverModal(false)}
+        mode={mode}
+        onUpdate={fetchMaterials} // Refreshes main list if leftover logic changes rm stock
+      />
+
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       >
-        <Alert severity={snackbar.severity} variant="filled">
+        <Alert
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ borderRadius: 2 }}
+        >
           {snackbar.message}
         </Alert>
       </Snackbar>

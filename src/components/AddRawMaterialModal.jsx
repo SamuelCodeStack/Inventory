@@ -10,8 +10,9 @@ import {
   Typography,
   MenuItem,
   Grid,
+  Box,
 } from "@mui/material";
-import { Close } from "@mui/icons-material";
+import { Close, Inventory2 } from "@mui/icons-material";
 
 const categories = ["Plastic", "Injection", "Paper", "Metals", "Trading"];
 const units = ["Pieces", "Bundle", "Boxes", "kg", "L"];
@@ -52,59 +53,97 @@ export default function AddRawMaterialModal({
       });
 
       if (response.ok) {
-        onSaveSuccess();
-        handleClose();
-        setFormData({
-          material_name: "",
-          category: "Plastic",
-          unit: "Pieces",
-          stock: 0,
-          min_stock: 10,
-        });
+        onSaveSuccess(); // This triggers the fetch in the parent component
+        handleReset();
       } else {
-        const errorData = await response.json();
-        alert("Server Error: " + errorData.error);
+        // If the response is not ok, try to read the error message
+        const errorData = await response
+          .json()
+          .catch(() => ({ error: "Unknown Server Error" }));
+        alert("Error: " + errorData.error);
       }
     } catch (error) {
-      alert("Network Error: Could not connect to server.");
+      console.error("Network Error:", error);
+      alert(
+        "Network Error: Make sure your backend server is running on port 3000.",
+      );
     }
   };
 
+  const handleReset = () => {
+    setFormData({
+      material_name: "",
+      category: "Plastic",
+      unit: "Pieces",
+      stock: 0,
+      min_stock: 10,
+    });
+    handleClose();
+  };
+
+  const isDark = mode === "dark";
+
   const fieldStyle = {
     "& .MuiOutlinedInput-root": {
-      bgcolor: mode === "light" ? "#fff" : "rgba(255, 255, 255, 0.05)",
+      bgcolor: isDark ? "rgba(255, 255, 255, 0.03)" : "#fff",
       borderRadius: 2,
+    },
+    "& .MuiInputLabel-root": {
+      color: isDark ? "rgba(255,255,255,0.7)" : "inherit",
     },
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
+    <Dialog
+      open={open}
+      onClose={handleReset}
+      fullWidth
+      maxWidth="sm"
+      PaperProps={{
+        sx: {
+          borderRadius: 3,
+          backgroundImage: "none",
+          bgcolor: isDark ? "#1e1e1e" : "#fff",
+        },
+      }}
+    >
       <DialogTitle
         component="div"
         sx={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          pb: 1,
         }}
       >
-        <Typography variant="h6" fontWeight="bold">
-          Add New Raw Material
-        </Typography>
-        <IconButton onClick={handleClose} size="small">
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Inventory2 sx={{ color: "#f2994a" }} />
+          <Typography variant="h6" fontWeight="bold">
+            Add New Raw Material
+          </Typography>
+        </Box>
+        <IconButton onClick={handleReset} size="small">
           <Close />
         </IconButton>
       </DialogTitle>
 
-      <DialogContent dividers>
-        <Grid container spacing={2} sx={{ mt: 0.5 }}>
+      <DialogContent
+        dividers
+        sx={{
+          borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)",
+        }}
+      >
+        <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
           <Grid item xs={12}>
             <TextField
               fullWidth
               label="Material Name"
               name="material_name"
+              placeholder="e.g. PP Resin Grade A"
               value={formData.material_name}
               onChange={handleChange}
               sx={fieldStyle}
+              autoFocus
             />
           </Grid>
           <Grid item xs={6}>
@@ -128,7 +167,7 @@ export default function AddRawMaterialModal({
             <TextField
               fullWidth
               select
-              label="Unit"
+              label="Unit of Measure"
               name="unit"
               value={formData.unit}
               onChange={handleChange}
@@ -145,35 +184,47 @@ export default function AddRawMaterialModal({
             <TextField
               fullWidth
               type="number"
-              label="Initial Stock"
+              label="Initial Stock Quantity"
               name="stock"
               value={formData.stock}
               onChange={handleChange}
               sx={fieldStyle}
+              inputProps={{ min: 0 }}
             />
           </Grid>
           <Grid item xs={6}>
             <TextField
               fullWidth
               type="number"
-              label="Min Stock Level"
+              label="Alert Level (Min Stock)"
               name="min_stock"
               value={formData.min_stock}
               onChange={handleChange}
               sx={fieldStyle}
+              inputProps={{ min: 0 }}
             />
           </Grid>
         </Grid>
       </DialogContent>
 
-      <DialogActions sx={{ p: 3 }}>
-        <Button onClick={handleClose} sx={{ color: "text.secondary" }}>
+      <DialogActions sx={{ p: 3, bgcolor: isDark ? "#1e1e1e" : "#fff" }}>
+        <Button
+          onClick={handleReset}
+          sx={{ color: "text.secondary", fontWeight: "bold" }}
+        >
           Cancel
         </Button>
         <Button
           variant="contained"
           onClick={handleSubmit}
-          sx={{ fontWeight: "bold", px: 3 }}
+          sx={{
+            fontWeight: "bold",
+            px: 4,
+            borderRadius: 2,
+            bgcolor: "#f2994a",
+            color: "#000",
+            "&:hover": { bgcolor: "#d8853a" },
+          }}
         >
           Save Material
         </Button>

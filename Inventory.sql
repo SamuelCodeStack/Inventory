@@ -1,5 +1,6 @@
 
 
+
 CREATE TABLE inventory (
     item_id SERIAL PRIMARY KEY,
     item_name VARCHAR(255) NOT NULL,
@@ -36,15 +37,48 @@ CREATE TABLE item_order(
 CREATE TABLE raw_materials(
 	rm_id SERIAL PRIMARY KEY,
 	material_name VARCHAR(255) NOT NULL,
-    category VARCHAR(255),
-    unit VARCHAR(255),
+    category VARCHAR(255)NOT NULL,
+    unit VARCHAR(255)NOT NULL ,
     stock DECIMAl DEFAULT 0.0,
     min_stock DECIMAl DEFAULT 0.0
 );
 
--- CREATE TABLE job_order(
+-- 1. Main Job Order Table
+CREATE TABLE job_order (
+    jo_id SERIAL PRIMARY KEY,
+    item_name VARCHAR(255) NOT NULL,
+    handle_by VARCHAR(255) NOT NULL,
+    status VARCHAR(255) NOT NULL DEFAULT 'Pending',
+    quantity_produced INT DEFAULT 0, 
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- );
+-- 2. Junction Table: Tracks what materials were used in a Job Order (BOM)
+CREATE TABLE job_materials (
+    jom_id SERIAL PRIMARY KEY,
+    jo_id INT REFERENCES job_order(jo_id) ON DELETE CASCADE,
+    rm_id INT NOT NULL, -- The ID from either raw_materials or material_leftovers
+    material_name VARCHAR(255) NOT NULL,
+    category VARCHAR(255) NOT NULL,
+    unit VARCHAR(255) NOT NULL,
+    used_stock DECIMAL(10, 2) NOT NULL, -- Changed from 'used-stock' (invalid syntax)
+    source_type VARCHAR(50) NOT NULL -- 'Raw' or 'Leftover'
+);
+
+-- 3. Leftover / Scrap Inventory
+CREATE TABLE material_leftovers (
+    leftover_id SERIAL PRIMARY KEY,
+    jo_id INT REFERENCES job_order(jo_id) ON DELETE SET NULL, -- The JO that created this scrap
+    rm_id INT REFERENCES raw_materials(rm_id) ON DELETE SET NULL, -- Link back to the original Raw Material type
+    material_name VARCHAR(255) NOT NULL,
+    category VARCHAR(255) NOT NULL,
+    unit VARCHAR(255) NOT NULL,
+    quantity DECIMAL(10, 2) NOT NULL DEFAULT 0, -- Current available leftover
+    type VARCHAR(50) NOT NULL, -- 'Scrap', 'Returned', 'Offcut'
+    remarks VARCHAR(255),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 
 
 -- CREATE TABLE activity_log (

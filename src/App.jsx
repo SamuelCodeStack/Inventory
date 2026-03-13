@@ -6,6 +6,7 @@ import Header from "./components/Header.jsx";
 import Inventory from "./components/Inventory.jsx";
 import PurchaseOrder from "./components/PurchaseOrder.jsx";
 import RawMaterials from "./components/RawMaterials.jsx";
+import JobOrder from "./components/JobOrder.jsx"; // Ensure this import exists
 
 function App() {
   const [mode, setMode] = useState("dark"); // Default to dark based on your project style
@@ -65,14 +66,7 @@ function App() {
               />
 
               {/* Job Orders Placeholder */}
-              <Route
-                path="/job-order"
-                element={
-                  <Box sx={{ p: 4, color: mode === "dark" ? "#fff" : "#000" }}>
-                    Job Order Content Coming Soon
-                  </Box>
-                }
-              />
+              <Route path="/job-order" element={<JobOrder mode={mode} />} />
             </Routes>
           </Box>
         </Box>
