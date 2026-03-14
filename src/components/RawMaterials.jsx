@@ -18,6 +18,7 @@ import {
   InputAdornment,
   Snackbar,
   Alert,
+  Divider,
 } from "@mui/material";
 import {
   Add,
@@ -52,7 +53,8 @@ export default function RawMaterials({ mode }) {
     severity: "success",
   });
 
-  const componentRef = useRef();
+  // 1. THIS REF NOW POINTS TO THE HIDDEN PRINT TEMPLATE
+  const printRef = useRef();
 
   const showMessage = (msg, sev = "success") => {
     setSnackbar({ open: true, message: msg, severity: sev });
@@ -63,7 +65,6 @@ export default function RawMaterials({ mode }) {
       const response = await fetch("http://localhost:3000/api/raw-materials");
       const data = await response.json();
       setMaterialsData(data);
-      // Deep copy to track local changes
       setOriginalData(JSON.parse(JSON.stringify(data)));
     } catch (error) {
       console.error("Fetch error:", error);
@@ -75,12 +76,15 @@ export default function RawMaterials({ mode }) {
     fetchMaterials();
   }, []);
 
+  // 2. UPDATED PRINT HANDLER
+  const handlePrint = useReactToPrint({
+    contentRef: printRef, // Points to the clean report
+    documentTitle: `KIMWIN_Inventory_Report_${new Date().toLocaleDateString()}`,
+    onAfterPrint: () => showMessage("Report generated successfully!", "info"),
+  });
+
   const handleDelete = async (id) => {
-    if (
-      window.confirm(
-        "Are you sure you want to delete this material? This may affect Job Orders using it.",
-      )
-    ) {
+    if (window.confirm("Are you sure you want to delete this material?")) {
       try {
         const response = await fetch(
           `http://localhost:3000/api/raw-materials/${id}`,
@@ -105,7 +109,6 @@ export default function RawMaterials({ mode }) {
     });
 
     try {
-      // Note: Using PATCH as it's more standard for partial updates
       await Promise.all(
         changedItems.map((item) =>
           fetch(`http://localhost:3000/api/raw-materials/${item.rm_id}`, {
@@ -122,12 +125,6 @@ export default function RawMaterials({ mode }) {
       showMessage("Failed to update stock", "error");
     }
   };
-
-  const handlePrint = useReactToPrint({
-    contentRef: componentRef,
-    documentTitle: `Raw_Materials_Report_${new Date().toLocaleDateString()}`,
-    onAfterPrint: () => showMessage("Report generated successfully!", "info"),
-  });
 
   const handleQuantityChangeLocal = (id, newStock) => {
     setMaterialsData((prev) =>
@@ -152,22 +149,18 @@ export default function RawMaterials({ mode }) {
     return { label: "In Stock", color: "success" };
   };
 
+  // Filter logic used for both Screen and Print
+  const filteredData = materialsData.filter(
+    (item) =>
+      item.material_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.category.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
+
   return (
     <Box
       sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
     >
-      {/* Print Styles */}
-      <style>
-        {`
-          @media print {
-            .no-print { display: none !important; }
-            table { width: 100%; border-collapse: collapse; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-          }
-        `}
-      </style>
-
-      {/* HEADER SECTION */}
+      {/* --- SCREEN VIEW UI --- */}
       <Box
         sx={{
           display: "flex",
@@ -178,10 +171,10 @@ export default function RawMaterials({ mode }) {
       >
         <Box>
           <Typography variant="h5" fontWeight="bold">
-            Raw Materials Inventory
+            Raw Materials
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Monitor and manage your factory raw stock
+            Dashboard / Raw Materials
           </Typography>
         </Box>
 
@@ -193,28 +186,23 @@ export default function RawMaterials({ mode }) {
           >
             Print Report
           </Button>
-
           <Button
             variant="outlined"
             color="secondary"
             startIcon={<HistoryToggleOff />}
             onClick={() => setOpenLeftoverModal(true)}
-            sx={{ fontWeight: "bold" }}
           >
             Leftovers
           </Button>
-
           <Button
             variant={isEditingQty ? "contained" : "outlined"}
             color={isEditingQty ? "warning" : "primary"}
             startIcon={isEditingQty ? <Save /> : <EditNote />}
-            onClick={() => {
-              if (isEditingQty && hasChanges) {
-                handleBulkUpdate();
-              } else {
-                setIsEditingQty(!isEditingQty);
-              }
-            }}
+            onClick={() =>
+              isEditingQty && hasChanges
+                ? handleBulkUpdate()
+                : setIsEditingQty(!isEditingQty)
+            }
           >
             {isEditingQty
               ? hasChanges
@@ -222,7 +210,6 @@ export default function RawMaterials({ mode }) {
                 : "Lock Edit"
               : "Quick Edit Qty"}
           </Button>
-
           <Button
             variant="contained"
             startIcon={<Add />}
@@ -239,7 +226,6 @@ export default function RawMaterials({ mode }) {
         </Stack>
       </Box>
 
-      {/* TABLE SECTION */}
       <TableContainer
         component={Paper}
         sx={{ borderRadius: 3, p: 3, backgroundImage: "none" }}
@@ -253,11 +239,11 @@ export default function RawMaterials({ mode }) {
           }}
         >
           <Typography variant="subtitle1" fontWeight="bold">
-            Active Stock List
+            Raw Materials List
           </Typography>
           <TextField
             size="small"
-            placeholder="Search material or category..."
+            placeholder="Search..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             InputProps={{
@@ -271,119 +257,99 @@ export default function RawMaterials({ mode }) {
           />
         </Box>
 
-        <Box ref={componentRef}>
-          <Table>
-            <TableHead
-              sx={{
-                bgcolor:
-                  mode === "light" ? "action.hover" : "rgba(255,255,255,0.05)",
-              }}
-            >
-              <TableRow>
-                <TableCell>RM ID</TableCell>
-                <TableCell>Material Name</TableCell>
-                <TableCell>Category</TableCell>
-                <TableCell align="right">Stock Level</TableCell>
-                <TableCell>Unit</TableCell>
-                <TableCell align="center">Status</TableCell>
-                <TableCell align="right" className="no-print">
-                  Action
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {materialsData
-                .filter(
-                  (item) =>
-                    item.material_name
-                      .toLowerCase()
-                      .includes(searchQuery.toLowerCase()) ||
-                    item.category
-                      .toLowerCase()
-                      .includes(searchQuery.toLowerCase()),
-                )
-                .map((row) => {
-                  const status = getStatus(row.stock, row.min_stock);
-                  return (
-                    <TableRow key={row.rm_id} hover>
-                      <TableCell>#{row.rm_id}</TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight="bold">
-                          {row.material_name}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={row.category}
-                          size="small"
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        {isEditingQty ? (
-                          <TextField
-                            type="number"
-                            size="small"
-                            value={row.stock}
-                            onChange={(e) =>
-                              handleQuantityChangeLocal(
-                                row.rm_id,
-                                e.target.value,
-                              )
-                            }
-                            sx={{
-                              width: "90px",
-                              "& input": { textAlign: "right", py: 0.5 },
-                            }}
-                          />
-                        ) : (
-                          <Typography variant="body2" fontWeight="bold">
-                            {row.stock}
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>{row.unit}</TableCell>
-                      <TableCell align="center">
-                        <Chip
-                          label={status.label}
-                          size="small"
-                          color={status.color}
-                          sx={{ fontWeight: "bold", minWidth: 90 }}
-                        />
-                      </TableCell>
-                      <TableCell align="right" className="no-print">
-                        <Stack
-                          direction="row"
-                          spacing={1}
-                          justifyContent="flex-end"
-                        >
-                          <IconButton
-                            size="small"
-                            color="info"
-                            onClick={() => {
-                              setSelectedItem(row);
-                              setOpenEditModal(true);
-                            }}
-                          >
-                            <Edit fontSize="inherit" />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => handleDelete(row.rm_id)}
-                          >
-                            <Delete fontSize="inherit" />
-                          </IconButton>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-            </TableBody>
-          </Table>
-        </Box>
+        <Table>
+          <TableHead
+            sx={{
+              bgcolor:
+                mode === "light" ? "action.hover" : "rgba(255,255,255,0.05)",
+            }}
+          >
+            <TableRow>
+              <TableCell>RM ID</TableCell>
+              <TableCell>Material Name</TableCell>
+              <TableCell>Category</TableCell>
+              <TableCell align="right">Stock Level</TableCell>
+              <TableCell>Unit</TableCell>
+              <TableCell align="center">Status</TableCell>
+              <TableCell align="right">Action</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredData.map((row) => {
+              const status = getStatus(row.stock, row.min_stock);
+              return (
+                <TableRow key={row.rm_id} hover>
+                  <TableCell>#{row.rm_id}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight="bold">
+                      {row.material_name}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={row.category}
+                      size="small"
+                      variant="outlined"
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    {isEditingQty ? (
+                      <TextField
+                        type="number"
+                        size="small"
+                        value={row.stock}
+                        onChange={(e) =>
+                          handleQuantityChangeLocal(row.rm_id, e.target.value)
+                        }
+                        sx={{
+                          width: "90px",
+                          "& input": { textAlign: "right", py: 0.5 },
+                        }}
+                      />
+                    ) : (
+                      row.stock
+                    )}
+                  </TableCell>
+                  <TableCell>{row.unit}</TableCell>
+                  <TableCell align="center">
+                    <Chip
+                      label={status.label}
+                      size="small"
+                      color={status.color}
+                      sx={{ fontWeight: "bold", minWidth: 90 }}
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      justifyContent="flex-end"
+                    >
+                      <IconButton
+                        size="small"
+                        color="info"
+                        onClick={() => {
+                          setSelectedItem(row);
+                          setOpenEditModal(true);
+                        }}
+                      >
+                        <Edit fontSize="inherit" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => handleDelete(row.rm_id)}
+                      >
+                        <Delete fontSize="inherit" />
+                      </IconButton>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
 
-        {/* BULK UPDATE ACTIONS */}
         {hasChanges && (
           <Box
             sx={{
@@ -403,7 +369,7 @@ export default function RawMaterials({ mode }) {
                 setMaterialsData(JSON.parse(JSON.stringify(originalData)))
               }
             >
-              Discard Changes
+              Discard
             </Button>
             <Button
               variant="contained"
@@ -411,23 +377,19 @@ export default function RawMaterials({ mode }) {
               startIcon={<Save />}
               onClick={handleBulkUpdate}
             >
-              Save Stock Levels
+              Save Stock
             </Button>
           </Box>
         )}
       </TableContainer>
 
-      {/* MODALS */}
+      {/* --- MODALS --- */}
       <AddRawMaterialModal
         open={openAddModal}
         handleClose={() => setOpenAddModal(false)}
-        onSaveSuccess={() => {
-          showMessage("Material added successfully!");
-          fetchMaterials();
-        }}
+        onSaveSuccess={fetchMaterials}
         mode={mode}
       />
-
       <EditRawMaterialModal
         open={openEditModal}
         handleClose={() => {
@@ -435,18 +397,14 @@ export default function RawMaterials({ mode }) {
           setSelectedItem(null);
         }}
         itemData={selectedItem}
-        onSaveSuccess={() => {
-          showMessage("Material updated successfully!");
-          fetchMaterials();
-        }}
+        onSaveSuccess={fetchMaterials}
         mode={mode}
       />
-
       <LeftoverModal
         open={openLeftoverModal}
         handleClose={() => setOpenLeftoverModal(false)}
         mode={mode}
-        onUpdate={fetchMaterials} // Refreshes main list if leftover logic changes rm stock
+        onUpdate={fetchMaterials}
       />
 
       <Snackbar
@@ -463,6 +421,89 @@ export default function RawMaterials({ mode }) {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* --- 3. HIDDEN PRINT TEMPLATE --- */}
+      <Box sx={{ display: "none" }}>
+        <Box
+          ref={printRef}
+          sx={{
+            p: "15mm",
+            bgcolor: "white",
+            color: "black",
+            width: "210mm",
+            "& *": { color: "black !important" },
+          }}
+        >
+          <style>{`
+            @media print {
+              @page { size: A4; margin: 10mm; }
+              body { background-color: white !important; }
+              * { 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact; 
+              }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              th, td { border: 1px solid #ccc; padding: 10px; text-align: left; font-size: 12px; }
+              th { background-color: #f5f5f5 !important; font-weight: bold; }
+            }
+          `}</style>
+
+          <Typography
+            variant="h4"
+            fontWeight="bold"
+            sx={{ color: "#1a237e !important" }}
+          >
+            KIMWIN CORPORATION
+          </Typography>
+          <Typography variant="h6" sx={{ mb: 1 }}>
+            Raw Materials Assets Report
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 3 }}>
+            Date Generated: {new Date().toLocaleString()}
+          </Typography>
+
+          <Divider sx={{ mb: 3, borderColor: "black !important" }} />
+
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Material Name</th>
+                <th>Category</th>
+                <th>Stock</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredData.map((row) => (
+                <tr key={row.rm_id}>
+                  <td>{row.rm_id}</td>
+                  <td>{row.material_name}</td>
+                  <td>{row.category}</td>
+                  <td>
+                    {row.stock} {row.unit}
+                  </td>
+
+                  <td>{getStatus(row.stock, row.min_stock).label}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <Box sx={{ mt: 5, display: "flex", justifyContent: "space-between" }}>
+            <Box>
+              <Typography variant="caption">
+                Prepared by: ____________________
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption">
+                Approved by: ____________________
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+      </Box>
     </Box>
   );
 }

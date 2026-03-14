@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useReactToPrint } from "react-to-print";
 import {
   Dialog,
   DialogTitle,
@@ -19,11 +20,23 @@ import {
   Divider,
   Stack,
 } from "@mui/material";
-import { Close, Inventory, Person, Engineering } from "@mui/icons-material";
+import {
+  Close,
+  Inventory,
+  Engineering,
+  CalendarToday,
+  Print,
+} from "@mui/icons-material";
 
 export default function ViewJOModal({ open, handleClose, jo, mode }) {
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(false);
+  const printRef = useRef();
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `JobOrder_${jo?.jo_id || "Details"}`,
+  });
 
   useEffect(() => {
     if (open && jo?.jo_id) {
@@ -45,6 +58,29 @@ export default function ViewJOModal({ open, handleClose, jo, mode }) {
 
   const isDark = mode === "dark";
 
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    return new Intl.DateTimeFormat("en-PH", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    }).format(new Date(dateString));
+  };
+
+  /**
+   * Helper function to format quantity based on unit.
+   * If unit is a weight/length base, show 1 decimal. Otherwise whole number.
+   */
+  const formatQuantity = (qty, unit) => {
+    const value = parseFloat(qty) || 0;
+    const baseUnits = ["kg", "kilogram", "meter", "m", "liter", "L", "lb"];
+
+    if (baseUnits.includes(unit?.toLowerCase())) {
+      return value.toFixed(1);
+    }
+    return Math.round(value).toString();
+  };
+
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="md">
       <DialogTitle
@@ -64,7 +100,7 @@ export default function ViewJOModal({ open, handleClose, jo, mode }) {
       </DialogTitle>
 
       <DialogContent dividers sx={{ bgcolor: isDark ? "#121212" : "#fcfcfc" }}>
-        {/* Header Info Section */}
+        {/* UI VIEW (Visible on Screen) */}
         <Box sx={{ mb: 3 }}>
           <Stack
             direction={{ xs: "column", sm: "row" }}
@@ -81,20 +117,29 @@ export default function ViewJOModal({ open, handleClose, jo, mode }) {
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">
-                QUANTITY PRODUCED
+                DATE CREATED
               </Typography>
-              <Typography variant="h6">{jo.quantity_produced} units</Typography>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <CalendarToday
+                  fontSize="small"
+                  color="action"
+                  sx={{ fontSize: 16 }}
+                />
+                <Typography variant="body1" fontWeight="medium">
+                  {formatDate(jo.created_at)}
+                </Typography>
+              </Stack>
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">
-                HANDLED BY
+                QUANTITY PRODUCED
               </Typography>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Person fontSize="small" color="action" />
-                <Typography variant="body1">
-                  {jo.handle_by || "Unassigned"}
-                </Typography>
-              </Stack>
+              <Typography variant="h6">
+                {jo.quantity_produced
+                  ? formatQuantity(jo.quantity_produced, "units")
+                  : "--"}{" "}
+                units
+              </Typography>
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">
@@ -105,6 +150,7 @@ export default function ViewJOModal({ open, handleClose, jo, mode }) {
                   label={jo.status}
                   size="small"
                   color={jo.status === "Completed" ? "success" : "warning"}
+                  sx={{ fontWeight: "bold" }}
                 />
               </Box>
             </Box>
@@ -131,7 +177,6 @@ export default function ViewJOModal({ open, handleClose, jo, mode }) {
               <TableRow>
                 <TableCell sx={{ fontWeight: "bold" }}>Source</TableCell>
                 <TableCell sx={{ fontWeight: "bold" }}>Material Name</TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
                 <TableCell align="center" sx={{ fontWeight: "bold" }}>
                   Qty Used
                 </TableCell>
@@ -140,11 +185,11 @@ export default function ViewJOModal({ open, handleClose, jo, mode }) {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
-                    Loading materials...
+                  <TableCell colSpan={3} align="center">
+                    Loading...
                   </TableCell>
                 </TableRow>
-              ) : materials.length > 0 ? (
+              ) : (
                 materials.map((mat, index) => (
                   <TableRow key={index} hover>
                     <TableCell>
@@ -152,51 +197,135 @@ export default function ViewJOModal({ open, handleClose, jo, mode }) {
                         label={mat.source_type}
                         size="small"
                         variant="outlined"
-                        color={
-                          mat.source_type === "Leftover"
-                            ? "secondary"
-                            : "default"
-                        }
+                        sx={{
+                          fontWeight: "bold",
+                          borderColor:
+                            mat.source_type === "Raw"
+                              ? "#f2994a"
+                              : "secondary.main",
+                          color:
+                            mat.source_type === "Raw"
+                              ? "#f2994a"
+                              : "secondary.main",
+                        }}
                       />
                     </TableCell>
-                    <TableCell fontWeight="medium">
+                    <TableCell sx={{ fontWeight: 500 }}>
                       {mat.material_name}
                     </TableCell>
-                    <TableCell>{mat.category}</TableCell>
                     <TableCell align="center">
                       <Typography fontWeight="bold">
-                        {mat.used_stock} {mat.unit}
+                        {/* --- CONDITIONAL FORMATTING APPLIED HERE --- */}
+                        {formatQuantity(mat.used_stock, mat.unit)} {mat.unit}
                       </Typography>
                     </TableCell>
                   </TableRow>
                 ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
-                    No materials recorded for this Job Order.
-                  </TableCell>
-                </TableRow>
               )}
             </TableBody>
           </Table>
         </TableContainer>
+
+        {/* --- HIDDEN PRINT TEMPLATE --- */}
+        <Box sx={{ display: "none" }}>
+          <Box
+            ref={printRef}
+            sx={{ p: "15mm", bgcolor: "white", color: "black", width: "210mm" }}
+          >
+            <style>{`
+              @media print {
+                @page { size: A4; margin: 10mm; }
+                body { background-color: white !important; }
+                * { -webkit-print-color-adjust: exact; print-color-adjust: exact; color: black !important; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #ccc; padding: 10px; text-align: left; font-size: 12px; }
+                th { background-color: #f5f5f5 !important; font-weight: bold; }
+              }
+            `}</style>
+
+            <Typography
+              variant="h4"
+              fontWeight="bold"
+              sx={{ color: "#1a237e !important" }}
+            >
+              KIMWIN CORPORATION
+            </Typography>
+            <Typography variant="h6">Job Order Detail Report</Typography>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              Generated: {new Date().toLocaleString()}
+            </Typography>
+            <Divider sx={{ mb: 3, borderColor: "black !important" }} />
+
+            <Stack spacing={1} sx={{ mb: 4 }}>
+              <Typography variant="body1">
+                <b>JO ID:</b> #{jo.jo_id}
+              </Typography>
+              <Typography variant="body1">
+                <b>Item Produced:</b> {jo.item_name}
+              </Typography>
+              <Typography variant="body1">
+                <b>Date Created:</b> {formatDate(jo.created_at)}
+              </Typography>
+              <Typography variant="body1">
+                <b>Status:</b> {jo.status}
+              </Typography>
+            </Stack>
+
+            <Typography variant="subtitle1" fontWeight="bold">
+              Bill of Materials
+            </Typography>
+            <table>
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Material Name</th>
+                  <th>Quantity Used</th>
+                </tr>
+              </thead>
+              <tbody>
+                {materials.map((mat, index) => (
+                  <tr key={index}>
+                    <td>{mat.source_type}</td>
+                    <td>{mat.material_name}</td>
+                    <td>
+                      {/* --- CONDITIONAL FORMATTING APPLIED HERE --- */}
+                      {formatQuantity(mat.used_stock, mat.unit)} {mat.unit}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <Box
+              sx={{ mt: 10, display: "flex", justifyContent: "space-between" }}
+            >
+              <Typography variant="caption">
+                Issued by: ____________________
+              </Typography>
+              <Typography variant="caption">
+                Approved by: ____________________
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
       </DialogContent>
 
       <DialogActions sx={{ p: 2 }}>
         <Button onClick={handleClose} variant="outlined" color="inherit">
           Close
         </Button>
-        {jo.status !== "Completed" && (
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => {
-              /* Future: Link to Edit */
-            }}
-          >
-            Edit Order
-          </Button>
-        )}
+        <Button
+          variant="contained"
+          startIcon={<Print />}
+          onClick={handlePrint}
+          sx={{
+            bgcolor: "#f2994a",
+            color: "black",
+            "&:hover": { bgcolor: "#d8853a" },
+          }}
+        >
+          Print Details
+        </Button>
       </DialogActions>
     </Dialog>
   );

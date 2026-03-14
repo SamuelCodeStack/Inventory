@@ -9,7 +9,7 @@ import RawMaterials from "./components/RawMaterials.jsx";
 import JobOrder from "./components/JobOrder.jsx"; // Ensure this import exists
 
 function App() {
-  const [mode, setMode] = useState("dark"); // Default to dark based on your project style
+  const [mode, setMode] = useState("light"); // Default to dark based on your project style
 
   const theme = useMemo(
     () =>
