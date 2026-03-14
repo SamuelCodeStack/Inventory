@@ -77,6 +77,10 @@ app.get("/api/purchase-orders", async (req, res) => {
         id: po.po_id,
         poNo: po.po_number,
         customer: po.customer_name,
+        company: po.company, // Added
+        address: po.address, // Added
+        email: po.email, // Added
+        contact: po.contact, // Added
         totalPrice: po.total_price,
         status: po.status,
         date: po.created_at,
@@ -84,6 +88,19 @@ app.get("/api/purchase-orders", async (req, res) => {
     );
   } catch (err) {
     res.status(500).json({ error: "Server error fetching orders" });
+  }
+});
+app.get("/api/purchase-orders/:id/items", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      "SELECT * FROM item_order WHERE po_id = $1",
+      [id],
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Fetch PO items error:", err.message);
+    res.status(500).json({ error: "Failed to fetch order items" });
   }
 });
 
@@ -146,12 +163,14 @@ app.get("/api/job-orders", async (req, res) => {
 app.get("/api/job-orders/:id/materials", async (req, res) => {
   try {
     const { id } = req.params;
+    // Added used_stock and source_type to the SELECT statement
     const result = await pool.query(
-      "SELECT rm_id, material_name, category, unit FROM job_materials WHERE jo_id = $1",
+      "SELECT rm_id, material_name, category, unit, used_stock, source_type FROM job_materials WHERE jo_id = $1",
       [id],
     );
     res.json(result.rows);
   } catch (err) {
+    console.error("Fetch JO materials error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });

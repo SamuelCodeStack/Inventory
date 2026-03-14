@@ -26,15 +26,15 @@ import {
 } from "@mui/material";
 import {
   Add,
-  Edit,
   Delete,
   Search,
   Print,
-  ProductionQuantityLimits,
   CheckCircleOutline,
   Recycling,
+  Visibility,
 } from "@mui/icons-material";
 import CreateJOModal from "./CreateJOModal";
+import ViewJOModal from "./ViewJOModal";
 
 const THEME_ORANGE = "#f2994a";
 
@@ -43,8 +43,9 @@ export default function JobOrder({ mode }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Completion Dialog States
+  // States
   const [completionOpen, setCompletionOpen] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
   const [selectedJO, setSelectedJO] = useState(null);
   const [joMaterials, setJoMaterials] = useState([]);
   const [remarks, setRemarks] = useState("");
@@ -57,9 +58,8 @@ export default function JobOrder({ mode }) {
   const componentRef = useRef();
   const isDark = mode === "dark";
 
-  const showMessage = (msg, sev = "success") => {
+  const showMessage = (msg, sev = "success") =>
     setSnackbar({ open: true, message: msg, severity: sev });
-  };
 
   const fetchJobOrders = async () => {
     try {
@@ -80,7 +80,11 @@ export default function JobOrder({ mode }) {
     documentTitle: `JobOrder_Report_${new Date().toLocaleDateString()}`,
   });
 
-  // --- COMPLETION LOGIC ---
+  const handleOpenView = (jo) => {
+    setSelectedJO(jo);
+    setViewOpen(true);
+  };
+
   const handleOpenCompletion = async (jo) => {
     setSelectedJO(jo);
     setRemarks("");
@@ -89,11 +93,10 @@ export default function JobOrder({ mode }) {
         `http://localhost:3000/api/job-orders/${jo.jo_id}/materials`,
       );
       const data = await res.json();
-      // Initialize with 0 leftover
       setJoMaterials(data.map((m) => ({ ...m, leftover_qty: 0 })));
       setCompletionOpen(true);
     } catch (error) {
-      showMessage("Failed to load materials for this JO", "error");
+      showMessage("Failed to load materials", "error");
     }
   };
 
@@ -140,7 +143,7 @@ export default function JobOrder({ mode }) {
             Job Order Management
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Track production and leftovers
+            Track production and stock usage
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
@@ -250,6 +253,17 @@ export default function JobOrder({ mode }) {
                         spacing={1}
                         justifyContent="flex-end"
                       >
+                        {/* VIEW ACTION */}
+                        <Tooltip title="View Usage">
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => handleOpenView(row)}
+                          >
+                            <Visibility fontSize="inherit" />
+                          </IconButton>
+                        </Tooltip>
+
                         {row.status !== "Completed" && (
                           <Tooltip title="Finalize JO">
                             <IconButton
@@ -261,13 +275,7 @@ export default function JobOrder({ mode }) {
                             </IconButton>
                           </Tooltip>
                         )}
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => {
-                            /* Delete Logic */
-                          }}
-                        >
+                        <IconButton size="small" color="error">
                           <Delete fontSize="inherit" />
                         </IconButton>
                       </Stack>
@@ -279,7 +287,6 @@ export default function JobOrder({ mode }) {
         </Box>
       </TableContainer>
 
-      {/* COMPLETION DIALOG */}
       <Dialog
         open={completionOpen}
         onClose={() => setCompletionOpen(false)}
@@ -357,6 +364,14 @@ export default function JobOrder({ mode }) {
         </DialogActions>
       </Dialog>
 
+      {/* MODALS */}
+      <ViewJOModal
+        open={viewOpen}
+        handleClose={() => setViewOpen(false)}
+        jo={selectedJO}
+        mode={mode}
+      />
+
       <CreateJOModal
         open={isModalOpen}
         handleClose={() => setIsModalOpen(false)}
@@ -364,6 +379,7 @@ export default function JobOrder({ mode }) {
         onSaveSuccess={fetchJobOrders}
       />
 
+      {/* Completion Dialog omitted for brevity but keeps your state logic... */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}
