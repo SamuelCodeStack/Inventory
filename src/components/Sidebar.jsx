@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useLocation } from "react-router-dom"; // Added these
+import { Link, useLocation } from "react-router-dom";
 import {
   Drawer,
   Box,
@@ -12,38 +12,33 @@ import {
   Switch,
 } from "@mui/material";
 import {
-  Dashboard,
   Inventory,
   ShoppingCart,
-  People,
-  Receipt,
-  Settings,
+  Assignment, // Icon for Job Order
+  Layers, // Icon for Raw Materials
+  ManageAccounts, // Icon for User Management
 } from "@mui/icons-material";
 
 export default function Sidebar({ toggleDarkMode, mode }) {
-  const location = useLocation(); // Gets the current URL path
+  const location = useLocation();
 
   const menuItems = [
     {
-      text: "Dashboard",
-      icon: <Dashboard />,
-      section: "Main Menu",
-      path: "/dashboard",
+      text: "Inventory",
+      icon: <Inventory />,
+      section: "Main Menu", // Section Header
+      path: "/",
     },
-    { text: "Inventory", icon: <Inventory />, path: "/" }, // Home path
-    { text: "Purchase Order", icon: <ShoppingCart />, path: "/purchase-order" },
     {
-      text: "Supplier",
-      icon: <People />,
-      section: "Other Menu",
-      path: "/supplier",
+      text: "Purchase Order",
+      icon: <ShoppingCart />,
+      path: "/purchase-order",
     },
-    { text: "Invoice", icon: <Receipt />, path: "/invoice" },
     {
-      text: "Settings",
-      icon: <Settings />,
-      section: "Help & Settings",
-      path: "/settings",
+      text: "User Management",
+      icon: <ManageAccounts />,
+      section: "Administration", // New Section Header
+      path: "/user-management",
     },
   ];
 
@@ -57,6 +52,7 @@ export default function Sidebar({ toggleDarkMode, mode }) {
           width: 240,
           boxSizing: "border-box",
           borderRight: mode === "light" ? "1px solid #eee" : "1px solid #333",
+          backgroundColor: mode === "light" ? "#fff" : "#121212",
         },
       }}
     >
@@ -88,7 +84,6 @@ export default function Sidebar({ toggleDarkMode, mode }) {
 
       <List sx={{ px: 2 }}>
         {menuItems.map((item, index) => {
-          // Check if the current URL matches this item's path
           const isActive = location.pathname === item.path;
 
           return (
@@ -110,7 +105,6 @@ export default function Sidebar({ toggleDarkMode, mode }) {
                 </Typography>
               )}
               <ListItem disablePadding sx={{ mb: 0.5 }}>
-                {/* Link component makes it navigate without refreshing */}
                 <ListItemButton
                   component={Link}
                   to={item.path}

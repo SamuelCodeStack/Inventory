@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import {
   AppBar,
   Toolbar,
@@ -8,26 +9,42 @@ import {
   Badge,
   Avatar,
   Typography,
+  Menu,
+  MenuItem,
+  Divider,
+  ListItemIcon,
 } from "@mui/material";
 import {
   Search,
   NotificationsNone,
   KeyboardArrowDown,
+  History, // Icon for Activity
+  PersonOutline,
+  Logout,
 } from "@mui/icons-material";
 
-// Accept 'mode' as a prop to handle dynamic styling if needed
 export default function Header({ mode }) {
+  // State for the dropdown menu
+  const [anchorEl, setAnchorEl] = useState(null);
+  const open = Boolean(anchorEl);
+
+  const handleClick = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
   return (
     <AppBar
       position="fixed"
       elevation={0}
       sx={{
-        // Use theme tokens instead of hex codes
         backgroundColor: "background.paper",
         color: "text.primary",
         width: { sm: "calc(100% - 240px)" },
         ml: { sm: "240px" },
-        // Adjust border color based on mode
         borderBottom: "1px solid",
         borderColor: mode === "light" ? "#eee" : "#333",
       }}
@@ -40,7 +57,6 @@ export default function Header({ mode }) {
           sx={{
             width: 400,
             "& fieldset": { border: "none" },
-            // Search bar should be slightly different from the header background
             backgroundColor:
               mode === "light" ? "#f9f9f9" : "rgba(255, 255, 255, 0.05)",
             borderRadius: 2,
@@ -61,12 +77,20 @@ export default function Header({ mode }) {
             </Badge>
           </IconButton>
 
+          {/* Profile Section with Click Trigger */}
           <Box
+            onClick={handleClick}
             sx={{
               display: "flex",
               alignItems: "center",
               gap: 1,
               cursor: "pointer",
+              padding: "4px 8px",
+              borderRadius: 1,
+              "&:hover": {
+                backgroundColor:
+                  mode === "light" ? "#f5f5f5" : "rgba(255,255,255,0.05)",
+              },
             }}
           >
             <Avatar src="" sx={{ width: 32, height: 32 }} />
@@ -77,9 +101,50 @@ export default function Header({ mode }) {
             </Box>
             <KeyboardArrowDown
               fontSize="small"
-              sx={{ color: "text.secondary" }}
+              sx={{
+                color: "text.secondary",
+                transform: open ? "rotate(180deg)" : "rotate(0deg)",
+                transition: "0.2s",
+              }}
             />
           </Box>
+
+          {/* Dropdown Menu */}
+          <Menu
+            anchorEl={anchorEl}
+            open={open}
+            onClose={handleClose}
+            onClick={handleClose}
+            transformOrigin={{ horizontal: "right", vertical: "top" }}
+            anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+            PaperProps={{
+              elevation: 3,
+              sx: {
+                minWidth: 180,
+                mt: 1.5,
+                borderRadius: 2,
+                border: "1px solid",
+                borderColor: mode === "light" ? "#eee" : "#333",
+              },
+            }}
+          >
+            {/* ADDED ACTIVITY OPTION */}
+            <MenuItem onClick={handleClose}>
+              <ListItemIcon>
+                <History fontSize="small" />
+              </ListItemIcon>
+              Activity
+            </MenuItem>
+
+            <Divider />
+
+            <MenuItem onClick={handleClose} sx={{ color: "error.main" }}>
+              <ListItemIcon>
+                <Logout fontSize="small" color="error" />
+              </ListItemIcon>
+              Logout
+            </MenuItem>
+          </Menu>
         </Box>
       </Toolbar>
     </AppBar>

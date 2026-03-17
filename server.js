@@ -344,6 +344,39 @@ app.patch("/api/inventory/:id", async (req, res) => {
   }
 });
 
+app.post("/api/inventory/bulk-add", async (req, res) => {
+  const { items } = req.body; // Expects array of { name, category, uom, quantity, minStock }
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const insertQuery = `
+      INSERT INTO inventory (item_name, category, unit, quantity, minimum_stock)
+      VALUES ($1, $2, $3, $4, $5)
+    `;
+
+    for (const item of items) {
+      await client.query(insertQuery, [
+        item.name,
+        item.category,
+        item.uom,
+        item.quantity || 0,
+        item.minStock || 10,
+      ]);
+    }
+
+    await client.query("COMMIT");
+    res.status(201).json({ message: "All items added successfully" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("BULK ADD ERROR:", err.message);
+    res.status(500).json({ error: "Failed to add items to database" });
+  } finally {
+    client.release();
+  }
+});
+
 app.listen(port, () =>
   console.log(`Server running on http://localhost:${port}`),
 );

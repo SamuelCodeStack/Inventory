@@ -1,189 +1,263 @@
 import React, { useState } from "react";
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  IconButton,
+  Modal,
+  Box,
   Typography,
+  TextField,
+  Button,
+  Grid,
+  IconButton,
   MenuItem,
-  Grid, // Use the standard Grid
+  Divider,
+  Stack,
 } from "@mui/material";
-import { Close } from "@mui/icons-material";
+import { AddCircle, Delete, Save } from "@mui/icons-material";
 
-const categories = ["Plastic", "Injection", "Paper", "Trading"];
-const units = ["Pieces", "Bundle", "Boxes"];
+const CATEGORIES = ["Paper", "Plastic", "Injection", "Trading"];
+const UNITS = ["Pieces", "Bundle", "Box"];
 
 export default function AddInventoryModal({
   open,
   handleClose,
   onSaveSuccess,
-  mode,
 }) {
-  const [formData, setFormData] = useState({
-    item_name: "",
-    category: "Plastic",
-    unit: "Pieces",
-    quantity: 0,
-    minimum_stock: 10,
-  });
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    // Convert numbers correctly for the DB
-    setFormData({
-      ...formData,
-      [name]:
-        name === "quantity" || name === "minimum_stock"
-          ? parseInt(value) || 0
-          : value,
-    });
+  const emptyRow = {
+    name: "",
+    category: "",
+    uom: "",
+    quantity: "",
+    minStock: "",
   };
+  const [items, setItems] = useState([emptyRow]);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async () => {
-    if (!formData.item_name) return alert("Item name is required");
+  const addRow = () => setItems([...items, { ...emptyRow }]);
 
-    try {
-      const response = await fetch("http://localhost:3000/api/inventory", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
-
-      if (response.ok) {
-        // 1. Notify the parent to refresh the data
-        onSaveSuccess();
-
-        // 2. IMPORTANT: Close the dialog
-        handleClose();
-
-        // 3. Reset form for the next time it opens
-        setFormData({
-          item_name: "",
-          category: "Plastic",
-          unit: "Pieces",
-          quantity: 0,
-          minimum_stock: 10,
-        });
-      } else {
-        const errorData = await response.json();
-        alert("Server Error: " + errorData.error);
-      }
-    } catch (error) {
-      alert("Network Error: Could not connect to server.");
+  const removeRow = (index) => {
+    if (items.length > 1) {
+      setItems(items.filter((_, i) => i !== index));
     }
   };
 
-  const fieldStyle = {
-    "& .MuiOutlinedInput-root": {
-      bgcolor: mode === "light" ? "#fff" : "rgba(255, 255, 255, 0.03)",
-      borderRadius: 2,
-    },
+  const handleChange = (index, field, value) => {
+    const newItems = [...items];
+    newItems[index][field] = value;
+    setItems(newItems);
+  };
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(
+        "http://localhost:3000/api/inventory/bulk-add",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items }),
+        },
+      );
+
+      if (response.ok) {
+        onSaveSuccess();
+        setItems([{ ...emptyRow }]);
+        handleClose();
+      }
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
-      <DialogTitle
-        component="div"
+    <Modal open={open} onClose={handleClose}>
+      <Box
         sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: { xs: "95%", md: 1100 },
+          bgcolor: "background.paper",
+          borderRadius: 3,
+          boxShadow: 24,
+          p: 4,
+          maxHeight: "85vh",
+          overflowY: "auto",
         }}
       >
-        <Typography variant="h6" fontWeight="bold">
-          Add New Item
+        <Typography variant="h5" fontWeight="bold" mb={4}>
+          Inventory Intake
         </Typography>
-        <IconButton onClick={handleClose} size="small">
-          <Close />
-        </IconButton>
-      </DialogTitle>
 
-      <DialogContent dividers>
-        <Grid container spacing={2} sx={{ mt: 0.5 }}>
-          <Grid size={12}>
-            <TextField
-              fullWidth
-              label="Item Name"
-              name="item_name"
-              value={formData.item_name}
-              onChange={handleChange}
-              sx={fieldStyle}
-            />
-          </Grid>
-          <Grid size={6}>
-            <TextField
-              fullWidth
-              select
-              label="Category"
-              name="category"
-              value={formData.category}
-              onChange={handleChange}
-              sx={fieldStyle}
-            >
-              {categories.map((opt) => (
-                <MenuItem key={opt} value={opt}>
-                  {opt}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid size={6}>
-            <TextField
-              fullWidth
-              select
-              label="Unit"
-              name="unit"
-              value={formData.unit}
-              onChange={handleChange}
-              sx={fieldStyle}
-            >
-              {units.map((u) => (
-                <MenuItem key={u} value={u}>
-                  {u}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid size={6}>
-            <TextField
-              fullWidth
-              type="number"
-              label="Initial Quantity"
-              name="quantity"
-              value={formData.quantity}
-              onChange={handleChange}
-              sx={fieldStyle}
-            />
-          </Grid>
-          <Grid size={6}>
-            <TextField
-              fullWidth
-              type="number"
-              label="Min Stock Level"
-              name="minimum_stock"
-              value={formData.minimum_stock}
-              onChange={handleChange}
-              sx={fieldStyle}
-            />
-          </Grid>
-        </Grid>
-      </DialogContent>
+        <Stack spacing={4} divider={<Divider />}>
+          {items.map((item, index) => (
+            <Box key={index}>
+              <Grid container spacing={2} alignItems="flex-end">
+                {/* ITEM NAME */}
+                <Grid item xs={12} md={4}>
+                  <Typography
+                    variant="caption"
+                    fontWeight="bold"
+                    sx={{ mb: 1, display: "block", color: "text.secondary" }}
+                  >
+                    ITEM NAME
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Enter item name..."
+                    value={item.name}
+                    onChange={(e) =>
+                      handleChange(index, "name", e.target.value)
+                    }
+                  />
+                </Grid>
 
-      <DialogActions sx={{ p: 3 }}>
-        <Button onClick={handleClose} sx={{ color: "text.secondary" }}>
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleSubmit}
-          sx={{ bgcolor: "primary.main", fontWeight: "bold" }}
+                {/* CATEGORY - WIDER */}
+                <Grid item xs={6} md={2.5}>
+                  <Typography
+                    variant="caption"
+                    fontWeight="bold"
+                    sx={{ mb: 1, display: "block", color: "text.secondary" }}
+                  >
+                    CATEGORY
+                  </Typography>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    value={item.category}
+                    onChange={(e) =>
+                      handleChange(index, "category", e.target.value)
+                    }
+                  >
+                    {CATEGORIES.map((cat) => (
+                      <MenuItem key={cat} value={cat}>
+                        {cat}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+
+                {/* UNIT - WIDER */}
+                <Grid item xs={6} md={2}>
+                  <Typography
+                    variant="caption"
+                    fontWeight="bold"
+                    sx={{ mb: 1, display: "block", color: "text.secondary" }}
+                  >
+                    UNIT
+                  </Typography>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    value={item.uom}
+                    onChange={(e) => handleChange(index, "uom", e.target.value)}
+                  >
+                    {UNITS.map((unit) => (
+                      <MenuItem key={unit} value={unit}>
+                        {unit}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+
+                {/* QTY - HALF WIDTH (COMPACT) */}
+                <Grid item xs={6} md={1.2}>
+                  <Typography
+                    variant="caption"
+                    fontWeight="bold"
+                    sx={{ mb: 1, display: "block", color: "text.secondary" }}
+                  >
+                    QTY
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    size="small"
+                    value={item.quantity}
+                    onChange={(e) =>
+                      handleChange(index, "quantity", e.target.value)
+                    }
+                  />
+                </Grid>
+
+                {/* MIN - HALF WIDTH (COMPACT) */}
+                <Grid item xs={6} md={1.2}>
+                  <Typography
+                    variant="caption"
+                    fontWeight="bold"
+                    sx={{ mb: 1, display: "block", color: "text.secondary" }}
+                  >
+                    MIN
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    size="small"
+                    value={item.minStock}
+                    onChange={(e) =>
+                      handleChange(index, "minStock", e.target.value)
+                    }
+                  />
+                </Grid>
+
+                {/* ACTION */}
+                <Grid item xs={12} md={1} sx={{ textAlign: "right" }}>
+                  <IconButton
+                    color="error"
+                    onClick={() => removeRow(index)}
+                    disabled={items.length === 1}
+                    sx={{ mb: 0.5 }}
+                  >
+                    <Delete fontSize="small" />
+                  </IconButton>
+                </Grid>
+              </Grid>
+            </Box>
+          ))}
+        </Stack>
+
+        <Box
+          sx={{
+            mt: 5,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
         >
-          Add to Inventory
-        </Button>
-      </DialogActions>
-    </Dialog>
+          <Button
+            variant="outlined"
+            startIcon={<AddCircle />}
+            onClick={addRow}
+            sx={{ px: 3, borderRadius: 2 }}
+          >
+            Add Another Item
+          </Button>
+
+          <Stack direction="row" spacing={2}>
+            <Button onClick={handleClose} color="inherit">
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<Save />}
+              onClick={handleSave}
+              disabled={loading}
+              sx={{
+                px: 5,
+                borderRadius: 2,
+                bgcolor: "primary.main",
+                fontWeight: "bold",
+              }}
+            >
+              {loading ? "Saving..." : "Commit All Items"}
+            </Button>
+          </Stack>
+        </Box>
+      </Box>
+    </Modal>
   );
 }
