@@ -27,7 +27,7 @@ import {
   DeleteOutline,
 } from "@mui/icons-material";
 
-const statusOptions = ["Job Order", "Pending", "Done"];
+const statusOptions = ["Job Order", "Pending"];
 
 export default function UpdatePOModal({
   open,

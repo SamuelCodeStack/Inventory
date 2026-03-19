@@ -29,9 +29,10 @@ import {
   ShoppingCart,
   DeleteOutline,
   Search,
+  Event,
 } from "@mui/icons-material";
 
-const statusOptions = ["Job Order", "Pending", "Done"];
+const statusOptions = ["Job Order", "Pending"];
 
 export default function CreatePOModal({
   open,
@@ -44,11 +45,10 @@ export default function CreatePOModal({
   const [selectedItems, setSelectedItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Snackbar State
   const [notification, setNotification] = useState({
     open: false,
     message: "",
-    severity: "success", // "success" | "error" | "warning" | "info"
+    severity: "success",
   });
 
   const [formData, setFormData] = useState({
@@ -58,23 +58,20 @@ export default function CreatePOModal({
     contact: "",
     address: "",
     poNumber: "",
+    deliveryDate: "", // NEW FIELD
     status: "Job Order",
     totalPrice: 0,
   });
 
-  // 1. Fetch Inventory
   useEffect(() => {
     if (open) {
       fetch("http://localhost:3000/api/inventory")
         .then((res) => res.json())
         .then((data) => setDbInventory(data))
-        .catch((err) => {
-          showNotification("Failed to load inventory", "error");
-        });
+        .catch(() => showNotification("Failed to load inventory", "error"));
     }
   }, [open]);
 
-  // 2. Auto-calculate Total Price
   useEffect(() => {
     const calculated = selectedItems.reduce(
       (sum, item) => sum + item.qty * (item.price || 0),
@@ -83,7 +80,6 @@ export default function CreatePOModal({
     setFormData((prev) => ({ ...prev, totalPrice: calculated }));
   }, [selectedItems]);
 
-  // --- HANDLERS ---
   const showNotification = (message, severity = "success") => {
     setNotification({ open: true, message, severity });
   };
@@ -127,6 +123,7 @@ export default function CreatePOModal({
       contact: formData.contact,
       address: formData.address,
       po_number: formData.poNumber,
+      delivery_date: formData.deliveryDate, // INCLUDED IN PAYLOAD
       status: formData.status,
       total_price: formData.totalPrice,
       items: selectedItems,
@@ -141,21 +138,15 @@ export default function CreatePOModal({
           body: JSON.stringify(payload),
         },
       );
-
       const data = await response.json();
-
       if (response.ok) {
-        // Success!
         onSaveSuccess();
         handleReset();
-        // Note: You might want to show the success snackbar on the parent dashboard
-        // after the modal closes, but we'll show it here for immediate feedback.
       } else {
-        // Duplicate PO or DB error caught by backend
         showNotification(data.error || "Failed to create order", "error");
       }
-    } catch (error) {
-      showNotification("Network error. Please check your connection.", "error");
+    } catch {
+      showNotification("Network error. Please check connection.", "error");
     }
   };
 
@@ -168,6 +159,7 @@ export default function CreatePOModal({
       contact: "",
       address: "",
       poNumber: "",
+      deliveryDate: "", // RESET FIELD
       status: "Job Order",
       totalPrice: 0,
     });
@@ -175,11 +167,20 @@ export default function CreatePOModal({
     handleClose();
   };
 
+  // --- STYLES ---
   const fieldStyle = {
     "& .MuiOutlinedInput-root": {
       bgcolor: mode === "light" ? "#fff" : "rgba(255, 255, 255, 0.03)",
       borderRadius: 2,
     },
+  };
+
+  const headerCellStyle = {
+    fontWeight: "bold",
+    bgcolor: mode === "light" ? "#ffffff" : "#1e1e1e",
+    zIndex: 10,
+    borderBottom: "1px solid",
+    borderColor: "divider",
   };
 
   return (
@@ -207,8 +208,8 @@ export default function CreatePOModal({
 
         <DialogContent dividers sx={{ py: 3 }}>
           <Grid container spacing={3}>
-            {/* LEFT SIDE: INPUT FORM */}
-            <Grid size={{ xs: 12, md: 7 }}>
+            {/* LEFT SIDE: INPUTS */}
+            <Grid item xs={12} md={7}>
               <Typography
                 variant="subtitle2"
                 color="primary"
@@ -219,7 +220,7 @@ export default function CreatePOModal({
               </Typography>
 
               <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid size={{ xs: 12, md: 6 }}>
+                <Grid item xs={12} md={6}>
                   <TextField
                     fullWidth
                     size="small"
@@ -230,7 +231,7 @@ export default function CreatePOModal({
                     sx={fieldStyle}
                   />
                 </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
+                <Grid item xs={12} md={6}>
                   <TextField
                     fullWidth
                     size="small"
@@ -241,7 +242,7 @@ export default function CreatePOModal({
                     sx={fieldStyle}
                   />
                 </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
+                <Grid item xs={12} md={6}>
                   <TextField
                     fullWidth
                     size="small"
@@ -252,7 +253,7 @@ export default function CreatePOModal({
                     sx={fieldStyle}
                   />
                 </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
+                <Grid item xs={12} md={6}>
                   <TextField
                     fullWidth
                     size="small"
@@ -263,7 +264,7 @@ export default function CreatePOModal({
                     sx={fieldStyle}
                   />
                 </Grid>
-                <Grid size={{ xs: 12 }}>
+                <Grid item xs={12}>
                   <TextField
                     fullWidth
                     size="small"
@@ -274,19 +275,40 @@ export default function CreatePOModal({
                     sx={fieldStyle}
                   />
                 </Grid>
-                <Grid size={{ xs: 12, md: 8 }}>
+
+                {/* UPDATED SECTION: DATE, PO, STATUS */}
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Delivery Date"
+                    name="deliveryDate"
+                    type="date"
+                    value={formData.deliveryDate}
+                    onChange={handleInputChange}
+                    sx={fieldStyle}
+                    InputLabelProps={{ shrink: true }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Event fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={4}>
                   <TextField
                     fullWidth
                     size="small"
                     label="PO Number"
                     name="poNumber"
-                    placeholder="PO-2026-XXX"
                     value={formData.poNumber}
                     onChange={handleInputChange}
                     sx={fieldStyle}
                   />
                 </Grid>
-                <Grid size={{ xs: 12, md: 4 }}>
+                <Grid item xs={12} md={4}>
                   <TextField
                     select
                     fullWidth
@@ -320,7 +342,7 @@ export default function CreatePOModal({
                 </Typography>
                 <TextField
                   size="small"
-                  placeholder="Search..."
+                  placeholder="Search inventory..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   InputProps={{
@@ -335,33 +357,15 @@ export default function CreatePOModal({
               </Box>
 
               <TableContainer
-                sx={{
-                  border: "1px solid",
-                  borderColor: "divider",
-                  borderRadius: 2,
-                  maxHeight: 250,
-                }}
+                component={Paper}
+                variant="outlined"
+                sx={{ maxHeight: 300, overflow: "auto", borderRadius: 2 }}
               >
                 <Table stickyHeader size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell
-                        sx={{
-                          fontWeight: "bold",
-                          bgcolor:
-                            mode === "light" ? "action.hover" : "#1e1e1e",
-                        }}
-                      >
-                        Item
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          fontWeight: "bold",
-                          bgcolor:
-                            mode === "light" ? "action.hover" : "#1e1e1e",
-                        }}
-                      >
+                      <TableCell sx={headerCellStyle}>Item</TableCell>
+                      <TableCell align="right" sx={headerCellStyle}>
                         Action
                       </TableCell>
                     </TableRow>
@@ -398,7 +402,7 @@ export default function CreatePOModal({
             </Grid>
 
             {/* RIGHT SIDE: SUMMARY */}
-            <Grid size={{ xs: 12, md: 5 }}>
+            <Grid item xs={12} md={5}>
               <Box
                 sx={{
                   p: 2,
@@ -420,7 +424,6 @@ export default function CreatePOModal({
                   <ShoppingCart fontSize="small" color="primary" /> Order
                   Summary
                 </Typography>
-
                 <Box
                   sx={{ flexGrow: 1, maxHeight: 400, overflow: "auto", mb: 2 }}
                 >
@@ -447,7 +450,7 @@ export default function CreatePOModal({
                         <DeleteOutline fontSize="small" />
                       </IconButton>
                       <Grid container spacing={1} sx={{ mt: 1 }}>
-                        <Grid size={{ xs: 6 }}>
+                        <Grid item xs={6}>
                           <TextField
                             fullWidth
                             size="small"
@@ -459,7 +462,7 @@ export default function CreatePOModal({
                             }
                           />
                         </Grid>
-                        <Grid size={{ xs: 6 }}>
+                        <Grid item xs={6}>
                           <TextField
                             fullWidth
                             size="small"
@@ -475,7 +478,6 @@ export default function CreatePOModal({
                     </Paper>
                   ))}
                 </Box>
-
                 <Box
                   sx={{
                     p: 2,
@@ -504,7 +506,8 @@ export default function CreatePOModal({
             disabled={
               selectedItems.length === 0 ||
               !formData.customerName.trim() ||
-              !formData.poNumber.trim()
+              !formData.poNumber.trim() ||
+              !formData.deliveryDate // Ensures date is picked
             }
             sx={{ px: 4, fontWeight: "bold", borderRadius: 2 }}
           >
@@ -513,7 +516,6 @@ export default function CreatePOModal({
         </DialogActions>
       </Dialog>
 
-      {/* SNACKBAR NOTIFICATION */}
       <Snackbar
         open={notification.open}
         autoHideDuration={5000}

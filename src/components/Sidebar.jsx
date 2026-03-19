@@ -78,7 +78,7 @@ export default function Sidebar({ toggleDarkMode, mode }) {
           fontWeight="bold"
           color="primary"
         >
-          Kimwin Inventory
+          Inventory System
         </Typography>
       </Box>
 
@@ -165,6 +165,20 @@ export default function Sidebar({ toggleDarkMode, mode }) {
           size="small"
           checked={mode === "dark"}
           onChange={toggleDarkMode}
+          // Option 1: Use MUI's built-in green success color
+          color="success"
+          // Option 2: Custom green styling for more control
+          sx={{
+            "& .MuiSwitch-switchBase.Mui-checked": {
+              color: "#4caf50", // The thumb color when checked
+              "&:hover": {
+                backgroundColor: "rgba(76, 175, 80, 0.08)",
+              },
+            },
+            "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+              backgroundColor: "#4caf50", // The track color when checked
+            },
+          }}
         />
       </Box>
     </Drawer>

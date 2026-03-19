@@ -2,8 +2,6 @@ import React, { useState } from "react";
 import {
   AppBar,
   Toolbar,
-  TextField,
-  InputAdornment,
   Box,
   IconButton,
   Badge,
@@ -15,16 +13,13 @@ import {
   ListItemIcon,
 } from "@mui/material";
 import {
-  Search,
   NotificationsNone,
   KeyboardArrowDown,
-  History, // Icon for Activity
-  PersonOutline,
+  History,
   Logout,
 } from "@mui/icons-material";
 
 export default function Header({ mode }) {
-  // State for the dropdown menu
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
 
@@ -49,27 +44,8 @@ export default function Header({ mode }) {
         borderColor: mode === "light" ? "#eee" : "#333",
       }}
     >
-      <Toolbar sx={{ justifyContent: "space-between" }}>
-        <TextField
-          size="small"
-          placeholder="Search anything here"
-          variant="outlined"
-          sx={{
-            width: 400,
-            "& fieldset": { border: "none" },
-            backgroundColor:
-              mode === "light" ? "#f9f9f9" : "rgba(255, 255, 255, 0.05)",
-            borderRadius: 2,
-          }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Search fontSize="small" sx={{ color: "text.secondary" }} />
-              </InputAdornment>
-            ),
-          }}
-        />
-
+      {/* Changed justifyContent to flex-end to push items to the right */}
+      <Toolbar sx={{ justifyContent: "flex-end" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
           <IconButton>
             <Badge variant="dot" color="error">
@@ -77,7 +53,7 @@ export default function Header({ mode }) {
             </Badge>
           </IconButton>
 
-          {/* Profile Section with Click Trigger */}
+          {/* Profile Section */}
           <Box
             onClick={handleClick}
             sx={{
@@ -128,7 +104,6 @@ export default function Header({ mode }) {
               },
             }}
           >
-            {/* ADDED ACTIVITY OPTION */}
             <MenuItem onClick={handleClose}>
               <ListItemIcon>
                 <History fontSize="small" />

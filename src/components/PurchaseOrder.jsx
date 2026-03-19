@@ -19,6 +19,7 @@ import {
   Divider,
   Snackbar,
   Alert,
+  Tooltip,
 } from "@mui/material";
 import {
   Add,
@@ -31,6 +32,8 @@ import {
 import CreatePOModal from "./CreatePOModal";
 import UpdatePOModal from "./UpdatePOModal";
 import ViewPOModal from "./ViewPOModal";
+
+const THEME_ORANGE = "#f2994a";
 
 export default function PurchaseOrder({ mode }) {
   const [poData, setPoData] = useState([]);
@@ -48,6 +51,7 @@ export default function PurchaseOrder({ mode }) {
   });
 
   const componentRef = useRef();
+  const isDark = mode === "dark";
 
   const showSnackbar = (message, severity = "success") => {
     setSnackbar({ open: true, message, severity });
@@ -89,35 +93,20 @@ export default function PurchaseOrder({ mode }) {
       year: "numeric",
       month: "short",
       day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
     });
   };
 
   const getStatusStyle = (status) => {
     switch (status) {
       case "Job Order":
-        return { color: "info", variant: "filled" };
+        return { bgcolor: "rgba(52, 152, 219, 0.2)", color: "#3498db" };
       case "Done":
-        return { color: "success", variant: "filled" };
+        return { bgcolor: "rgba(46, 204, 113, 0.2)", color: "#2ecc71" };
       case "Pending":
-        return { color: "warning", variant: "filled" };
+        return { bgcolor: "rgba(241, 145, 73, 0.2)", color: THEME_ORANGE };
       default:
-        return { color: "default", variant: "outlined" };
+        return { bgcolor: "rgba(0,0,0,0.1)", color: "inherit" };
     }
-  };
-
-  const handleCreateSuccess = () => {
-    setOpenCreateModal(false);
-    fetchPurchaseOrders();
-    showSnackbar("New Purchase Order created successfully!", "success");
-  };
-
-  const handleUpdateSuccess = () => {
-    setOpenUpdateModal(false);
-    fetchPurchaseOrders();
-    showSnackbar("Purchase Order updated successfully!", "info");
   };
 
   const handleEditClick = (po) => {
@@ -141,9 +130,7 @@ export default function PurchaseOrder({ mode }) {
       );
       if (response.ok) {
         fetchPurchaseOrders();
-        showSnackbar("Purchase Order deleted successfully", "error");
-      } else {
-        showSnackbar("Failed to delete order", "error");
+        showSnackbar("Purchase Order deleted", "error");
       }
     } catch (error) {
       showSnackbar("Error connecting to server", "error");
@@ -155,10 +142,10 @@ export default function PurchaseOrder({ mode }) {
       sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
     >
       {/* Header Section */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 4 }}>
         <Box>
           <Typography variant="h5" fontWeight="bold">
-            Purchase Order
+            Purchase Orders
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Dashboard / Purchase Order
@@ -168,7 +155,7 @@ export default function PurchaseOrder({ mode }) {
           <Button
             variant="outlined"
             startIcon={<Print />}
-            onClick={() => handlePrint()}
+            onClick={handlePrint}
           >
             Print All
           </Button>
@@ -176,16 +163,22 @@ export default function PurchaseOrder({ mode }) {
             variant="contained"
             startIcon={<Add />}
             onClick={() => setOpenCreateModal(true)}
+            sx={{
+              bgcolor: THEME_ORANGE,
+              color: "#000",
+              fontWeight: "bold",
+              "&:hover": { bgcolor: "#d8853a" },
+            }}
           >
             Create PO
           </Button>
         </Stack>
       </Box>
 
-      {/* Main Table */}
+      {/* Main Table Container */}
       <TableContainer
         component={Paper}
-        sx={{ borderRadius: 3, p: 2, backgroundImage: "none" }}
+        sx={{ borderRadius: 3, p: 3, backgroundImage: "none" }}
       >
         <Box
           sx={{
@@ -196,11 +189,11 @@ export default function PurchaseOrder({ mode }) {
           }}
         >
           <Typography variant="subtitle1" fontWeight="bold">
-            Purchase Order List
+            Master Order List
           </Typography>
           <TextField
             size="small"
-            placeholder="Search orders..."
+            placeholder="Search customer or PO#..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             InputProps={{
@@ -210,26 +203,24 @@ export default function PurchaseOrder({ mode }) {
                 </InputAdornment>
               ),
             }}
+            sx={{ width: 350 }}
           />
         </Box>
 
-        <Table>
+        <Table size="small">
           <TableHead
-            sx={{
-              bgcolor:
-                mode === "light" ? "action.hover" : "rgba(255,255,255,0.02)",
-            }}
+            sx={{ bgcolor: isDark ? "rgba(255,255,255,0.02)" : "action.hover" }}
           >
             <TableRow>
-              <TableCell sx={{ fontWeight: "bold" }}>PO ID</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Customer Name</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>PO No.</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Date Created</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Customer</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>PO Number</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Date</TableCell>
               <TableCell align="center" sx={{ fontWeight: "bold" }}>
                 Status
               </TableCell>
               <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                Action
+                Actions
               </TableCell>
             </TableRow>
           </TableHead>
@@ -244,9 +235,9 @@ export default function PurchaseOrder({ mode }) {
               )
               .map((row) => (
                 <TableRow key={row.id} hover>
-                  <TableCell>{row.id}</TableCell>
+                  <TableCell>#{row.id}</TableCell>
                   <TableCell>
-                    <Typography variant="body2" fontWeight="bold">
+                    <Typography variant="body2" fontWeight="600">
                       {row.customer}
                     </Typography>
                   </TableCell>
@@ -256,8 +247,11 @@ export default function PurchaseOrder({ mode }) {
                     <Chip
                       label={row.status}
                       size="small"
-                      {...getStatusStyle(row.status)}
-                      sx={{ fontWeight: 600 }}
+                      sx={{
+                        fontWeight: "bold",
+                        fontSize: "0.7rem",
+                        ...getStatusStyle(row.status),
+                      }}
                     />
                   </TableCell>
                   <TableCell align="right">
@@ -266,26 +260,48 @@ export default function PurchaseOrder({ mode }) {
                       spacing={1}
                       justifyContent="flex-end"
                     >
-                      <IconButton
-                        size="small"
-                        onClick={() => handleViewClick(row)}
-                        sx={{
-                          color: "#2ecc71",
-                          bgcolor: "rgba(46, 204, 113, 0.1)",
-                        }}
+                      <Tooltip title="View Order">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleViewClick(row)}
+                          sx={{
+                            color: "#2ecc71",
+                            bgcolor: "rgba(46, 204, 113, 0.1)",
+                          }}
+                        >
+                          <Visibility fontSize="inherit" />
+                        </IconButton>
+                      </Tooltip>
+
+                      <Tooltip
+                        title={
+                          row.status === "Done"
+                            ? "Completed orders cannot be edited"
+                            : "Edit Order"
+                        }
                       >
-                        <Visibility fontSize="inherit" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleEditClick(row)}
-                        sx={{
-                          color: "#3498db",
-                          bgcolor: "rgba(52, 152, 219, 0.1)",
-                        }}
-                      >
-                        <Edit fontSize="inherit" />
-                      </IconButton>
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleEditClick(row)}
+                            // DISABLE LOGIC APPLIED HERE
+                            disabled={row.status === "Done"}
+                            sx={{
+                              color: "#3498db",
+                              bgcolor: "rgba(52, 152, 219, 0.1)",
+                              "&.Mui-disabled": {
+                                bgcolor: isDark
+                                  ? "rgba(255,255,255,0.05)"
+                                  : "rgba(0,0,0,0.05)",
+                                color: "text.disabled",
+                              },
+                            }}
+                          >
+                            <Edit fontSize="inherit" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+
                       <IconButton
                         size="small"
                         onClick={() => handleDelete(row.id)}
@@ -304,93 +320,60 @@ export default function PurchaseOrder({ mode }) {
         </Table>
       </TableContainer>
 
-      {/* --- HIDDEN PRINT TEMPLATE (FIXED FOR DARKMODE) --- */}
-      <Box sx={{ display: "none" }}>
+      {/* --- HIDDEN PRINT TEMPLATE --- */}
+      <Box sx={{ position: "absolute", left: "-9999px", top: 0 }}>
         <Box
           ref={componentRef}
-          sx={{
-            p: "10mm",
-            bgcolor: "white",
-            color: "black",
-            width: "210mm",
-            // Force text black for all children during print
-            "& *": { color: "black !important" },
-          }}
+          sx={{ p: "15mm", bgcolor: "white", color: "black", width: "210mm" }}
         >
           <style>{`
             @media print {
               @page { size: A4; margin: 15mm; }
-              body { background-color: white !important; -webkit-print-color-adjust: exact; }
-              * { 
-                color: black !important; 
-                background-color: transparent !important; 
-                border-color: #333 !important; 
-              }
-              .print-divider { border-bottom: 2px solid black !important; }
-              .print-header { color: #1a237e !important; }
+              body { background-color: white !important; }
+              * { color: black !important; border-color: #333 !important; -webkit-print-color-adjust: exact; }
+              .p-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              .p-table th, .p-table td { border: 1px solid #ccc; padding: 8px; text-align: left; font-size: 12px; }
             }
           `}</style>
-
           <Typography
             variant="h4"
             fontWeight="bold"
-            className="print-header"
             sx={{ color: "#1a237e !important" }}
           >
             KIMWIN CORPORATION
           </Typography>
-          <Typography variant="h6" sx={{ mb: 2 }}>
-            Purchase Order Master List
-          </Typography>
-
-          <Divider
-            className="print-divider"
-            sx={{
-              mb: 3,
-              borderBottomWidth: 2,
-              borderColor: "black !important",
-            }}
-          />
-
-          <Table size="small">
-            <TableHead>
-              <TableRow
-                sx={{
-                  "& th": {
-                    fontWeight: "bold",
-                    borderBottom: "2px solid black !important",
-                  },
-                }}
-              >
-                <TableCell>ID</TableCell>
-                <TableCell>Customer</TableCell>
-                <TableCell>PO No.</TableCell>
-                <TableCell>Created At</TableCell>
-                <TableCell align="center">Status</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+          <Typography variant="h6">Purchase Order Master List</Typography>
+          <Divider sx={{ my: 2, borderColor: "black !important" }} />
+          <table className="p-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Customer</th>
+                <th>PO No.</th>
+                <th>Date</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
               {poData.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.id}</TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>
-                    {row.customer}
-                  </TableCell>
-                  <TableCell>{row.poNo}</TableCell>
-                  <TableCell>{formatDate(row.date)}</TableCell>
-                  <TableCell align="center">{row.status}</TableCell>
-                </TableRow>
+                <tr key={row.id}>
+                  <td>{row.id}</td>
+                  <td>{row.customer}</td>
+                  <td>{row.poNo}</td>
+                  <td>{formatDate(row.date)}</td>
+                  <td>{row.status}</td>
+                </tr>
               ))}
-            </TableBody>
-          </Table>
+            </tbody>
+          </table>
         </Box>
       </Box>
 
-      {/* Modals */}
+      {/* Modals & Feedback */}
       <CreatePOModal
         open={openCreateModal}
         handleClose={() => setOpenCreateModal(false)}
-        onSaveSuccess={handleCreateSuccess}
+        onSaveSuccess={fetchPurchaseOrders}
         mode={mode}
       />
       {selectedPO && (
@@ -398,7 +381,7 @@ export default function PurchaseOrder({ mode }) {
           <UpdatePOModal
             open={openUpdateModal}
             handleClose={() => setOpenUpdateModal(false)}
-            onUpdateSuccess={handleUpdateSuccess}
+            onUpdateSuccess={fetchPurchaseOrders}
             mode={mode}
             poData={selectedPO}
           />
@@ -411,7 +394,6 @@ export default function PurchaseOrder({ mode }) {
         </>
       )}
 
-      {/* Snackbar */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}
@@ -422,7 +404,7 @@ export default function PurchaseOrder({ mode }) {
           onClose={handleCloseSnackbar}
           severity={snackbar.severity}
           variant="filled"
-          sx={{ width: "100%", borderRadius: 2, boxShadow: 6 }}
+          sx={{ borderRadius: 2 }}
         >
           {snackbar.message}
         </Alert>

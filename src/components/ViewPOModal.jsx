@@ -16,7 +16,6 @@ import {
   TableHead,
   TableRow,
   Typography,
-  Chip,
   Paper,
   CircularProgress,
   Divider,
@@ -56,6 +55,9 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
 
   if (!poData) return null;
 
+  // LOGIC: Disable print if not "Done" or still loading
+  const isPrintDisabled = loading || poData.status !== "Done";
+
   return (
     <Dialog
       open={open}
@@ -64,7 +66,7 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
       maxWidth="md"
       PaperProps={{ sx: { borderRadius: 3 } }}
     >
-      {/* MODAL HEADER (Visible in Dashboard) */}
+      {/* MODAL HEADER */}
       <DialogTitle
         sx={{
           fontWeight: "bold",
@@ -102,7 +104,6 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
               color: "black !important",
               borderColor: "rgba(0, 0, 0, 0.15) !important",
             },
-            // Print engine specific overrides
             "@media print": {
               p: 0,
               bgcolor: "white !important",
@@ -193,7 +194,7 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
             }}
           />
 
-          {/* VENDOR & SHIP TO SECTION */}
+          {/* CUSTOMER & SHIPPING SECTION */}
           <Grid container spacing={4} sx={{ mb: 4 }}>
             <Grid item xs={6}>
               <Typography
@@ -227,7 +228,6 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
               >
                 Shipping Details
               </Typography>
-
               <Typography variant="body2">
                 Address: <b>{poData.address || "Office Address"}</b>
               </Typography>
@@ -378,7 +378,6 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
             </Box>
           </Box>
         </Box>
-        {/* --- PRINTABLE AREA END --- */}
       </DialogContent>
 
       <DialogActions sx={{ p: 2.5, gap: 1 }}>
@@ -395,9 +394,22 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
           variant="contained"
           startIcon={<Print />}
           onClick={handlePrint}
-          sx={{ borderRadius: 2, py: 1.2, fontWeight: "bold", boxShadow: 3 }}
+          // DISABLING PRINT BUTTON BASED ON STATUS
+          disabled={isPrintDisabled}
+          sx={{
+            borderRadius: 2,
+            py: 1.2,
+            fontWeight: "bold",
+            boxShadow: 3,
+            "&.Mui-disabled": {
+              bgcolor: "action.disabledBackground",
+              color: "text.disabled",
+            },
+          }}
         >
-          Print Purchase Order (PDF)
+          {poData.status === "Done"
+            ? "Print Purchase Order (PDF)"
+            : `Cannot Print (Status: ${poData.status})`}
         </Button>
       </DialogActions>
     </Dialog>
