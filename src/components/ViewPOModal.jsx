@@ -27,7 +27,6 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
   const [loading, setLoading] = useState(false);
   const componentRef = useRef();
 
-  // Print Handler
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
     documentTitle: `PO_${poData?.poNo || "Export"}`,
@@ -55,8 +54,19 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
 
   if (!poData) return null;
 
-  // LOGIC: Disable print if not "Done" or still loading
-  const isPrintDisabled = loading || poData.status !== "Done";
+  // Finalized check for Printing and Date Visibility
+  const isFinalized =
+    poData.status === "Delivered" || poData.status === "Backload";
+  const isPrintDisabled = loading || !isFinalized;
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
 
   return (
     <Dialog
@@ -66,7 +76,6 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
       maxWidth="md"
       PaperProps={{ sx: { borderRadius: 3 } }}
     >
-      {/* MODAL HEADER */}
       <DialogTitle
         sx={{
           fontWeight: "bold",
@@ -92,14 +101,12 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
           bgcolor: mode === "light" ? "#f8f9fa" : "rgba(255,255,255,0.05)",
         }}
       >
-        {/* --- PRINTABLE AREA START --- */}
         <Box
           ref={componentRef}
           sx={{
             p: 4,
             bgcolor: "white",
             color: "black",
-            // DARK MODE FIX: Force all nested children to black text/gray borders
             "& *": {
               color: "black !important",
               borderColor: "rgba(0, 0, 0, 0.15) !important",
@@ -119,7 +126,6 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
             }
           `}</style>
 
-          {/* DYNAMIC COMPANY HEADER */}
           <Box
             sx={{
               display: "flex",
@@ -135,7 +141,6 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
                 sx={{
                   color: "#1a237e !important",
                   textTransform: "uppercase",
-                  letterSpacing: 1,
                   lineHeight: 1.1,
                 }}
               >
@@ -175,12 +180,32 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
                   </TableRow>
                   <TableRow>
                     <TableCell sx={{ fontWeight: "bold", textAlign: "right" }}>
-                      DATE:
+                      ORDER DATE:
                     </TableCell>
                     <TableCell sx={{ pl: 2 }}>
-                      {new Date(poData.date).toLocaleDateString()}
+                      {formatDate(poData.date)}
                     </TableCell>
                   </TableRow>
+
+                  {/* --- DYNAMIC STATUS DATE ROW (HIDDEN UNLESS DELIVERED/BACKLOAD) --- */}
+                  {isFinalized && (
+                    <TableRow>
+                      <TableCell
+                        sx={{
+                          fontWeight: "bold",
+                          textAlign: "right",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        {poData.status === "Backload"
+                          ? "Backload Date:"
+                          : "Delivery Date:"}
+                      </TableCell>
+                      <TableCell sx={{ pl: 2 }}>
+                        {formatDate(poData.statusDate || poData.date)}
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </Box>
@@ -194,7 +219,6 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
             }}
           />
 
-          {/* CUSTOMER & SHIPPING SECTION */}
           <Grid container spacing={4} sx={{ mb: 4 }}>
             <Grid item xs={6}>
               <Typography
@@ -229,15 +253,16 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
                 Shipping Details
               </Typography>
               <Typography variant="body2">
-                Address: <b>{poData.address || "Office Address"}</b>
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 1 }}>
                 Status: <b>{poData.status}</b>
               </Typography>
+              {poData.remarks && (
+                <Typography variant="body2" sx={{ mt: 1, fontStyle: "italic" }}>
+                  Remarks: <b>{poData.remarks}</b>
+                </Typography>
+              )}
             </Grid>
           </Grid>
 
-          {/* ITEMS TABLE */}
           <TableContainer component={Box} sx={{ mb: 4 }}>
             <Table size="small" sx={{ border: "1px solid #ddd" }}>
               <TableHead>
@@ -337,7 +362,6 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
             </Table>
           </TableContainer>
 
-          {/* SIGNATURE SECTION */}
           <Box
             sx={{
               mt: 8,
@@ -394,7 +418,6 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
           variant="contained"
           startIcon={<Print />}
           onClick={handlePrint}
-          // DISABLING PRINT BUTTON BASED ON STATUS
           disabled={isPrintDisabled}
           sx={{
             borderRadius: 2,
@@ -407,8 +430,8 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
             },
           }}
         >
-          {poData.status === "Done"
-            ? "Print Purchase Order (PDF)"
+          {isFinalized
+            ? `Print ${poData.status} Report (PDF)`
             : `Cannot Print (Status: ${poData.status})`}
         </Button>
       </DialogActions>

@@ -1,4 +1,5 @@
 
+
 CREATE TABLE inventory (
     item_id SERIAL PRIMARY KEY,
     item_name VARCHAR(255) NOT NULL,
@@ -18,7 +19,9 @@ CREATE TABLE purchase_order(
 	address VARCHAR(255) NOT NULL,
 	total_price INT NOT NULL,
     status VARCHAR(255) NOT NULL,
-	created_at TIMESTAMPTZ DEFAULT NOW()
+	remarks VARCHAR(255) NOT NULL,
+	delivery_date DATE NOT NULL,
+	status_date DATE NOT NULL
 );
 
 CREATE TABLE item_order(

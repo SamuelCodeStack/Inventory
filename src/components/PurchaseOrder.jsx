@@ -11,15 +11,15 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Chip,
   IconButton,
   Stack,
   TextField,
   InputAdornment,
-  Divider,
   Snackbar,
   Alert,
   Tooltip,
+  Chip,
+  Divider,
 } from "@mui/material";
 import {
   Add,
@@ -28,12 +28,16 @@ import {
   Delete,
   Search,
   Print,
+  LocalShipping,
+  CheckCircleOutline,
 } from "@mui/icons-material";
+
 import CreatePOModal from "./CreatePOModal";
 import UpdatePOModal from "./UpdatePOModal";
 import ViewPOModal from "./ViewPOModal";
+import DeliveryActionModal from "./DeliveryActionModal";
 
-const THEME_ORANGE = "#f2994a";
+const INITIAL_OPTIONS = ["Job Order", "Pending", "DeliverOnGoing"];
 
 export default function PurchaseOrder({ mode }) {
   const [poData, setPoData] = useState([]);
@@ -41,6 +45,7 @@ export default function PurchaseOrder({ mode }) {
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [openUpdateModal, setOpenUpdateModal] = useState(false);
   const [openViewModal, setOpenViewModal] = useState(false);
+  const [openDeliveryModal, setOpenDeliveryModal] = useState(false);
   const [selectedPO, setSelectedPO] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -53,15 +58,30 @@ export default function PurchaseOrder({ mode }) {
   const componentRef = useRef();
   const isDark = mode === "dark";
 
+  // --- HELPERS ---
   const showSnackbar = (message, severity = "success") => {
     setSnackbar({ open: true, message, severity });
   };
 
-  const handleCloseSnackbar = (event, reason) => {
-    if (reason === "clickaway") return;
-    setSnackbar({ ...snackbar, open: false });
+  const getStatusStyle = (status) => {
+    const clean = status?.replace(/\s/g, "") || "";
+    switch (clean) {
+      case "JobOrder":
+        return { color: "#3498db", bg: "rgba(52, 152, 219, 0.1)" };
+      case "Pending":
+        return { color: "#f19149", bg: "rgba(241, 145, 73, 0.1)" };
+      case "DeliverOnGoing":
+        return { color: "#9b59b2", bg: "rgba(155, 89, 182, 0.1)" };
+      case "Delivered":
+        return { color: "#2ecc71", bg: "rgba(46, 204, 113, 0.1)" };
+      case "Backload":
+        return { color: "#e74c3c", bg: "rgba(231, 76, 60, 0.15)" };
+      default:
+        return { color: "text.primary", bg: "transparent" };
+    }
   };
 
+  // --- API CALLS ---
   const fetchPurchaseOrders = async () => {
     try {
       setLoading(true);
@@ -69,10 +89,58 @@ export default function PurchaseOrder({ mode }) {
       const data = await response.json();
       setPoData(data);
     } catch (error) {
-      console.error("Error fetching POs:", error);
       showSnackbar("Failed to load data", "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStatusUpdate = async (id, newStatus, remarks = "") => {
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/purchase-orders/${id}/status`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: newStatus, remarks: remarks }),
+        },
+      );
+
+      if (response.ok) {
+        fetchPurchaseOrders();
+        showSnackbar(`Order status updated to ${newStatus}`, "success");
+      }
+    } catch (error) {
+      showSnackbar("Error connecting to server", "error");
+    }
+  };
+
+  const handleViewClick = (po) => {
+    setSelectedPO(po);
+    setOpenViewModal(true);
+  };
+  const handleEditClick = (po) => {
+    setSelectedPO(po);
+    setOpenUpdateModal(true);
+  };
+  const handleDeliveryActionClick = (po) => {
+    setSelectedPO(po);
+    setOpenDeliveryModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this PO?")) return;
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/purchase-orders/${id}`,
+        { method: "DELETE" },
+      );
+      if (response.ok) {
+        fetchPurchaseOrders();
+        showSnackbar("Purchase Order deleted", "error");
+      }
+    } catch (error) {
+      showSnackbar("Error deleting PO", "error");
     }
   };
 
@@ -83,59 +151,7 @@ export default function PurchaseOrder({ mode }) {
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
     documentTitle: "Kimwin_Corporation_PO_Report",
-    onAfterPrint: () => showSnackbar("Master list report generated!", "info"),
   });
-
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    const date = new Date(dateString);
-    return date.toLocaleString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  const getStatusStyle = (status) => {
-    switch (status) {
-      case "Job Order":
-        return { bgcolor: "rgba(52, 152, 219, 0.2)", color: "#3498db" };
-      case "Done":
-        return { bgcolor: "rgba(46, 204, 113, 0.2)", color: "#2ecc71" };
-      case "Pending":
-        return { bgcolor: "rgba(241, 145, 73, 0.2)", color: THEME_ORANGE };
-      default:
-        return { bgcolor: "rgba(0,0,0,0.1)", color: "inherit" };
-    }
-  };
-
-  const handleEditClick = (po) => {
-    setSelectedPO(po);
-    setOpenUpdateModal(true);
-  };
-
-  const handleViewClick = (po) => {
-    setSelectedPO(po);
-    setOpenViewModal(true);
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this PO?")) return;
-    try {
-      const response = await fetch(
-        `http://localhost:3000/api/purchase-orders/${id}`,
-        {
-          method: "DELETE",
-        },
-      );
-      if (response.ok) {
-        fetchPurchaseOrders();
-        showSnackbar("Purchase Order deleted", "error");
-      }
-    } catch (error) {
-      showSnackbar("Error connecting to server", "error");
-    }
-  };
 
   return (
     <Box
@@ -148,7 +164,7 @@ export default function PurchaseOrder({ mode }) {
             Purchase Orders
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Dashboard / Purchase Order
+            Order Workflow Management
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
@@ -161,14 +177,10 @@ export default function PurchaseOrder({ mode }) {
           </Button>
           <Button
             variant="contained"
+            color="success"
             startIcon={<Add />}
             onClick={() => setOpenCreateModal(true)}
-            sx={{
-              bgcolor: THEME_ORANGE,
-              color: "#000",
-              fontWeight: "bold",
-              "&:hover": { bgcolor: "#d8853a" },
-            }}
+            sx={{ fontWeight: "bold", color: "#fff" }}
           >
             Create PO
           </Button>
@@ -203,7 +215,7 @@ export default function PurchaseOrder({ mode }) {
                 </InputAdornment>
               ),
             }}
-            sx={{ width: 350 }}
+            sx={{ width: 300 }}
           />
         </Box>
 
@@ -215,10 +227,10 @@ export default function PurchaseOrder({ mode }) {
               <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>Customer</TableCell>
               <TableCell sx={{ fontWeight: "bold" }}>PO Number</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Date</TableCell>
               <TableCell align="center" sx={{ fontWeight: "bold" }}>
                 Status
               </TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Remarks</TableCell>
               <TableCell align="right" sx={{ fontWeight: "bold" }}>
                 Actions
               </TableCell>
@@ -231,36 +243,84 @@ export default function PurchaseOrder({ mode }) {
                   row.customer
                     .toLowerCase()
                     .includes(searchQuery.toLowerCase()) ||
-                  row.poNo.toLowerCase().includes(searchQuery.toLowerCase()),
+                  row.poNo.includes(searchQuery),
               )
-              .map((row) => (
-                <TableRow key={row.id} hover>
-                  <TableCell>#{row.id}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight="600">
-                      {row.customer}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{row.poNo}</TableCell>
-                  <TableCell>{formatDate(row.date)}</TableCell>
-                  <TableCell align="center">
-                    <Chip
-                      label={row.status}
-                      size="small"
-                      sx={{
-                        fontWeight: "bold",
-                        fontSize: "0.7rem",
-                        ...getStatusStyle(row.status),
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      justifyContent="flex-end"
-                    >
-                      <Tooltip title="View Order">
+              .map((row) => {
+                const style = getStatusStyle(row.status);
+                const clean = row.status?.replace(/\s/g, "") || "";
+
+                const isOngoing = clean === "DeliverOnGoing";
+                const isFinal = clean === "Delivered" || clean === "Backload";
+                const isActionAvailable =
+                  clean === "JobOrder" || clean === "Pending" || isOngoing;
+
+                return (
+                  <TableRow key={row.id} hover>
+                    <TableCell>#{row.id}</TableCell>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight="600">
+                        {row.customer}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{row.poNo}</TableCell>
+
+                    <TableCell align="center">
+                      <Chip
+                        icon={
+                          isOngoing ? (
+                            <LocalShipping
+                              style={{ fontSize: "1rem", color: style.color }}
+                            />
+                          ) : null
+                        }
+                        label={row.status}
+                        sx={{
+                          fontWeight: "bold",
+                          bgcolor: style.bg,
+                          color: style.color,
+                          border: "none",
+                          fontSize: "0.75rem",
+                          height: 28,
+                        }}
+                      />
+                    </TableCell>
+
+                    <TableCell sx={{ maxWidth: 200 }}>
+                      <Tooltip title={row.remarks || ""}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{
+                            display: "-webkit-box",
+                            WebkitLineClamp: 1,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                            fontStyle: row.remarks ? "normal" : "italic",
+                          }}
+                        >
+                          {row.remarks || "No remarks"}
+                        </Typography>
+                      </Tooltip>
+                    </TableCell>
+
+                    <TableCell align="right">
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        justifyContent="flex-end"
+                      >
+                        {isActionAvailable && (
+                          <Tooltip title="Update Status">
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => handleDeliveryActionClick(row)}
+                              sx={{ bgcolor: "rgba(25, 118, 210, 0.1)" }}
+                            >
+                              <CheckCircleOutline fontSize="inherit" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                         <IconButton
                           size="small"
                           onClick={() => handleViewClick(row)}
@@ -271,51 +331,32 @@ export default function PurchaseOrder({ mode }) {
                         >
                           <Visibility fontSize="inherit" />
                         </IconButton>
-                      </Tooltip>
-
-                      <Tooltip
-                        title={
-                          row.status === "Done"
-                            ? "Completed orders cannot be edited"
-                            : "Edit Order"
-                        }
-                      >
-                        <span>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleEditClick(row)}
-                            // DISABLE LOGIC APPLIED HERE
-                            disabled={row.status === "Done"}
-                            sx={{
-                              color: "#3498db",
-                              bgcolor: "rgba(52, 152, 219, 0.1)",
-                              "&.Mui-disabled": {
-                                bgcolor: isDark
-                                  ? "rgba(255,255,255,0.05)"
-                                  : "rgba(0,0,0,0.05)",
-                                color: "text.disabled",
-                              },
-                            }}
-                          >
-                            <Edit fontSize="inherit" />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDelete(row.id)}
-                        sx={{
-                          color: "#e74c3c",
-                          bgcolor: "rgba(231, 76, 60, 0.1)",
-                        }}
-                      >
-                        <Delete fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              ))}
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditClick(row)}
+                          disabled={isOngoing || isFinal}
+                          sx={{
+                            color: "#3498db",
+                            bgcolor: "rgba(52, 152, 219, 0.1)",
+                          }}
+                        >
+                          <Edit fontSize="inherit" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDelete(row.id)}
+                          sx={{
+                            color: "#e74c3c",
+                            bgcolor: "rgba(231, 76, 60, 0.1)",
+                          }}
+                        >
+                          <Delete fontSize="inherit" />
+                        </IconButton>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
           </TableBody>
         </Table>
       </TableContainer>
@@ -333,16 +374,14 @@ export default function PurchaseOrder({ mode }) {
               * { color: black !important; border-color: #333 !important; -webkit-print-color-adjust: exact; }
               .p-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
               .p-table th, .p-table td { border: 1px solid #ccc; padding: 8px; text-align: left; font-size: 12px; }
+              .header-title { color: #1a237e !important; font-size: 24px; font-weight: bold; }
             }
           `}</style>
-          <Typography
-            variant="h4"
-            fontWeight="bold"
-            sx={{ color: "#1a237e !important" }}
-          >
-            KIMWIN CORPORATION
-          </Typography>
+          <div className="header-title">KIMWIN CORPORATION</div>
           <Typography variant="h6">Purchase Order Master List</Typography>
+          <Typography variant="caption">
+            Report Generated: {new Date().toLocaleString()}
+          </Typography>
           <Divider sx={{ my: 2, borderColor: "black !important" }} />
           <table className="p-table">
             <thead>
@@ -350,18 +389,22 @@ export default function PurchaseOrder({ mode }) {
                 <th>ID</th>
                 <th>Customer</th>
                 <th>PO No.</th>
-                <th>Date</th>
                 <th>Status</th>
+                <th>Date</th>
+                <th>Remarks</th>
               </tr>
             </thead>
             <tbody>
               {poData.map((row) => (
                 <tr key={row.id}>
-                  <td>{row.id}</td>
+                  <td>#{row.id}</td>
                   <td>{row.customer}</td>
                   <td>{row.poNo}</td>
-                  <td>{formatDate(row.date)}</td>
                   <td>{row.status}</td>
+                  <td>
+                    {row.date ? new Date(row.date).toLocaleDateString() : "-"}
+                  </td>
+                  <td>{row.remarks || "-"}</td>
                 </tr>
               ))}
             </tbody>
@@ -369,7 +412,13 @@ export default function PurchaseOrder({ mode }) {
         </Box>
       </Box>
 
-      {/* Modals & Feedback */}
+      {/* Modals */}
+      <DeliveryActionModal
+        open={openDeliveryModal}
+        handleClose={() => setOpenDeliveryModal(false)}
+        po={selectedPO}
+        onUpdate={handleStatusUpdate}
+      />
       <CreatePOModal
         open={openCreateModal}
         handleClose={() => setOpenCreateModal(false)}
@@ -394,14 +443,14 @@ export default function PurchaseOrder({ mode }) {
         </>
       )}
 
+      {/* Snackbar */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}
-        onClose={handleCloseSnackbar}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       >
         <Alert
-          onClose={handleCloseSnackbar}
           severity={snackbar.severity}
           variant="filled"
           sx={{ borderRadius: 2 }}
