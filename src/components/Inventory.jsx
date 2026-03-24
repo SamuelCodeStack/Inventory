@@ -18,6 +18,7 @@ import {
   Snackbar,
   Alert,
   TablePagination,
+  MenuItem,
 } from "@mui/material";
 import {
   Add,
@@ -28,6 +29,7 @@ import {
   RestartAlt,
   EditNote,
   Print,
+  FilterListOff,
 } from "@mui/icons-material";
 import AddInventoryModal from "./AddInventoryModal";
 import EditInventoryModal from "./EditInventoryModal";
@@ -41,7 +43,11 @@ export default function Inventory({ mode }) {
   const [openEditModal, setOpenEditModal] = useState(false);
   const [openPrintModal, setOpenPrintModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+
+  // --- FILTER STATES ---
   const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
@@ -71,10 +77,33 @@ export default function Inventory({ mode }) {
     fetchInventory();
   }, []);
 
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
+  // --- FILTER LOGIC ---
+  const filteredData = inventoryData.filter((item) => {
+    const matchesSearch =
+      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(item.id).includes(searchQuery);
+    const matchesCategory =
+      categoryFilter === "All" || item.category === categoryFilter;
+    const matchesStatus =
+      statusFilter === "All" || item.status === statusFilter;
+
+    return matchesSearch && matchesCategory && matchesStatus;
+  });
+
+  const paginatedData = filteredData.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
+
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setCategoryFilter("All");
+    setStatusFilter("All");
+    setPage(0);
   };
 
+  // Pagination Handlers
+  const handleChangePage = (event, newPage) => setPage(newPage);
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
@@ -118,7 +147,6 @@ export default function Inventory({ mode }) {
           quantity: item.quantity,
         })),
     };
-
     try {
       const response = await fetch(`http://localhost:3000/api/inventory/bulk`, {
         method: "PATCH",
@@ -157,15 +185,6 @@ export default function Inventory({ mode }) {
     if (status === "Low Stock") return "warning";
     return "error";
   };
-
-  const filteredData = inventoryData.filter((item) =>
-    item.name.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
-
-  const paginatedData = filteredData.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage,
-  );
 
   return (
     <Box
@@ -209,20 +228,16 @@ export default function Inventory({ mode }) {
       </Box>
 
       <TableContainer component={Paper} sx={{ borderRadius: 3, p: 2 }}>
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            mb: 3,
-            alignItems: "center",
-          }}
+        {/* --- FILTER BAR --- */}
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={2}
+          sx={{ mb: 3, alignItems: "center" }}
         >
-          <Typography variant="subtitle1" fontWeight="bold">
-            Master List
-          </Typography>
           <TextField
             size="small"
-            placeholder="Search..."
+            placeholder="Search Name or ID..."
+            value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
               setPage(0);
@@ -234,8 +249,58 @@ export default function Inventory({ mode }) {
                 </InputAdornment>
               ),
             }}
+            sx={{ flexGrow: 1 }}
           />
-        </Box>
+
+          <TextField
+            select
+            size="small"
+            label="Category"
+            value={categoryFilter}
+            onChange={(e) => {
+              setCategoryFilter(e.target.value);
+              setPage(0);
+            }}
+            sx={{ minWidth: 150 }}
+          >
+            <MenuItem value="All">All Categories</MenuItem>
+            <MenuItem value="Plastic">Plastic</MenuItem>
+            <MenuItem value="Injection">Injection</MenuItem>
+            <MenuItem value="Paper">Paper</MenuItem>
+            <MenuItem value="Trading">Trading</MenuItem>
+          </TextField>
+
+          <TextField
+            select
+            size="small"
+            label="Status"
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(0);
+            }}
+            sx={{ minWidth: 150 }}
+          >
+            <MenuItem value="All">All Status</MenuItem>
+            <MenuItem value="In Stock">In Stock</MenuItem>
+            <MenuItem value="Low Stock">Low Stock</MenuItem>
+            <MenuItem value="Out of Stock">Out of Stock</MenuItem>
+          </TextField>
+
+          {(searchQuery ||
+            categoryFilter !== "All" ||
+            statusFilter !== "All") && (
+            <Button
+              startIcon={<FilterListOff />}
+              onClick={handleResetFilters}
+              color="inherit"
+              size="small"
+            >
+              Reset
+            </Button>
+          )}
+        </Stack>
+
         <Table size="small">
           <TableHead
             sx={{ bgcolor: isDark ? "rgba(255,255,255,0.02)" : "action.hover" }}
@@ -283,11 +348,8 @@ export default function Inventory({ mode }) {
                       disableUnderline: true,
                       sx: {
                         fontWeight: "bold",
-                        width: "110px", // INCREASED WIDTH
-                        "& input": {
-                          textAlign: "right",
-                          paddingRight: "8px", // EXTRA PADDING FOR READABILITY
-                        },
+                        width: "110px",
+                        "& input": { textAlign: "right", paddingRight: "8px" },
                       },
                     }}
                   />
@@ -326,6 +388,13 @@ export default function Inventory({ mode }) {
                 </TableCell>
               </TableRow>
             ))}
+            {paginatedData.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
+                  No items match your filters.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
 

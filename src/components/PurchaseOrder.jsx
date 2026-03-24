@@ -20,6 +20,7 @@ import {
   Tooltip,
   Chip,
   Divider,
+  TablePagination,
 } from "@mui/material";
 import {
   Add,
@@ -36,8 +37,7 @@ import CreatePOModal from "./CreatePOModal";
 import UpdatePOModal from "./UpdatePOModal";
 import ViewPOModal from "./ViewPOModal";
 import DeliveryActionModal from "./DeliveryActionModal";
-
-const INITIAL_OPTIONS = ["Job Order", "Pending", "DeliverOnGoing"];
+import PrintPOReportModal from "./PrintPOReportModal";
 
 export default function PurchaseOrder({ mode }) {
   const [poData, setPoData] = useState([]);
@@ -46,8 +46,13 @@ export default function PurchaseOrder({ mode }) {
   const [openUpdateModal, setOpenUpdateModal] = useState(false);
   const [openViewModal, setOpenViewModal] = useState(false);
   const [openDeliveryModal, setOpenDeliveryModal] = useState(false);
+  const [openPrintModal, setOpenPrintModal] = useState(false);
   const [selectedPO, setSelectedPO] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // --- PAGINATION STATE ---
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
 
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -144,14 +149,38 @@ export default function PurchaseOrder({ mode }) {
     }
   };
 
+  // --- PAGINATION HANDLERS ---
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
   useEffect(() => {
     fetchPurchaseOrders();
   }, []);
 
-  const handlePrint = useReactToPrint({
-    contentRef: componentRef,
-    documentTitle: "Kimwin_Corporation_PO_Report",
-  });
+  // --- FILTER & SORT LOGIC ---
+  const filteredAndSortedData = poData
+    .filter(
+      (row) =>
+        row.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        row.poNo.includes(searchQuery),
+    )
+    .sort((a, b) => {
+      const priority = { "Job Order": 1, Pending: 2 };
+      const aPriority = priority[a.status] || 3;
+      const bPriority = priority[b.status] || 3;
+      return aPriority - bPriority;
+    });
+
+  const paginatedData = filteredAndSortedData.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
 
   return (
     <Box
@@ -171,9 +200,9 @@ export default function PurchaseOrder({ mode }) {
           <Button
             variant="outlined"
             startIcon={<Print />}
-            onClick={handlePrint}
+            onClick={() => setOpenPrintModal(true)}
           >
-            Print All
+            Print Report
           </Button>
           <Button
             variant="contained"
@@ -207,7 +236,10 @@ export default function PurchaseOrder({ mode }) {
             size="small"
             placeholder="Search customer or PO#..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(0);
+            }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -237,180 +269,131 @@ export default function PurchaseOrder({ mode }) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {poData
-              .filter(
-                (row) =>
-                  row.customer
-                    .toLowerCase()
-                    .includes(searchQuery.toLowerCase()) ||
-                  row.poNo.includes(searchQuery),
-              )
-              .map((row) => {
-                const style = getStatusStyle(row.status);
-                const clean = row.status?.replace(/\s/g, "") || "";
+            {paginatedData.map((row) => {
+              const style = getStatusStyle(row.status);
+              const clean = row.status?.replace(/\s/g, "") || "";
 
-                const isOngoing = clean === "DeliverOnGoing";
-                const isFinal = clean === "Delivered" || clean === "Backload";
-                const isActionAvailable =
-                  clean === "JobOrder" || clean === "Pending" || isOngoing;
+              const isOngoing = clean === "DeliverOnGoing";
+              const isFinal = clean === "Delivered" || clean === "Backload";
+              const isActionAvailable =
+                clean === "JobOrder" || clean === "Pending" || isOngoing;
 
-                return (
-                  <TableRow key={row.id} hover>
-                    <TableCell>#{row.id}</TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight="600">
-                        {row.customer}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{row.poNo}</TableCell>
+              return (
+                <TableRow key={row.id} hover>
+                  <TableCell>#{row.id}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight="600">
+                      {row.customer}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{row.poNo}</TableCell>
 
-                    <TableCell align="center">
-                      <Chip
-                        icon={
-                          isOngoing ? (
-                            <LocalShipping
-                              style={{ fontSize: "1rem", color: style.color }}
-                            />
-                          ) : null
-                        }
-                        label={row.status}
+                  <TableCell align="center">
+                    <Chip
+                      icon={
+                        isOngoing ? (
+                          <LocalShipping
+                            style={{ fontSize: "1rem", color: style.color }}
+                          />
+                        ) : null
+                      }
+                      label={row.status}
+                      sx={{
+                        fontWeight: "bold",
+                        bgcolor: style.bg,
+                        color: style.color,
+                        border: "none",
+                        fontSize: "0.75rem",
+                        height: 28,
+                      }}
+                    />
+                  </TableCell>
+
+                  <TableCell sx={{ maxWidth: 200 }}>
+                    <Tooltip title={row.remarks || ""}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
                         sx={{
-                          fontWeight: "bold",
-                          bgcolor: style.bg,
-                          color: style.color,
-                          border: "none",
-                          fontSize: "0.75rem",
-                          height: 28,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 1,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                          fontStyle: row.remarks ? "normal" : "italic",
                         }}
-                      />
-                    </TableCell>
-
-                    <TableCell sx={{ maxWidth: 200 }}>
-                      <Tooltip title={row.remarks || ""}>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{
-                            display: "-webkit-box",
-                            WebkitLineClamp: 1,
-                            WebkitBoxOrient: "vertical",
-                            overflow: "hidden",
-                            fontStyle: row.remarks ? "normal" : "italic",
-                          }}
-                        >
-                          {row.remarks || "No remarks"}
-                        </Typography>
-                      </Tooltip>
-                    </TableCell>
-
-                    <TableCell align="right">
-                      <Stack
-                        direction="row"
-                        spacing={1}
-                        justifyContent="flex-end"
                       >
-                        {isActionAvailable && (
-                          <Tooltip title="Update Status">
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              onClick={() => handleDeliveryActionClick(row)}
-                              sx={{ bgcolor: "rgba(25, 118, 210, 0.1)" }}
-                            >
-                              <CheckCircleOutline fontSize="inherit" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                        <IconButton
-                          size="small"
-                          onClick={() => handleViewClick(row)}
-                          sx={{
-                            color: "#2ecc71",
-                            bgcolor: "rgba(46, 204, 113, 0.1)",
-                          }}
-                        >
-                          <Visibility fontSize="inherit" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleEditClick(row)}
-                          disabled={isOngoing || isFinal}
-                          sx={{
-                            color: "#3498db",
-                            bgcolor: "rgba(52, 152, 219, 0.1)",
-                          }}
-                        >
-                          <Edit fontSize="inherit" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleDelete(row.id)}
-                          sx={{
-                            color: "#e74c3c",
-                            bgcolor: "rgba(231, 76, 60, 0.1)",
-                          }}
-                        >
-                          <Delete fontSize="inherit" />
-                        </IconButton>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                        {row.remarks || "No remarks"}
+                      </Typography>
+                    </Tooltip>
+                  </TableCell>
+
+                  <TableCell align="right">
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      justifyContent="flex-end"
+                    >
+                      {isActionAvailable && (
+                        <Tooltip title="Update Status">
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => handleDeliveryActionClick(row)}
+                            sx={{ bgcolor: "rgba(25, 118, 210, 0.1)" }}
+                          >
+                            <CheckCircleOutline fontSize="inherit" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      <IconButton
+                        size="small"
+                        onClick={() => handleViewClick(row)}
+                        sx={{
+                          color: "#2ecc71",
+                          bgcolor: "rgba(46, 204, 113, 0.1)",
+                        }}
+                      >
+                        <Visibility fontSize="inherit" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleEditClick(row)}
+                        disabled={isOngoing || isFinal}
+                        sx={{
+                          color: "#3498db",
+                          bgcolor: "rgba(52, 152, 219, 0.1)",
+                        }}
+                      >
+                        <Edit fontSize="inherit" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDelete(row.id)}
+                        sx={{
+                          color: "#e74c3c",
+                          bgcolor: "rgba(231, 76, 60, 0.1)",
+                        }}
+                      >
+                        <Delete fontSize="inherit" />
+                      </IconButton>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
-      </TableContainer>
 
-      {/* --- HIDDEN PRINT TEMPLATE --- */}
-      <Box sx={{ position: "absolute", left: "-9999px", top: 0 }}>
-        <Box
-          ref={componentRef}
-          sx={{ p: "15mm", bgcolor: "white", color: "black", width: "210mm" }}
-        >
-          <style>{`
-            @media print {
-              @page { size: A4; margin: 15mm; }
-              body { background-color: white !important; }
-              * { color: black !important; border-color: #333 !important; -webkit-print-color-adjust: exact; }
-              .p-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-              .p-table th, .p-table td { border: 1px solid #ccc; padding: 8px; text-align: left; font-size: 12px; }
-              .header-title { color: #1a237e !important; font-size: 24px; font-weight: bold; }
-            }
-          `}</style>
-          <div className="header-title">KIMWIN CORPORATION</div>
-          <Typography variant="h6">Purchase Order Master List</Typography>
-          <Typography variant="caption">
-            Report Generated: {new Date().toLocaleString()}
-          </Typography>
-          <Divider sx={{ my: 2, borderColor: "black !important" }} />
-          <table className="p-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Customer</th>
-                <th>PO No.</th>
-                <th>Status</th>
-                <th>Date</th>
-                <th>Remarks</th>
-              </tr>
-            </thead>
-            <tbody>
-              {poData.map((row) => (
-                <tr key={row.id}>
-                  <td>#{row.id}</td>
-                  <td>{row.customer}</td>
-                  <td>{row.poNo}</td>
-                  <td>{row.status}</td>
-                  <td>
-                    {row.date ? new Date(row.date).toLocaleDateString() : "-"}
-                  </td>
-                  <td>{row.remarks || "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Box>
-      </Box>
+        <TablePagination
+          rowsPerPageOptions={[10, 20, 50]}
+          component="div"
+          count={filteredAndSortedData.length}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+        />
+      </TableContainer>
 
       {/* Modals */}
       <DeliveryActionModal
@@ -422,7 +405,10 @@ export default function PurchaseOrder({ mode }) {
       <CreatePOModal
         open={openCreateModal}
         handleClose={() => setOpenCreateModal(false)}
-        onSaveSuccess={fetchPurchaseOrders}
+        onSaveSuccess={() => {
+          fetchPurchaseOrders();
+          showSnackbar("Purchase Order created successfully!", "success");
+        }}
         mode={mode}
       />
       {selectedPO && (
@@ -430,7 +416,10 @@ export default function PurchaseOrder({ mode }) {
           <UpdatePOModal
             open={openUpdateModal}
             handleClose={() => setOpenUpdateModal(false)}
-            onUpdateSuccess={fetchPurchaseOrders}
+            onUpdateSuccess={() => {
+              fetchPurchaseOrders();
+              showSnackbar("Purchase Order updated successfully!", "info");
+            }}
             mode={mode}
             poData={selectedPO}
           />
@@ -443,6 +432,12 @@ export default function PurchaseOrder({ mode }) {
         </>
       )}
 
+      <PrintPOReportModal
+        open={openPrintModal}
+        handleClose={() => setOpenPrintModal(false)}
+        poData={poData}
+      />
+
       {/* Snackbar */}
       <Snackbar
         open={snackbar.open}
@@ -451,6 +446,7 @@ export default function PurchaseOrder({ mode }) {
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       >
         <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
           severity={snackbar.severity}
           variant="filled"
           sx={{ borderRadius: 2 }}

@@ -1,13 +1,14 @@
 
 
+
 CREATE TABLE inventory (
     item_id SERIAL PRIMARY KEY,
     item_name VARCHAR(255) NOT NULL,
     category VARCHAR(255),
     unit VARCHAR(255),
     quantity INTEGER DEFAULT 0,
-    minimum_stock INTEGER DEFAULT 10
-	created_at DATE NOT NULL,
+    minimum_stock INTEGER DEFAULT 10,
+	created_at DATE NOT NULL
 );
 
 CREATE TABLE purchase_order(
@@ -22,7 +23,8 @@ CREATE TABLE purchase_order(
     status VARCHAR(255) NOT NULL,
 	remarks VARCHAR(255) NOT NULL,
 	delivery_date DATE NOT NULL,
-	status_date DATE NOT NULL
+	status_date DATE NOT NULL,
+	created_at DATE NOT NULL
 );
 
 CREATE TABLE item_order(

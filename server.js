@@ -150,6 +150,7 @@ app.get("/api/purchase-orders", async (req, res) => {
         remarks: po.remarks,
         date: po.delivery_date,
         statusDate: po.status_date,
+        createdAt: po.created_at, // UPDATED: Ensure this is sent to frontend
       })),
     );
   } catch (err) {
@@ -157,7 +158,154 @@ app.get("/api/purchase-orders", async (req, res) => {
   }
 });
 
-// CRITICAL: This route must exist for ViewPOModal to work
+app.post("/api/purchase-orders", async (req, res) => {
+  const {
+    po_number,
+    customer_name,
+    email,
+    contact,
+    company,
+    address,
+    total_price,
+    status,
+    remarks,
+    delivery_date,
+    items,
+  } = req.body;
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const poResult = await client.query(
+      `INSERT INTO purchase_order (
+        po_number, customer_name, email, contact, company, 
+        address, total_price, status, remarks, delivery_date, status_date, created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_DATE, CURRENT_DATE) 
+      RETURNING po_id`,
+      [
+        po_number,
+        customer_name,
+        email,
+        contact,
+        company,
+        address,
+        total_price,
+        status || "Pending",
+        remarks || "",
+        delivery_date,
+      ],
+    );
+
+    const newPoId = poResult.rows[0].po_id;
+
+    const itemInsertQuery = `
+      INSERT INTO item_order (
+        po_id, po_number, item_id, item_name, category, unit, quantity, price
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `;
+
+    for (const item of items) {
+      await client.query(itemInsertQuery, [
+        newPoId,
+        po_number,
+        cleanId(item.id),
+        item.name,
+        item.category,
+        item.uom || item.unit,
+        item.qty || item.quantity,
+        item.price,
+      ]);
+    }
+
+    await client.query("COMMIT");
+    res
+      .status(201)
+      .json({ message: "Purchase Order created successfully", po_id: newPoId });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("PO Creation Error:", err);
+    if (err.code === "23505") {
+      return res.status(400).json({ error: "PO Number already exists." });
+    }
+    res.status(500).json({ error: "Failed to create order." });
+  } finally {
+    client.release();
+  }
+});
+
+app.put("/api/purchase-orders/:id", async (req, res) => {
+  const id = cleanId(req.params.id);
+  const {
+    customer_name,
+    email,
+    contact,
+    company,
+    address,
+    total_price,
+    status,
+    items,
+  } = req.body;
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    await client.query(
+      `UPDATE purchase_order SET 
+        customer_name=$1, email=$2, contact=$3, company=$4, address=$5, 
+        total_price=$6, status=$7, status_date=CURRENT_DATE 
+       WHERE po_id=$8`,
+      [
+        customer_name,
+        email,
+        contact,
+        company,
+        address,
+        total_price,
+        status,
+        id,
+      ],
+    );
+
+    await client.query("DELETE FROM item_order WHERE po_id = $1", [id]);
+
+    const poNumRes = await client.query(
+      "SELECT po_number FROM purchase_order WHERE po_id = $1",
+      [id],
+    );
+    const po_number = poNumRes.rows[0].po_number;
+
+    const itemInsertQuery = `
+      INSERT INTO item_order (po_id, po_number, item_id, item_name, category, unit, quantity, price) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `;
+
+    for (const item of items) {
+      await client.query(itemInsertQuery, [
+        id,
+        po_number,
+        cleanId(item.id),
+        item.name,
+        item.category,
+        item.unit || item.uom,
+        item.qty || item.quantity,
+        item.price,
+      ]);
+    }
+
+    await client.query("COMMIT");
+    res.json({ message: "Purchase Order updated successfully" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Update Error:", err);
+    res.status(500).json({ error: "Failed to update order" });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/api/purchase-orders/:id/items", async (req, res) => {
   const id = cleanId(req.params.id);
   try {

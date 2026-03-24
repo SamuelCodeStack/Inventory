@@ -24,36 +24,24 @@ import {
 import { Close, Print } from "@mui/icons-material";
 import { useReactToPrint } from "react-to-print";
 
-export default function PrintInventoryModal({
-  open,
-  handleClose,
-  inventoryData,
-}) {
+export default function PrintPOReportModal({ open, handleClose, poData }) {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
 
-  // Filter States
-  const [filterType, setFilterType] = useState("day"); // day, week, month, year
+  const [filterType, setFilterType] = useState("day");
   const [selectedDate, setSelectedDate] = useState(
     new Date().toLocaleDateString("en-CA"),
   );
   const [printAll, setPrintAll] = useState(false);
   const componentRef = useRef();
 
-  // Helper to get range text for the report header
   const getRangeLabel = () => {
-    if (printAll) return "Full Inventory";
+    if (printAll) return "Full History";
     const date = new Date(selectedDate);
-
-    if (filterType === "day") {
-      return `Date: ${date.toLocaleDateString("en-US", { dateStyle: "long" })}`;
-    }
-    if (filterType === "month") {
-      return `Month of: ${date.toLocaleString("default", { month: "long", year: "numeric" })}`;
-    }
-    if (filterType === "year") {
-      return `Year: ${date.getFullYear()}`;
-    }
+    if (filterType === "day") return `Date: ${date.toLocaleDateString()}`;
+    if (filterType === "month")
+      return `Month: ${date.toLocaleString("default", { month: "long", year: "numeric" })}`;
+    if (filterType === "year") return `Year: ${date.getFullYear()}`;
     if (filterType === "week") {
       const tempDate = new Date(selectedDate);
       const first = tempDate.getDate() - tempDate.getDay();
@@ -69,51 +57,40 @@ export default function PrintInventoryModal({
     return "";
   };
 
-  // Filter logic
   const filteredData = printAll
-    ? inventoryData
-    : inventoryData.filter((item) => {
-        if (!item.date) return false;
-        const itemDate = new Date(item.date);
+    ? poData
+    : poData.filter((po) => {
+        // UPDATED: Now filters based on createdAt (the date the PO was added to the system)
+        const dateToFilter = po.createdAt || po.date;
+        if (!dateToFilter) return false;
+
+        const poDate = new Date(dateToFilter);
         const targetDate = new Date(selectedDate);
 
-        // Daily
-        if (filterType === "day") {
-          return itemDate.toLocaleDateString("en-CA") === selectedDate;
-        }
-
-        // Monthly
-        if (filterType === "month") {
+        if (filterType === "day")
+          return poDate.toLocaleDateString("en-CA") === selectedDate;
+        if (filterType === "month")
           return (
-            itemDate.getMonth() === targetDate.getMonth() &&
-            itemDate.getFullYear() === targetDate.getFullYear()
+            poDate.getMonth() === targetDate.getMonth() &&
+            poDate.getFullYear() === targetDate.getFullYear()
           );
-        }
-
-        // Yearly
-        if (filterType === "year") {
-          return itemDate.getFullYear() === targetDate.getFullYear();
-        }
-
-        // Weekly
+        if (filterType === "year")
+          return poDate.getFullYear() === targetDate.getFullYear();
         if (filterType === "week") {
           const startOfWeek = new Date(targetDate);
           startOfWeek.setDate(targetDate.getDate() - targetDate.getDay());
           startOfWeek.setHours(0, 0, 0, 0);
-
           const endOfWeek = new Date(startOfWeek);
           endOfWeek.setDate(startOfWeek.getDate() + 6);
           endOfWeek.setHours(23, 59, 59, 999);
-
-          return itemDate >= startOfWeek && itemDate <= endOfWeek;
+          return poDate >= startOfWeek && poDate <= endOfWeek;
         }
-
         return false;
       });
 
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
-    documentTitle: `Inventory_Report_${getRangeLabel().replace(/ /g, "_")}`,
+    documentTitle: `PO_Report_${getRangeLabel().replace(/ /g, "_")}`,
     onAfterPrint: handleClose,
   });
 
@@ -129,7 +106,7 @@ export default function PrintInventoryModal({
         }}
       >
         <Typography variant="h6" fontWeight="bold">
-          Print Inventory Report
+          Print Purchase Order Report
         </Typography>
         <IconButton
           onClick={handleClose}
@@ -143,77 +120,66 @@ export default function PrintInventoryModal({
       <DialogContent
         sx={{ p: 0, bgcolor: isDarkMode ? "#121212" : "grey.100" }}
       >
-        {/* Selection Controls */}
         <Box
           sx={{
             p: 3,
             bgcolor: "background.paper",
             borderBottom: "1px solid",
             borderColor: "divider",
+            display: "flex",
+            gap: 2,
+            alignItems: "center",
+            flexWrap: "wrap",
           }}
         >
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 2,
-              flexWrap: "wrap",
-            }}
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={printAll}
+                onChange={(e) => setPrintAll(e.target.checked)}
+              />
+            }
+            label="Print All"
+          />
+          {!printAll && (
+            <>
+              <TextField
+                select
+                label="Range"
+                size="small"
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                sx={{ width: 130 }}
+              >
+                <MenuItem value="day">Daily</MenuItem>
+                <MenuItem value="week">Weekly</MenuItem>
+                <MenuItem value="month">Monthly</MenuItem>
+                <MenuItem value="year">Yearly</MenuItem>
+              </TextField>
+              <TextField
+                type="date"
+                label="Reference Date"
+                size="small"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
+            </>
+          )}
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ ml: "auto" }}
           >
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={printAll}
-                  onChange={(e) => setPrintAll(e.target.checked)}
-                />
-              }
-              label="Print All Records"
-            />
-
-            {!printAll && (
-              <>
-                <TextField
-                  select
-                  label="Filter Range"
-                  size="small"
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  sx={{ width: 140 }}
-                >
-                  <MenuItem value="day">Specific Day</MenuItem>
-                  <MenuItem value="week">Specific Week</MenuItem>
-                  <MenuItem value="month">Specific Month</MenuItem>
-                  <MenuItem value="year">Specific Year</MenuItem>
-                </TextField>
-
-                <TextField
-                  type="date"
-                  label="Reference Date"
-                  size="small"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                />
-              </>
-            )}
-
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ ml: "auto" }}
-            >
-              {filteredData.length} records found.
-            </Typography>
-          </Box>
+            {filteredData.length} records found.
+          </Typography>
         </Box>
 
-        {/* PRINT PREVIEW AREA */}
         <Box
           sx={{
             p: 4,
             display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
+            justifyContent: "center",
             bgcolor: isDarkMode ? "#1e1e1e" : "grey.200",
           }}
         >
@@ -247,76 +213,69 @@ export default function PrintInventoryModal({
             <Typography
               variant="h6"
               align="center"
-              sx={{ mb: 4, letterSpacing: 2, textTransform: "uppercase" }}
+              sx={{ mb: 4, letterSpacing: 2 }}
             >
-              Inventory Assets Report
+              PO SUMMARY REPORT
             </Typography>
-
             <Box
               sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}
             >
               <Typography variant="body2">
-                <b>Report Scope:</b> {getRangeLabel()}
+                <b>Scope:</b> {getRangeLabel()}
               </Typography>
               <Typography variant="body2">
-                <b>Generated On:</b> {new Date().toLocaleString()}
+                <b>Generated:</b> {new Date().toLocaleString()}
               </Typography>
             </Box>
-
             <Table
               size="small"
-              sx={{
-                "& td, & th": { border: "1px solid black" },
-                bgcolor: "white",
-              }}
+              sx={{ "& td, & th": { border: "1px solid black" } }}
             >
               <TableHead>
                 <TableRow sx={{ bgcolor: "#f0f0f0" }}>
-                  <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>Item Name</TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>PO No.</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>Customer</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>Status</TableCell>
                   <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                    Quantity
+                    Total Amount
                   </TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>Unit</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredData.length > 0 ? (
                   filteredData.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell>{String(row.id).split(":")[0]}</TableCell>
+                      <TableCell>{row.poNo}</TableCell>
                       <TableCell sx={{ fontWeight: "bold" }}>
-                        {row.name}
+                        {row.customer}
                       </TableCell>
-                      <TableCell>{row.category}</TableCell>
-                      <TableCell align="right">{row.quantity}</TableCell>
-                      <TableCell>{row.uom}</TableCell>
+                      <TableCell>{row.status}</TableCell>
+                      <TableCell align="right">
+                        ₱{Number(row.totalPrice).toLocaleString()}
+                      </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 10 }}>
-                      No inventory records found for the selected range.
+                    <TableCell colSpan={4} align="center" sx={{ py: 5 }}>
+                      No records found.
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
-
-            {/* Footer Section */}
             <Box
               sx={{ mt: 10, display: "flex", justifyContent: "space-between" }}
             >
               <Box sx={{ textAlign: "center" }}>
                 <Box
-                  sx={{ width: 200, borderBottom: "1px solid black", mb: 1 }}
+                  sx={{ width: 180, borderBottom: "1px solid black", mb: 1 }}
                 />
-                <Typography variant="caption">Warehouse Personnel</Typography>
+                <Typography variant="caption">Accounting</Typography>
               </Box>
               <Box sx={{ textAlign: "center" }}>
                 <Box
-                  sx={{ width: 200, borderBottom: "1px solid black", mb: 1 }}
+                  sx={{ width: 180, borderBottom: "1px solid black", mb: 1 }}
                 />
                 <Typography variant="caption">Authorized Signature</Typography>
               </Box>
@@ -324,15 +283,7 @@ export default function PrintInventoryModal({
           </Paper>
         </Box>
       </DialogContent>
-
-      <DialogActions
-        sx={{
-          p: 2,
-          bgcolor: "background.paper",
-          borderTop: "1px solid",
-          borderColor: "divider",
-        }}
-      >
+      <DialogActions sx={{ p: 2, bgcolor: "background.paper" }}>
         <Button onClick={handleClose} color="inherit">
           Cancel
         </Button>
@@ -343,7 +294,7 @@ export default function PrintInventoryModal({
           disabled={filteredData.length === 0}
           sx={{ fontWeight: "bold" }}
         >
-          Finalize & Print
+          Print PDF
         </Button>
       </DialogActions>
     </Dialog>
