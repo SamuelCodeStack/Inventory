@@ -177,10 +177,10 @@ export default function PurchaseOrder({ mode }) {
           </Button>
           <Button
             variant="contained"
-            color="success"
+            color="primary"
             startIcon={<Add />}
             onClick={() => setOpenCreateModal(true)}
-            sx={{ fontWeight: "bold", color: "#fff" }}
+            sx={{ fontWeight: "bold", color: "#000000" }}
           >
             Create PO
           </Button>

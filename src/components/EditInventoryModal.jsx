@@ -24,28 +24,36 @@ export default function EditInventoryModal({
   itemData,
 }) {
   const [formData, setFormData] = useState({
-    item_name: "",
+    name: "",
     category: "Plastic",
-    unit: "Pieces",
-    minimum_stock: 10, // Fixed spelling
+    uom: "Pieces",
+    minStock: 10,
   });
 
   useEffect(() => {
     if (itemData) {
       setFormData({
-        item_name: itemData.name || "",
+        name: itemData.name || "",
         category: itemData.category || "Plastic",
-        unit: itemData.uom || "Pieces",
-        minimum_stock: itemData.minStock || 10,
+        uom: itemData.uom || "Pieces",
+        minStock: itemData.minStock || 10,
       });
     }
   }, [itemData]);
+
+  // --- LOGIC: CHECK IF ANYTHING CHANGED ---
+  const isUnchanged =
+    itemData &&
+    formData.name === (itemData.name || "") &&
+    formData.category === (itemData.category || "Plastic") &&
+    formData.uom === (itemData.uom || "Pieces") &&
+    formData.minStock === (itemData.minStock || 10);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]: name === "minimum_stock" ? parseInt(value) || 0 : value,
+      [name]: name === "minStock" ? parseInt(value) || 0 : value,
     });
   };
 
@@ -54,7 +62,7 @@ export default function EditInventoryModal({
       const response = await fetch(
         `http://localhost:3000/api/inventory/${itemData.id}`,
         {
-          method: "PUT",
+          method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ...formData,
@@ -64,30 +72,19 @@ export default function EditInventoryModal({
       );
 
       if (response.ok) {
-        // 1. Refresh the data in the parent component
         onSaveSuccess();
-
-        // 2. Close this modal
         handleClose();
       } else {
-        const errorData = await response.json();
-        alert("Update Error: " + errorData.error);
+        alert("Update Error: Check backend console.");
       }
     } catch (error) {
       alert("Network Error: Could not connect to server.");
     }
   };
-  const fieldStyle = {
-    "& .MuiOutlinedInput-root": {
-      bgcolor: mode === "light" ? "#fff" : "rgba(255, 255, 255, 0.03)",
-      borderRadius: 2,
-    },
-  };
 
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
       <DialogTitle
-        component="div"
         sx={{
           display: "flex",
           justifyContent: "space-between",
@@ -101,17 +98,15 @@ export default function EditInventoryModal({
           <Close />
         </IconButton>
       </DialogTitle>
-
       <DialogContent dividers>
         <Grid container spacing={2} sx={{ mt: 0.5 }}>
           <Grid item xs={12}>
             <TextField
               fullWidth
               label="Item Name"
-              name="item_name"
-              value={formData.item_name}
+              name="name"
+              value={formData.name}
               onChange={handleChange}
-              sx={fieldStyle}
             />
           </Grid>
           <Grid item xs={6}>
@@ -122,7 +117,6 @@ export default function EditInventoryModal({
               name="category"
               value={formData.category}
               onChange={handleChange}
-              sx={fieldStyle}
             >
               {categories.map((opt) => (
                 <MenuItem key={opt} value={opt}>
@@ -136,10 +130,9 @@ export default function EditInventoryModal({
               fullWidth
               select
               label="Unit"
-              name="unit"
-              value={formData.unit}
+              name="uom"
+              value={formData.uom}
               onChange={handleChange}
-              sx={fieldStyle}
             >
               {units.map((u) => (
                 <MenuItem key={u} value={u}>
@@ -149,28 +142,29 @@ export default function EditInventoryModal({
             </TextField>
           </Grid>
           <Grid item xs={12}>
-            {/* Expanded to full width since Quantity is gone */}
             <TextField
               fullWidth
               type="number"
               label="Minimum Stock Level"
-              name="minimum_stock"
-              value={formData.minimum_stock}
+              name="minStock"
+              value={formData.minStock}
               onChange={handleChange}
-              sx={fieldStyle}
             />
           </Grid>
         </Grid>
       </DialogContent>
-
       <DialogActions sx={{ p: 3 }}>
-        <Button onClick={handleClose} sx={{ color: "text.secondary" }}>
+        <Button onClick={handleClose} color="inherit">
           Cancel
         </Button>
         <Button
           variant="contained"
           onClick={handleSubmit}
-          sx={{ fontWeight: "bold" }}
+          disabled={isUnchanged} // --- DISABLED IF NO CHANGES ---
+          sx={{
+            fontWeight: "bold",
+            // Optional: add a visual cue that it's disabled via styling if needed
+          }}
         >
           Update Item
         </Button>

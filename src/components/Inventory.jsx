@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useReactToPrint } from "react-to-print";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -18,7 +17,7 @@ import {
   InputAdornment,
   Snackbar,
   Alert,
-  Divider,
+  TablePagination,
 } from "@mui/material";
 import {
   Add,
@@ -32,6 +31,7 @@ import {
 } from "@mui/icons-material";
 import AddInventoryModal from "./AddInventoryModal";
 import EditInventoryModal from "./EditInventoryModal";
+import PrintInventoryModal from "./PrintInventoryModal";
 
 export default function Inventory({ mode }) {
   const [inventoryData, setInventoryData] = useState([]);
@@ -39,22 +39,22 @@ export default function Inventory({ mode }) {
   const [isEditingQty, setIsEditingQty] = useState(false);
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditModal, setOpenEditModal] = useState(false);
+  const [openPrintModal, setOpenPrintModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // --- SNACKBAR STATE ---
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
+
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
-    severity: "success", // success=green, error=red, info=blue
+    severity: "success",
   });
+  const isDark = mode === "dark";
 
-  const componentRef = useRef();
-
-  // Helper for Snackbar
-  const showMessage = (msg, sev = "success") => {
+  const showMessage = (msg, sev = "success") =>
     setSnackbar({ open: true, message: msg, severity: sev });
-  };
 
   const fetchInventory = async () => {
     try {
@@ -63,8 +63,7 @@ export default function Inventory({ mode }) {
       setInventoryData(data);
       setOriginalData(JSON.parse(JSON.stringify(data)));
     } catch (error) {
-      console.error("Fetch error:", error);
-      showMessage("Failed to fetch inventory data", "error"); // Red
+      showMessage("Network Error: Could not connect to server", "error");
     }
   };
 
@@ -72,49 +71,52 @@ export default function Inventory({ mode }) {
     fetchInventory();
   }, []);
 
-  // Print Logic
-  const handlePrint = useReactToPrint({
-    contentRef: componentRef,
-    documentTitle: "Kimwin_Corporation_Inventory_Report",
-    onAfterPrint: () => showMessage("Report generated successfully!", "info"), // Blue
-  });
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
 
   const hasChanges = inventoryData.some((item) => {
-    const originalItem = originalData.find((orig) => orig.id === item.id);
+    const originalItem = originalData.find(
+      (orig) => String(orig.id).split(":")[0] === String(item.id).split(":")[0],
+    );
     return originalItem && item.quantity !== originalItem.quantity;
   });
 
-  const handleCloseSnackbar = (event, reason) => {
-    if (reason === "clickaway") return;
-    setSnackbar({ ...snackbar, open: false });
-  };
-
   const handleQuantityChangeLocal = (id, newQuantity) => {
     const qty = parseInt(newQuantity) || 0;
-    const updatedData = inventoryData.map((item) => {
-      if (item.id === id) {
-        const threshold = item.minStock || 10;
-        let newStatus = "In Stock";
-        if (qty === 0) newStatus = "Out of Stock";
-        else if (qty <= threshold) newStatus = "Low Stock";
-        return { ...item, quantity: qty, status: newStatus };
-      }
-      return item;
-    });
-    setInventoryData(updatedData);
+    setInventoryData((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          const threshold = item.minStock || 10;
+          let newStatus =
+            qty === 0
+              ? "Out of Stock"
+              : qty <= threshold
+                ? "Low Stock"
+                : "In Stock";
+          return { ...item, quantity: qty, status: newStatus };
+        }
+        return item;
+      }),
+    );
   };
 
   const handleBulkSave = async () => {
-    const modifiedItems = inventoryData.filter((item) => {
-      const original = originalData.find((o) => o.id === item.id);
-      return original && item.quantity !== original.quantity;
-    });
-
     const payload = {
-      items: modifiedItems.map((item) => ({
-        id: item.id,
-        quantity: item.quantity,
-      })),
+      items: inventoryData
+        .filter((item) => {
+          const original = originalData.find((o) => o.id === item.id);
+          return original && item.quantity !== original.quantity;
+        })
+        .map((item) => ({
+          id: String(item.id).split(":")[0],
+          quantity: item.quantity,
+        })),
     };
 
     try {
@@ -123,75 +125,68 @@ export default function Inventory({ mode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
       if (response.ok) {
-        setOriginalData(JSON.parse(JSON.stringify(inventoryData)));
+        showMessage("Quantities updated!", "info");
         setIsEditingQty(false);
-        showMessage("All quantities updated successfully!", "info"); // blue
+        fetchInventory();
       }
     } catch (error) {
-      showMessage("Error saving changes", "error"); // Red
+      showMessage("Save failed", "error");
     }
   };
 
-  const handleResetChanges = () => {
-    setInventoryData(JSON.parse(JSON.stringify(originalData)));
-    setIsEditingQty(false);
-    showMessage("Changes discarded", "info"); // Blue
-  };
-
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure?")) return;
+    const cleanId = String(id).split(":")[0];
+    if (!window.confirm(`Delete item #${cleanId}?`)) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/inventory/${id}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `http://localhost:3000/api/inventory/${cleanId}`,
+        { method: "DELETE" },
+      );
       if (res.ok) {
-        setInventoryData(inventoryData.filter((item) => item.id !== id));
-        showMessage("Item deleted successfully", "error"); // Red
+        setInventoryData((prev) => prev.filter((item) => item.id !== id));
+        showMessage("Deleted successfully", "success");
       }
     } catch (e) {
-      showMessage("Delete failed", "error"); // Red
+      showMessage("Delete failed", "error");
     }
   };
 
   const getStatusColor = (status) => {
     if (status === "In Stock") return "success";
     if (status === "Low Stock") return "warning";
-    if (status === "Out of Stock") return "error";
-    return "default";
+    return "error";
   };
 
-  // Modal Handlers
-  const handleAddSuccess = () => {
-    fetchInventory();
-    showMessage("New item added successfully!", "success"); // Green
-  };
+  const filteredData = inventoryData.filter((item) =>
+    item.name.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
 
-  const handleEditSuccess = () => {
-    fetchInventory();
-    showMessage("Item details updated successfully!", "info"); // Green
-  };
+  const paginatedData = filteredData.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
 
   return (
     <Box
       sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
     >
-      {/* Header */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
-        <Box>
-          <Typography variant="h5" fontWeight="bold">
-            Inventory
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Dashboard / Inventory
-          </Typography>
-        </Box>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          mb: 3,
+          alignItems: "center",
+        }}
+      >
+        <Typography variant="h5" fontWeight="bold">
+          Inventory Management
+        </Typography>
         <Stack direction="row" spacing={2}>
           <Button
             variant="outlined"
             startIcon={<Print />}
-            onClick={() => handlePrint()}
+            onClick={() => setOpenPrintModal(true)}
           >
             Print Report
           </Button>
@@ -201,19 +196,18 @@ export default function Inventory({ mode }) {
             startIcon={<EditNote />}
             onClick={() => setIsEditingQty(!isEditingQty)}
           >
-            {isEditingQty ? "Lock Editing" : "Enable Qty Edit"}
+            {isEditingQty ? "Lock" : "Edit Qty"}
           </Button>
           <Button
             variant="contained"
             startIcon={<Add />}
             onClick={() => setOpenAddModal(true)}
           >
-            Add Inventory
+            Add Item
           </Button>
         </Stack>
       </Box>
 
-      {/* Main Table */}
       <TableContainer component={Paper} sx={{ borderRadius: 3, p: 2 }}>
         <Box
           sx={{
@@ -224,12 +218,15 @@ export default function Inventory({ mode }) {
           }}
         >
           <Typography variant="subtitle1" fontWeight="bold">
-            Inventory List
+            Master List
           </Typography>
           <TextField
             size="small"
-            placeholder="Search items..."
-            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search..."
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(0);
+            }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -239,97 +236,108 @@ export default function Inventory({ mode }) {
             }}
           />
         </Box>
-
-        <Table>
+        <Table size="small">
           <TableHead
-            sx={{
-              bgcolor:
-                mode === "light" ? "action.hover" : "rgba(255,255,255,0.02)",
-            }}
+            sx={{ bgcolor: isDark ? "rgba(255,255,255,0.02)" : "action.hover" }}
           >
             <TableRow>
-              <TableCell>ID</TableCell>
-              <TableCell>Item Name</TableCell>
-              <TableCell>Category</TableCell>
-              <TableCell>Unit</TableCell>
-              <TableCell align="right">Quantity</TableCell>
-              <TableCell align="center">Status</TableCell>
-              <TableCell align="right">Action</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Item Name</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
+              <TableCell sx={{ fontWeight: "bold" }}>Unit</TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                Quantity
+              </TableCell>
+              <TableCell align="center" sx={{ fontWeight: "bold" }}>
+                Status
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                Action
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {inventoryData
-              .filter((item) =>
-                item.name.toLowerCase().includes(searchQuery.toLowerCase()),
-              )
-              .map((row) => (
-                <TableRow key={row.id} hover>
-                  <TableCell>{row.id}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight="bold">
-                      {row.name}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={row.category} size="small" />
-                  </TableCell>
-                  <TableCell>{row.uom}</TableCell>
-                  <TableCell align="right">
-                    <TextField
-                      type="number"
-                      variant={isEditingQty ? "outlined" : "standard"}
-                      size="small"
-                      disabled={!isEditingQty}
-                      value={row.quantity}
-                      onChange={(e) =>
-                        handleQuantityChangeLocal(row.id, e.target.value)
-                      }
-                      InputProps={{
-                        disableUnderline: true,
-                        sx: {
-                          fontWeight: "bold",
-                          width: "80px",
-                          "& input": { textAlign: "right" },
+            {paginatedData.map((row) => (
+              <TableRow key={row.id} hover>
+                <TableCell>#{String(row.id).split(":")[0]}</TableCell>
+                <TableCell>
+                  <Typography variant="body2" fontWeight="bold">
+                    {row.name}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Chip label={row.category} size="small" variant="outlined" />
+                </TableCell>
+                <TableCell>{row.uom}</TableCell>
+                <TableCell align="right">
+                  <TextField
+                    type="number"
+                    variant={isEditingQty ? "outlined" : "standard"}
+                    size="small"
+                    disabled={!isEditingQty}
+                    value={row.quantity}
+                    onChange={(e) =>
+                      handleQuantityChangeLocal(row.id, e.target.value)
+                    }
+                    InputProps={{
+                      disableUnderline: true,
+                      sx: {
+                        fontWeight: "bold",
+                        width: "110px", // INCREASED WIDTH
+                        "& input": {
+                          textAlign: "right",
+                          paddingRight: "8px", // EXTRA PADDING FOR READABILITY
                         },
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell align="center">
-                    <Chip
-                      label={row.status}
+                      },
+                    }}
+                  />
+                </TableCell>
+                <TableCell align="center">
+                  <Chip
+                    label={row.status}
+                    size="small"
+                    color={getStatusColor(row.status)}
+                    sx={{ fontWeight: "bold" }}
+                  />
+                </TableCell>
+                <TableCell align="right">
+                  <Stack direction="row" spacing={1} justifyContent="flex-end">
+                    <IconButton
                       size="small"
-                      color={getStatusColor(row.status)}
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      justifyContent="flex-end"
+                      color="info"
+                      onClick={() => {
+                        setSelectedItem({
+                          ...row,
+                          id: String(row.id).split(":")[0],
+                        });
+                        setOpenEditModal(true);
+                      }}
                     >
-                      <IconButton
-                        size="small"
-                        color="info"
-                        onClick={() => {
-                          setSelectedItem(row);
-                          setOpenEditModal(true);
-                        }}
-                      >
-                        <Edit fontSize="inherit" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleDelete(row.id)}
-                      >
-                        <Delete fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      <Edit fontSize="inherit" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={() => handleDelete(row.id)}
+                    >
+                      <Delete fontSize="inherit" />
+                    </IconButton>
+                  </Stack>
+                </TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
+
+        <TablePagination
+          rowsPerPageOptions={[10, 20, 50]}
+          component="div"
+          count={filteredData.length}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+        />
 
         {hasChanges && (
           <Box
@@ -346,8 +354,10 @@ export default function Inventory({ mode }) {
             <Button
               variant="text"
               color="inherit"
-              startIcon={<RestartAlt />}
-              onClick={handleResetChanges}
+              onClick={() => {
+                setInventoryData(JSON.parse(JSON.stringify(originalData)));
+                setIsEditingQty(false);
+              }}
             >
               Discard
             </Button>
@@ -357,138 +367,42 @@ export default function Inventory({ mode }) {
               startIcon={<Save />}
               onClick={handleBulkSave}
             >
-              Save All Changes
+              Save Changes
             </Button>
           </Box>
         )}
       </TableContainer>
 
-      {/* --- HIDDEN PRINT TEMPLATE --- */}
-      <Box sx={{ display: "none" }}>
-        <Box
-          ref={componentRef}
-          sx={{
-            p: "10mm",
-            bgcolor: "white",
-            color: "black",
-            width: "210mm",
-            // This ensures MUI Typography components inside this box default to black
-            "& *": { color: "black !important" },
-          }}
-        >
-          {/* CRITICAL: CSS to override Dark Mode styles during printing */}
-          <style>{`
-            @media print {
-              @page { 
-                size: A4; 
-                margin: 15mm; 
-              }
-              body { 
-                background-color: white !important; 
-                color: black !important;
-              }
-              /* Force all elements to black and borders to be visible */
-              * { 
-                color: black !important; 
-                background-color: transparent !important;
-                border-color: #333 !important;
-                -webkit-print-color-adjust: exact; 
-                print-color-adjust: exact;
-              }
-              /* Ensure the header text is dark blue even in print */
-              .print-header {
-                color: #1a237e !important;
-              }
-            }
-          `}</style>
-
-          <Typography
-            variant="h4"
-            fontWeight="bold"
-            className="print-header"
-            sx={{ color: "#1a237e !important" }}
-          >
-            KIMWIN CORPORATION
-          </Typography>
-          <Typography variant="h6" sx={{ mb: 2 }}>
-            Inventory Assets Report
-          </Typography>
-
-          <Divider
-            sx={{
-              mb: 3,
-              borderColor: "black !important",
-              borderBottomWidth: 1,
-            }}
-          />
-
-          <Table size="small">
-            <TableHead>
-              <TableRow
-                sx={{
-                  "& th": {
-                    fontWeight: "bold",
-                    color: "black !important",
-                    borderBottom: "2px solid black !important",
-                  },
-                }}
-              >
-                <TableCell>ID</TableCell>
-                <TableCell>Item Name</TableCell>
-                <TableCell>Category</TableCell>
-                <TableCell align="right">Qty</TableCell>
-                <TableCell>Unit</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {inventoryData.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.id}</TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>{row.name}</TableCell>
-                  <TableCell>{row.category}</TableCell>
-                  <TableCell align="right">{row.quantity}</TableCell>
-                  <TableCell>{row.uom}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-
-          <Box sx={{ mt: 4, textAlign: "right" }}>
-            <Typography variant="caption" sx={{ color: "black !important" }}>
-              Report Generated: {new Date().toLocaleString()}
-            </Typography>
-          </Box>
-        </Box>
-      </Box>
-
-      {/* Modals */}
       <AddInventoryModal
         open={openAddModal}
         handleClose={() => setOpenAddModal(false)}
-        onSaveSuccess={handleAddSuccess}
-        mode={mode}
+        onSaveSuccess={() => {
+          fetchInventory();
+          showMessage("Added!", "success");
+        }}
       />
       <EditInventoryModal
         open={openEditModal}
         handleClose={() => setOpenEditModal(false)}
-        onSaveSuccess={handleEditSuccess}
-        mode={mode}
+        onSaveSuccess={() => {
+          fetchInventory();
+          showMessage("Updated!", "info");
+        }}
         itemData={selectedItem}
       />
+      <PrintInventoryModal
+        open={openPrintModal}
+        handleClose={() => setOpenPrintModal(false)}
+        inventoryData={inventoryData}
+      />
 
-      {/* --- REFINED SNACKBAR --- */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}
-        onClose={handleCloseSnackbar}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       >
-        <Alert
-          onClose={handleCloseSnackbar}
-          severity={snackbar.severity}
-          variant="filled"
-          sx={{ width: "100%", borderRadius: 2, boxShadow: 6 }}
-        >
+        <Alert severity={snackbar.severity} variant="filled">
           {snackbar.message}
         </Alert>
       </Snackbar>

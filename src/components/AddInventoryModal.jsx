@@ -31,6 +31,17 @@ export default function AddInventoryModal({
   const [items, setItems] = useState([emptyRow]);
   const [loading, setLoading] = useState(false);
 
+  // --- VALIDATION LOGIC ---
+  // Returns true if ANY field in ANY row is empty
+  const isInvalid = items.some(
+    (item) =>
+      !item.name.trim() ||
+      !item.category ||
+      !item.uom ||
+      item.quantity === "" ||
+      item.minStock === "",
+  );
+
   const addRow = () => setItems([...items, { ...emptyRow }]);
 
   const removeRow = (index) => {
@@ -101,33 +112,35 @@ export default function AddInventoryModal({
                     fontWeight="bold"
                     sx={{ mb: 1, display: "block", color: "text.secondary" }}
                   >
-                    ITEM NAME
+                    ITEM NAME *
                   </Typography>
                   <TextField
                     fullWidth
                     size="small"
                     placeholder="Enter item name..."
                     value={item.name}
+                    error={!item.name && item.name !== ""} // Show red if user touched and left empty
                     onChange={(e) =>
                       handleChange(index, "name", e.target.value)
                     }
                   />
                 </Grid>
 
-                {/* CATEGORY - WIDER */}
+                {/* CATEGORY */}
                 <Grid item xs={6} md={2.5}>
                   <Typography
                     variant="caption"
                     fontWeight="bold"
                     sx={{ mb: 1, display: "block", color: "text.secondary" }}
                   >
-                    CATEGORY
+                    CATEGORY *
                   </Typography>
                   <TextField
                     select
                     fullWidth
                     size="small"
                     value={item.category}
+                    error={!item.category}
                     onChange={(e) =>
                       handleChange(index, "category", e.target.value)
                     }
@@ -140,20 +153,21 @@ export default function AddInventoryModal({
                   </TextField>
                 </Grid>
 
-                {/* UNIT - WIDER */}
+                {/* UNIT */}
                 <Grid item xs={6} md={2}>
                   <Typography
                     variant="caption"
                     fontWeight="bold"
                     sx={{ mb: 1, display: "block", color: "text.secondary" }}
                   >
-                    UNIT
+                    UNIT *
                   </Typography>
                   <TextField
                     select
                     fullWidth
                     size="small"
                     value={item.uom}
+                    error={!item.uom}
                     onChange={(e) => handleChange(index, "uom", e.target.value)}
                   >
                     {UNITS.map((unit) => (
@@ -164,47 +178,49 @@ export default function AddInventoryModal({
                   </TextField>
                 </Grid>
 
-                {/* QTY - HALF WIDTH (COMPACT) */}
+                {/* QTY */}
                 <Grid item xs={6} md={1.2}>
                   <Typography
                     variant="caption"
                     fontWeight="bold"
                     sx={{ mb: 1, display: "block", color: "text.secondary" }}
                   >
-                    QTY
+                    QTY *
                   </Typography>
                   <TextField
                     fullWidth
                     type="number"
                     size="small"
                     value={item.quantity}
+                    error={item.quantity === ""}
                     onChange={(e) =>
                       handleChange(index, "quantity", e.target.value)
                     }
                   />
                 </Grid>
 
-                {/* MIN - HALF WIDTH (COMPACT) */}
+                {/* MIN STOCK */}
                 <Grid item xs={6} md={1.2}>
                   <Typography
                     variant="caption"
                     fontWeight="bold"
                     sx={{ mb: 1, display: "block", color: "text.secondary" }}
                   >
-                    MIN
+                    MIN *
                   </Typography>
                   <TextField
                     fullWidth
                     type="number"
                     size="small"
                     value={item.minStock}
+                    error={item.minStock === ""}
                     onChange={(e) =>
                       handleChange(index, "minStock", e.target.value)
                     }
                   />
                 </Grid>
 
-                {/* ACTION */}
+                {/* DELETE ACTION */}
                 <Grid item xs={12} md={1} sx={{ textAlign: "right" }}>
                   <IconButton
                     color="error"
@@ -245,7 +261,8 @@ export default function AddInventoryModal({
               variant="contained"
               startIcon={<Save />}
               onClick={handleSave}
-              disabled={loading}
+              // --- BUTTON IS DISABLED IF LOADING OR ANY FIELD IS EMPTY ---
+              disabled={loading || isInvalid}
               sx={{
                 px: 5,
                 borderRadius: 2,

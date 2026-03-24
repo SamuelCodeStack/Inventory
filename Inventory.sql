@@ -7,6 +7,7 @@ CREATE TABLE inventory (
     unit VARCHAR(255),
     quantity INTEGER DEFAULT 0,
     minimum_stock INTEGER DEFAULT 10
+	created_at DATE NOT NULL,
 );
 
 CREATE TABLE purchase_order(
