@@ -34,6 +34,12 @@ export default function Sidebar({ toggleDarkMode, mode }) {
       icon: <ShoppingCart />,
       path: "/purchase-order",
     },
+
+    {
+      text: "Raw Materials",
+      icon: <Layers />,
+      path: "/raw-materials",
+    },
     {
       text: "User Management",
       icon: <ManageAccounts />,

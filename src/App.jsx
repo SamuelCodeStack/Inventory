@@ -8,6 +8,10 @@ import PurchaseOrder from "./components/PurchaseOrder.jsx";
 import UserManagement from "./components/UserManagement.jsx";
 import Auth from "./components/Auth.jsx";
 
+// --- NEW IMPORTS (Ensure these files exist in your components folder) ---
+// import JobOrder from "./components/JobOrder.jsx";
+import RawMaterials from "./components/RawMaterials.jsx";
+
 function AppContent({ mode, toggleDarkMode }) {
   const location = useLocation();
 
@@ -62,11 +66,19 @@ function AppContent({ mode, toggleDarkMode }) {
               path="/purchase-order"
               element={<PurchaseOrder mode={mode} />}
             />
+
+            {/* --- NEW ROUTES ADDED HERE --- */}
+            {/* <Route path="/job-order" element={<JobOrder mode={mode} />} /> */}
+
+            <Route
+              path="/raw-materials"
+              element={<RawMaterials mode={mode} />}
+            />
+
             <Route
               path="/user-management"
               element={<UserManagement mode={mode} />}
             />
-            {/* You can add /raw-materials here when the component is ready */}
           </Routes>
         </Box>
       </Box>
