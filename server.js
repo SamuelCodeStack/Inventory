@@ -31,8 +31,9 @@ const cleanId = (id) => {
 
 app.get("/api/inventory", async (req, res) => {
   try {
+    // UPDATED: Added updated_at to the SELECT query
     const result = await pool.query(
-      "SELECT *, created_at FROM inventory ORDER BY item_id DESC",
+      "SELECT *, created_at, updated_at FROM inventory ORDER BY item_id DESC",
     );
     const mappedData = result.rows.map((item) => ({
       id: item.item_id,
@@ -48,6 +49,7 @@ app.get("/api/inventory", async (req, res) => {
             ? "Low Stock"
             : "In Stock",
       date: item.created_at,
+      lastUpdated: item.updated_at, // NEW: Added this field for the Print tracking
     }));
     res.json(mappedData);
   } catch (err) {
@@ -88,8 +90,9 @@ app.patch("/api/inventory/bulk", async (req, res) => {
   try {
     await client.query("BEGIN");
     for (const item of items) {
+      // UPDATED: Added updated_at = now() so print can track the quantity change
       await client.query(
-        "UPDATE inventory SET quantity = $1 WHERE item_id = $2",
+        "UPDATE inventory SET quantity = $1, updated_at = now() WHERE item_id = $2",
         [item.quantity, cleanId(item.id)],
       );
     }
@@ -107,8 +110,9 @@ app.patch("/api/inventory/:id", async (req, res) => {
   const id = cleanId(req.params.id);
   const { name, category, uom, quantity, minStock } = req.body;
   try {
+    // UPDATED: Added updated_at = now()
     await pool.query(
-      "UPDATE inventory SET item_name=$1, category=$2, unit=$3, quantity=$4, minimum_stock=$5 WHERE item_id=$6",
+      "UPDATE inventory SET item_name=$1, category=$2, unit=$3, quantity=$4, minimum_stock=$5, updated_at=now() WHERE item_id=$6",
       [name, category, uom, quantity, minStock, id],
     );
     res.json({ message: "Item updated" });
@@ -150,7 +154,7 @@ app.get("/api/purchase-orders", async (req, res) => {
         remarks: po.remarks,
         date: po.delivery_date,
         statusDate: po.status_date,
-        createdAt: po.created_at, // UPDATED: Ensure this is sent to frontend
+        createdAt: po.created_at,
       })),
     );
   } catch (err) {
@@ -330,6 +334,112 @@ app.patch("/api/purchase-orders/:id/status", async (req, res) => {
     res.json({ message: "Status updated" });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 3. RAW MATERIALS ENDPOINTS
+// ==========================================
+
+app.get("/api/raw-materials", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM raw_materials ORDER BY material_id DESC",
+    );
+    const mappedData = result.rows.map((m) => ({
+      id: m.material_id,
+      name: m.material_name,
+      category: m.category,
+      baseValue: parseFloat(m.base_value),
+      baseUnit: m.base_unit,
+      qtyValue: parseFloat(m.qty_value),
+      qtyUnit: m.qty_unit,
+      minStockThreshold: parseFloat(m.min_stock_threshold),
+      minStockTarget: m.min_stock_target,
+      createdAt: m.created_at,
+    }));
+    res.json(mappedData);
+  } catch (err) {
+    res.status(500).json({ error: "Raw materials fetch failed" });
+  }
+});
+
+app.post("/api/raw-materials", async (req, res) => {
+  const {
+    name,
+    category,
+    baseValue,
+    baseUnit,
+    qtyValue,
+    qtyUnit,
+    minStockThreshold,
+    minStockTarget,
+  } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO raw_materials 
+      (material_name, category, base_value, base_unit, qty_value, qty_unit, min_stock_threshold, min_stock_target) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [
+        name,
+        category,
+        baseValue,
+        baseUnit,
+        qtyValue,
+        qtyUnit,
+        minStockThreshold,
+        minStockTarget,
+      ],
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/raw-materials/:id", async (req, res) => {
+  const id = cleanId(req.params.id);
+  const {
+    name,
+    category,
+    baseValue,
+    baseUnit,
+    qtyValue,
+    qtyUnit,
+    minStockThreshold,
+    minStockTarget,
+  } = req.body;
+  try {
+    await pool.query(
+      `UPDATE raw_materials SET 
+      material_name=$1, category=$2, base_value=$3, base_unit=$4, 
+      qty_value=$5, qty_unit=$6, min_stock_threshold=$7, min_stock_target=$8, updated_at=now() 
+      WHERE material_id=$9`,
+      [
+        name,
+        category,
+        baseValue,
+        baseUnit,
+        qtyValue,
+        qtyUnit,
+        minStockThreshold,
+        minStockTarget,
+        id,
+      ],
+    );
+    res.json({ message: "Raw material updated" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/raw-materials/:id", async (req, res) => {
+  const id = cleanId(req.params.id);
+  try {
+    await pool.query("DELETE FROM raw_materials WHERE material_id = $1", [id]);
+    res.json({ message: "Deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: "Delete failed" });
   }
 });
 

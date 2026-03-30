@@ -5,7 +5,8 @@ CREATE TABLE inventory (
     unit VARCHAR(255),
     quantity INTEGER DEFAULT 0,
     minimum_stock INTEGER DEFAULT 10,
-	created_at DATE NOT NULL
+	created_at DATE NOT NULL,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE purchase_order(
@@ -36,6 +37,20 @@ CREATE TABLE item_order(
 );
 
 
+CREATE TABLE raw_materials (
+    material_id SERIAL PRIMARY KEY,
+    material_name VARCHAR(255) NOT NULL,
+    category VARCHAR(100),
+    base_value NUMERIC(12, 2) DEFAULT 0.00,
+    base_unit VARCHAR(20) NOT NULL, 
+    qty_value NUMERIC(12, 2) DEFAULT 0.00,
+    qty_unit VARCHAR(50) NOT NULL, 
+    min_stock_threshold NUMERIC(12, 2) NOT NULL,
+    min_stock_target VARCHAR(10) DEFAULT 'base', 
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- CREATE TABLE activity_log (
 --     activity_log_id SERIAL PRIMARY KEY,
 --     item_id INT REFERENCES inventory(item_id) ON DELETE SET NULL,   
@@ -48,17 +63,14 @@ CREATE TABLE item_order(
 --     logged_at TIMESTAMPTZ DEFAULT NOW()
 -- );
 
-
--- CREATE TABLE users (
---     users_id SERIAL PRIMARY KEY,
---     users_level INT NOT NULL, -- 1=Admin, 2=Staff, 3=Viewer
---     first_name VARCHAR(255) NOT NULL,
---     last_name VARCHAR(255) NOT NULL,
---     email VARCHAR(50) UNIQUE NOT NULL,
---     username VARCHAR(50) UNIQUE NOT NULL,
---     password TEXT NOT NULL,
---     contact_number BIGINT, -- Using BIGINT for phone numbers is safer
---     created_at TIMESTAMPTZ DEFAULT NOW(),
--- 	reset_token TEXT,
--- 	reset_expires TIMESTAMP
--- );
+CREATE TABLE users (
+    user_id SERIAL PRIMARY KEY,
+    full_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role VARCHAR(50) DEFAULT 'Staff', -- Admin, Manager, Staff
+    avatar_url TEXT, -- Added for your UI avatars
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    reset_token TEXT,
+    reset_expires TIMESTAMP
+);

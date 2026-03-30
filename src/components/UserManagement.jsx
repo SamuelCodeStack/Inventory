@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import {
   Box,
   Typography,
-  Button,
   Paper,
   Table,
   TableBody,
@@ -21,7 +20,6 @@ import {
   Alert,
 } from "@mui/material";
 import {
-  Add,
   Edit,
   Delete,
   Search,
@@ -68,9 +66,6 @@ export default function UserManagement({ mode }) {
       open: true,
       message: `Role updated to ${newRole} successfully!`,
     });
-
-    // NOTE: Here you would typically trigger your API call:
-    // fetch(`/api/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ role: newRole }) })
   };
 
   const filteredUsers = users.filter(
@@ -83,39 +78,22 @@ export default function UserManagement({ mode }) {
     <Box
       sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
     >
-      {/* HEADER SECTION */}
+      {/* HEADER SECTION - Add User button removed */}
       <Box
         sx={{
-          display: "flex",
-          justifyContent: "space-between",
           mb: 4,
-          alignItems: "center",
         }}
       >
-        <Box>
-          <Typography
-            variant="h5"
-            fontWeight="bold"
-            sx={{ display: "flex", alignItems: "center", gap: 1 }}
-          >
-            <ManageAccounts /> User Management
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Manage system access levels and user profiles
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<Add />}
-          sx={{
-            bgcolor: THEME_ORANGE,
-            color: "#000",
-            fontWeight: "bold",
-            "&:hover": { bgcolor: "#d8853a" },
-          }}
+        <Typography
+          variant="h5"
+          fontWeight="bold"
+          sx={{ display: "flex", alignItems: "center", gap: 1 }}
         >
-          Add New User
-        </Button>
+          <ManageAccounts /> User Management
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Manage system access levels and user profiles
+        </Typography>
       </Box>
 
       {/* TABLE CONTAINER */}
@@ -196,7 +174,6 @@ export default function UserManagement({ mode }) {
                   </Stack>
                 </TableCell>
                 <TableCell align="center">
-                  {/* ROLE DROPDOWN INSTEAD OF CHIP */}
                   <TextField
                     select
                     value={user.role}

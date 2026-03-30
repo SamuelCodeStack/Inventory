@@ -180,12 +180,6 @@ export default function Inventory({ mode }) {
     }
   };
 
-  const getStatusColor = (status) => {
-    if (status === "In Stock") return "success";
-    if (status === "Low Stock") return "warning";
-    return "error";
-  };
-
   return (
     <Box
       sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
@@ -355,12 +349,30 @@ export default function Inventory({ mode }) {
                   />
                 </TableCell>
                 <TableCell align="center">
-                  <Chip
-                    label={row.status}
-                    size="small"
-                    color={getStatusColor(row.status)}
-                    sx={{ fontWeight: "bold" }}
-                  />
+                  <Box
+                    sx={{
+                      display: "inline-block",
+                      px: 1.5,
+                      py: 0.5,
+                      borderRadius: 1,
+                      fontSize: "0.75rem",
+                      fontWeight: "bold",
+                      bgcolor:
+                        row.status === "In Stock"
+                          ? "rgba(46, 204, 113, 0.15)"
+                          : row.status === "Low Stock"
+                            ? "rgba(241, 145, 73, 0.15)"
+                            : "rgba(231, 76, 60, 0.15)",
+                      color:
+                        row.status === "In Stock"
+                          ? "#27ae60"
+                          : row.status === "Low Stock"
+                            ? "#e67e22"
+                            : "#c0392b",
+                    }}
+                  >
+                    {row.status}
+                  </Box>
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={1} justifyContent="flex-end">

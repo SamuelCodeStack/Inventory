@@ -69,12 +69,14 @@ export default function PrintInventoryModal({
     return "";
   };
 
-  // Filter logic
+  // Filter logic - Uses lastUpdated if available, otherwise fallback to original date
   const filteredData = printAll
     ? inventoryData
     : inventoryData.filter((item) => {
-        if (!item.date) return false;
-        const itemDate = new Date(item.date);
+        const dateToCompare = item.lastUpdated || item.date;
+        if (!dateToCompare) return false;
+
+        const itemDate = new Date(dateToCompare);
         const targetDate = new Date(selectedDate);
 
         // Daily
@@ -279,6 +281,10 @@ export default function PrintInventoryModal({
                     Quantity
                   </TableCell>
                   <TableCell sx={{ fontWeight: "bold" }}>Unit</TableCell>
+                  {/* NEW COLUMN */}
+                  <TableCell sx={{ fontWeight: "bold" }}>
+                    Date Updated
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -292,11 +298,17 @@ export default function PrintInventoryModal({
                       <TableCell>{row.category}</TableCell>
                       <TableCell align="right">{row.quantity}</TableCell>
                       <TableCell>{row.uom}</TableCell>
+                      {/* DISPLAY DATE UPDATED OR CREATED DATE AS FALLBACK */}
+                      <TableCell>
+                        {new Date(
+                          row.lastUpdated || row.date,
+                        ).toLocaleDateString()}
+                      </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 10 }}>
+                    <TableCell colSpan={6} align="center" sx={{ py: 10 }}>
                       No inventory records found for the selected range.
                     </TableCell>
                   </TableRow>
@@ -339,9 +351,10 @@ export default function PrintInventoryModal({
         <Button
           onClick={handlePrint}
           variant="contained"
+          size="large"
           startIcon={<Print />}
           disabled={filteredData.length === 0}
-          sx={{ fontWeight: "bold" }}
+          sx={{ fontWeight: "bold", px: 4 }}
         >
           Finalize & Print
         </Button>

@@ -2,15 +2,14 @@ import React, { useState } from "react";
 import {
   Box,
   Paper,
+  Typography,
   TextField,
   Button,
-  Typography,
-  InputAdornment,
-  IconButton,
-  Link,
   Stack,
+  IconButton,
+  InputAdornment,
+  Link,
   Divider,
-  Alert,
 } from "@mui/material";
 import {
   Visibility,
@@ -18,40 +17,32 @@ import {
   Email,
   Lock,
   Person,
-  Inventory,
+  ArrowBack,
 } from "@mui/icons-material";
 
-const THEME_ORANGE = "#f2994a";
-
 export default function Auth({ mode }) {
-  const [isLogin, setIsLogin] = useState(true);
+  // Views: 'login' | 'register' | 'forgot'
+  const [view, setView] = useState("login");
   const [showPassword, setShowPassword] = useState(false);
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
-  });
-
   const isDark = mode === "dark";
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+  const togglePassword = () => setShowPassword(!showPassword);
 
-  const handleSubmit = (e) => {
+  // --- SUBMIT HANDLERS ---
+  const handleAuthAction = (e) => {
     e.preventDefault();
-    console.log("Submitting:", isLogin ? "Login" : "Sign Up", formData);
-    // Add your Auth API call logic here
+    console.log(`Performing ${view} action...`);
+    // Add your API logic here (fetch to /api/auth/...)
   };
 
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        height: "100vh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        bgcolor: isDark ? "#121212" : "#f4f7fe",
+        bgcolor: isDark ? "#121212" : "#f4f7f9",
         p: 2,
       }}
     >
@@ -59,71 +50,42 @@ export default function Auth({ mode }) {
         elevation={4}
         sx={{
           width: "100%",
-          maxWidth: 400,
+          maxWidth: 420,
           p: 4,
           borderRadius: 4,
-          bgcolor: isDark ? "#1e1e1e" : "#fff",
-          backgroundImage: "none",
+          textAlign: "center",
         }}
       >
         {/* LOGO AREA */}
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            mb: 3,
-          }}
-        >
-          <Box
-            sx={{
-              width: 48,
-              height: 48,
-              bgcolor: THEME_ORANGE,
-              borderRadius: 1.5,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#000",
-              mb: 1.5,
-              boxShadow: "0 4px 12px rgba(242, 153, 74, 0.3)",
-            }}
-          >
-            <Inventory fontSize="large" />
-          </Box>
-          <Typography variant="h5" fontWeight="900" sx={{ letterSpacing: 1 }}>
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h4" fontWeight="bold" color="primary">
             KIMWIN
           </Typography>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ textTransform: "uppercase", letterSpacing: 2 }}
-          >
-            Inventory Management
+          <Typography variant="body2" color="text.secondary">
+            Inventory Management System
           </Typography>
         </Box>
 
         <Typography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>
-          {isLogin ? "Welcome Back!" : "Create Account"}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          {isLogin
-            ? "Please enter your details to sign in."
-            : "Fill in the details to get started."}
+          {view === "login" && "Welcome Back"}
+          {view === "register" && "Create Account"}
+          {view === "forgot" && "Reset Password"}
         </Typography>
 
-        <form onSubmit={handleSubmit}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          {view === "login" && "Please enter your details to sign in"}
+          {view === "register" && "Join us to start managing your inventory"}
+          {view === "forgot" && "Enter your email to receive a reset link"}
+        </Typography>
+
+        <form onSubmit={handleAuthAction}>
           <Stack spacing={2.5}>
-            {!isLogin && (
+            {/* NAME FIELD (Register only) */}
+            {view === "register" && (
               <TextField
                 fullWidth
                 label="Full Name"
-                name="name"
-                variant="outlined"
                 size="small"
-                required
-                value={formData.name}
-                onChange={handleChange}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -134,16 +96,13 @@ export default function Auth({ mode }) {
               />
             )}
 
+            {/* EMAIL FIELD */}
             <TextField
               fullWidth
               label="Email Address"
-              name="email"
               type="email"
-              variant="outlined"
               size="small"
               required
-              value={formData.email}
-              onChange={handleChange}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -153,101 +112,92 @@ export default function Auth({ mode }) {
               }}
             />
 
-            <TextField
-              fullWidth
-              label="Password"
-              name="password"
-              variant="outlined"
-              size="small"
-              required
-              type={showPassword ? "text" : "password"}
-              value={formData.password}
-              onChange={handleChange}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Lock fontSize="small" />
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowPassword(!showPassword)}
-                      edge="end"
-                      size="small"
-                    >
-                      {showPassword ? (
-                        <VisibilityOff fontSize="inherit" />
-                      ) : (
-                        <Visibility fontSize="inherit" />
-                      )}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
+            {/* PASSWORD FIELD (Login/Register only) */}
+            {view !== "forgot" && (
+              <TextField
+                fullWidth
+                label="Password"
+                type={showPassword ? "text" : "password"}
+                size="small"
+                required
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Lock fontSize="small" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={togglePassword} edge="end">
+                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            )}
 
-            {isLogin && (
-              <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+            {/* FORGOT PASSWORD LINK (Login only) */}
+            {view === "login" && (
+              <Box sx={{ textAlign: "right", mt: -1 }}>
                 <Link
-                  href="#"
+                  component="button"
+                  type="button"
                   variant="caption"
-                  sx={{
-                    color: THEME_ORANGE,
-                    textDecoration: "none",
-                    fontWeight: "bold",
-                  }}
+                  onClick={() => setView("forgot")}
+                  sx={{ textDecoration: "none", fontWeight: "bold" }}
                 >
-                  Forgot password?
+                  Forgot Password?
                 </Link>
               </Box>
             )}
 
+            {/* MAIN BUTTON */}
             <Button
               fullWidth
-              type="submit"
               variant="contained"
-              sx={{
-                py: 1.2,
-                bgcolor: THEME_ORANGE,
-                color: "#000",
-                fontWeight: "bold",
-                fontSize: "0.9rem",
-                borderRadius: 2,
-                "&:hover": { bgcolor: "#d8853a" },
-                boxShadow: "0 4px 14px rgba(242, 153, 74, 0.4)",
-              }}
+              size="large"
+              type="submit"
+              sx={{ py: 1.2, fontWeight: "bold", textTransform: "none" }}
             >
-              {isLogin ? "Sign In" : "Register"}
+              {view === "login" && "Sign In"}
+              {view === "register" && "Sign Up"}
+              {view === "forgot" && "Send Reset Link"}
             </Button>
           </Stack>
         </form>
 
-        <Divider sx={{ my: 3 }}>
-          <Typography variant="caption" color="text.disabled">
-            OR
-          </Typography>
-        </Divider>
+        {/* BOTTOM TOGGLES */}
+        <Box sx={{ mt: 4 }}>
+          <Divider>
+            <Typography variant="caption" color="text.disabled">
+              OR
+            </Typography>
+          </Divider>
 
-        <Box sx={{ textAlign: "center" }}>
-          <Typography variant="body2" color="text.secondary">
-            {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-            <Link
-              component="button"
-              variant="body2"
-              onClick={() => setIsLogin(!isLogin)}
-              sx={{
-                color: THEME_ORANGE,
-                fontWeight: "bold",
-                textDecoration: "none",
-                cursor: "pointer",
-                border: "none",
-                bgcolor: "transparent",
-              }}
-            >
-              {isLogin ? "Create account" : "Sign in here"}
-            </Link>
-          </Typography>
+          <Box sx={{ mt: 2 }}>
+            {view === "login" ? (
+              <Typography variant="body2">
+                Don't have an account?{" "}
+                <Link
+                  component="button"
+                  onClick={() => setView("register")}
+                  sx={{ fontWeight: "bold", cursor: "pointer" }}
+                >
+                  Register here
+                </Link>
+              </Typography>
+            ) : (
+              <Button
+                startIcon={<ArrowBack />}
+                onClick={() => setView("login")}
+                size="small"
+                sx={{ textTransform: "none" }}
+              >
+                Back to Login
+              </Button>
+            )}
+          </Box>
         </Box>
       </Paper>
     </Box>
