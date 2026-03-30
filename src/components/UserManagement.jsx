@@ -20,7 +20,6 @@ import {
   Alert,
 } from "@mui/material";
 import {
-  Edit,
   Delete,
   Search,
   ManageAccounts,
@@ -78,12 +77,8 @@ export default function UserManagement({ mode }) {
     <Box
       sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
     >
-      {/* HEADER SECTION - Add User button removed */}
-      <Box
-        sx={{
-          mb: 4,
-        }}
-      >
+      {/* HEADER SECTION */}
+      <Box sx={{ mb: 4 }}>
         <Typography
           variant="h5"
           fontWeight="bold"
@@ -197,11 +192,7 @@ export default function UserManagement({ mode }) {
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    <Tooltip title="Edit Profile">
-                      <IconButton size="small" color="info">
-                        <Edit fontSize="inherit" />
-                      </IconButton>
-                    </Tooltip>
+                    {/* Edit button removed from here */}
                     <Tooltip title="Delete User">
                       <IconButton size="small" color="error">
                         <Delete fontSize="inherit" />

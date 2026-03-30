@@ -69,7 +69,6 @@ CREATE TABLE users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     role VARCHAR(50) DEFAULT 'Staff', -- Admin, Manager, Staff
-    avatar_url TEXT, -- Added for your UI avatars
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     reset_token TEXT,
     reset_expires TIMESTAMP

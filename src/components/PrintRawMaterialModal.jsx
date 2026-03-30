@@ -16,7 +16,9 @@ import {
   IconButton,
   Paper,
   MenuItem,
-  Stack, // Added missing Stack import
+  Stack,
+  FormControlLabel,
+  Checkbox,
   useTheme,
 } from "@mui/material";
 import { Close, Print } from "@mui/icons-material";
@@ -31,16 +33,83 @@ export default function PrintRawMaterialModal({
   const isDarkMode = theme.palette.mode === "dark";
 
   // Filter States
+  const [filterType, setFilterType] = useState("day"); // day, week, month, year
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toLocaleDateString("en-CA"),
+  );
+  const [printAll, setPrintAll] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("All");
   const componentRef = useRef();
 
   const categories = ["All", "Paper", "Plastic", "Injection", "Trading"];
 
-  // Filter logic
+  // Helper to get range text for the report header
+  const getRangeLabel = () => {
+    if (printAll) return "Full Inventory";
+    const date = new Date(selectedDate);
+
+    if (filterType === "day") {
+      return `Date: ${date.toLocaleDateString("en-US", { dateStyle: "long" })}`;
+    }
+    if (filterType === "month") {
+      return `Month of: ${date.toLocaleString("default", { month: "long", year: "numeric" })}`;
+    }
+    if (filterType === "year") {
+      return `Year: ${date.getFullYear()}`;
+    }
+    if (filterType === "week") {
+      const tempDate = new Date(selectedDate);
+      const first = tempDate.getDate() - tempDate.getDay();
+      const last = first + 6;
+      const firstday = new Date(
+        new Date(selectedDate).setDate(first),
+      ).toLocaleDateString();
+      const lastday = new Date(
+        new Date(selectedDate).setDate(last),
+      ).toLocaleDateString();
+      return `Week: ${firstday} - ${lastday}`;
+    }
+    return "";
+  };
+
+  // Filter logic - Matches Inventory logic using latest update date
   const filteredData = materialsData.filter((item) => {
+    // Check Category first
     const matchesCategory =
       categoryFilter === "All" || item.category === categoryFilter;
-    return matchesCategory;
+    if (!matchesCategory) return false;
+
+    if (printAll) return true;
+
+    // Check Date (Uses updatedAt if it exists, otherwise createdAt)
+    const dateToCompare = item.updatedAt || item.createdAt;
+    if (!dateToCompare) return false;
+
+    const itemDate = new Date(dateToCompare);
+    const targetDate = new Date(selectedDate);
+
+    if (filterType === "day") {
+      return itemDate.toLocaleDateString("en-CA") === selectedDate;
+    }
+    if (filterType === "month") {
+      return (
+        itemDate.getMonth() === targetDate.getMonth() &&
+        itemDate.getFullYear() === targetDate.getFullYear()
+      );
+    }
+    if (filterType === "year") {
+      return itemDate.getFullYear() === targetDate.getFullYear();
+    }
+    if (filterType === "week") {
+      const startOfWeek = new Date(targetDate);
+      startOfWeek.setDate(targetDate.getDate() - targetDate.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+      return itemDate >= startOfWeek && itemDate <= endOfWeek;
+    }
+    return false;
   });
 
   const handlePrint = useReactToPrint({
@@ -75,7 +144,7 @@ export default function PrintRawMaterialModal({
       <DialogContent
         sx={{ p: 0, bgcolor: isDarkMode ? "#121212" : "grey.100" }}
       >
-        {/* Filter Controls */}
+        {/* Selection Controls */}
         <Box
           sx={{
             p: 3,
@@ -84,14 +153,29 @@ export default function PrintRawMaterialModal({
             borderColor: "divider",
           }}
         >
-          <Stack direction="row" spacing={2} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={2}
+            alignItems="center"
+            flexWrap="wrap"
+          >
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={printAll}
+                  onChange={(e) => setPrintAll(e.target.checked)}
+                />
+              }
+              label="Print All"
+            />
+
             <TextField
               select
-              label="Filter by Category"
+              label="Category"
               size="small"
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              sx={{ width: 200 }}
+              sx={{ width: 130 }}
             >
               {categories.map((cat) => (
                 <MenuItem key={cat} value={cat}>
@@ -99,8 +183,39 @@ export default function PrintRawMaterialModal({
                 </MenuItem>
               ))}
             </TextField>
-            <Typography variant="caption" color="text.secondary">
-              {filteredData.length} materials included in this report.
+
+            {!printAll && (
+              <>
+                <TextField
+                  select
+                  label="Range"
+                  size="small"
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  sx={{ width: 130 }}
+                >
+                  <MenuItem value="day">Day</MenuItem>
+                  <MenuItem value="week">Week</MenuItem>
+                  <MenuItem value="month">Month</MenuItem>
+                  <MenuItem value="year">Year</MenuItem>
+                </TextField>
+
+                <TextField
+                  type="date"
+                  size="small"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </>
+            )}
+
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ ml: "auto" }}
+            >
+              {filteredData.length} records found.
             </Typography>
           </Stack>
         </Box>
@@ -134,7 +249,6 @@ export default function PrintRawMaterialModal({
               },
             }}
           >
-            {/* Header */}
             <Typography
               variant="h4"
               fontWeight="bold"
@@ -155,14 +269,14 @@ export default function PrintRawMaterialModal({
               sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}
             >
               <Typography variant="body2">
-                <b>Category Scope:</b> {categoryFilter}
+                <b>Scope:</b> {getRangeLabel()} | <b>Category:</b>{" "}
+                {categoryFilter}
               </Typography>
               <Typography variant="body2">
-                <b>Generated On:</b> {new Date().toLocaleString()}
+                <b>Generated:</b> {new Date().toLocaleString()}
               </Typography>
             </Box>
 
-            {/* Table */}
             <Table
               size="small"
               sx={{
@@ -172,60 +286,52 @@ export default function PrintRawMaterialModal({
             >
               <TableHead>
                 <TableRow sx={{ bgcolor: "#f5f5f5" }}>
-                  <TableCell sx={{ fontWeight: "bold", width: "50px" }}>
-                    ID
-                  </TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
                   <TableCell sx={{ fontWeight: "bold" }}>
                     Material Name
                   </TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
                   <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                    Base Stock
+                    Measurement
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                    Qty/Containers
+                    Quantity
                   </TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>Ratio Info</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>
+                    Last Updated
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredData.length > 0 ? (
-                  filteredData.map((row) => {
-                    const ratio =
-                      row.qtyValue > 0
-                        ? (row.baseValue / row.qtyValue).toFixed(2)
-                        : 0;
-                    return (
-                      <TableRow key={row.id}>
-                        <TableCell>#{row.id}</TableCell>
-                        <TableCell sx={{ fontWeight: "bold" }}>
-                          {row.name}
-                        </TableCell>
-                        <TableCell>{row.category}</TableCell>
-                        <TableCell align="right">
-                          {row.baseValue} {row.baseUnit}
-                        </TableCell>
-                        <TableCell align="right">
-                          {row.qtyValue} {row.qtyUnit}
-                        </TableCell>
-                        <TableCell sx={{ fontSize: "0.75rem" }}>
-                          1 {row.qtyUnit.replace(/s$/, "")} = {ratio}{" "}
-                          {row.baseUnit}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
+                  filteredData.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>#{row.id}</TableCell>
+                      <TableCell sx={{ fontWeight: "bold" }}>
+                        {row.name}
+                      </TableCell>
+                      <TableCell align="right">
+                        {row.baseValue} {row.baseUnit}
+                      </TableCell>
+                      <TableCell align="right">
+                        {row.qtyValue} {row.qtyUnit}
+                      </TableCell>
+                      <TableCell>
+                        {new Date(
+                          row.updatedAt || row.createdAt,
+                        ).toLocaleDateString()}
+                      </TableCell>
+                    </TableRow>
+                  ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 10 }}>
-                      No raw materials found.
+                    <TableCell colSpan={5} align="center" sx={{ py: 10 }}>
+                      No records found for the selected filters.
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
 
-            {/* Signatures */}
             <Box
               sx={{ mt: 10, display: "flex", justifyContent: "space-between" }}
             >
@@ -233,13 +339,13 @@ export default function PrintRawMaterialModal({
                 <Box
                   sx={{ width: 200, borderBottom: "1px solid black", mb: 1 }}
                 />
-                <Typography variant="caption">Warehouse Custodian</Typography>
+                <Typography variant="caption">Warehouse Personnel</Typography>
               </Box>
               <Box sx={{ textAlign: "center" }}>
                 <Box
                   sx={{ width: 200, borderBottom: "1px solid black", mb: 1 }}
                 />
-                <Typography variant="caption">Production Manager</Typography>
+                <Typography variant="caption">Authorized Signature</Typography>
               </Box>
             </Box>
           </Paper>

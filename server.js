@@ -31,7 +31,6 @@ const cleanId = (id) => {
 
 app.get("/api/inventory", async (req, res) => {
   try {
-    // UPDATED: Added updated_at to the SELECT query
     const result = await pool.query(
       "SELECT *, created_at, updated_at FROM inventory ORDER BY item_id DESC",
     );
@@ -49,7 +48,7 @@ app.get("/api/inventory", async (req, res) => {
             ? "Low Stock"
             : "In Stock",
       date: item.created_at,
-      lastUpdated: item.updated_at, // NEW: Added this field for the Print tracking
+      lastUpdated: item.updated_at,
     }));
     res.json(mappedData);
   } catch (err) {
@@ -90,9 +89,12 @@ app.patch("/api/inventory/bulk", async (req, res) => {
   try {
     await client.query("BEGIN");
     for (const item of items) {
-      // UPDATED: Added updated_at = now() so print can track the quantity change
+      // UPDATED: CASE logic added to Bulk Update
       await client.query(
-        "UPDATE inventory SET quantity = $1, updated_at = now() WHERE item_id = $2",
+        `UPDATE inventory SET 
+         quantity = $1, 
+         updated_at = CASE WHEN quantity != $1 THEN now() ELSE updated_at END 
+         WHERE item_id = $2`,
         [item.quantity, cleanId(item.id)],
       );
     }
@@ -110,9 +112,12 @@ app.patch("/api/inventory/:id", async (req, res) => {
   const id = cleanId(req.params.id);
   const { name, category, uom, quantity, minStock } = req.body;
   try {
-    // UPDATED: Added updated_at = now()
+    // UPDATED: CASE logic added to individual update to only update timestamp if quantity changes
     await pool.query(
-      "UPDATE inventory SET item_name=$1, category=$2, unit=$3, quantity=$4, minimum_stock=$5, updated_at=now() WHERE item_id=$6",
+      `UPDATE inventory SET 
+       item_name=$1, category=$2, unit=$3, quantity=$4, minimum_stock=$5, 
+       updated_at = CASE WHEN quantity != $4 THEN now() ELSE updated_at END
+       WHERE item_id=$6`,
       [name, category, uom, quantity, minStock, id],
     );
     res.json({ message: "Item updated" });
@@ -344,7 +349,7 @@ app.patch("/api/purchase-orders/:id/status", async (req, res) => {
 app.get("/api/raw-materials", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM raw_materials ORDER BY material_id DESC",
+      "SELECT *, updated_at FROM raw_materials ORDER BY material_id DESC",
     );
     const mappedData = result.rows.map((m) => ({
       id: m.material_id,
@@ -357,6 +362,7 @@ app.get("/api/raw-materials", async (req, res) => {
       minStockThreshold: parseFloat(m.min_stock_threshold),
       minStockTarget: m.min_stock_target,
       createdAt: m.created_at,
+      updatedAt: m.updated_at,
     }));
     res.json(mappedData);
   } catch (err) {
@@ -413,7 +419,11 @@ app.put("/api/raw-materials/:id", async (req, res) => {
     await pool.query(
       `UPDATE raw_materials SET 
       material_name=$1, category=$2, base_value=$3, base_unit=$4, 
-      qty_value=$5, qty_unit=$6, min_stock_threshold=$7, min_stock_target=$8, updated_at=now() 
+      qty_value=$5, qty_unit=$6, min_stock_threshold=$7, min_stock_target=$8,
+      updated_at = CASE 
+        WHEN base_value != $3 OR qty_value != $5 THEN now() 
+        ELSE updated_at 
+      END
       WHERE material_id=$9`,
       [
         name,
