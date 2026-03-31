@@ -20,6 +20,7 @@ import {
   Divider,
   Paper,
   InputAdornment,
+  Chip,
 } from "@mui/material";
 import {
   Close,
@@ -53,13 +54,11 @@ export default function UpdatePOModal({
 
   useEffect(() => {
     if (open) {
-      // 1. Fetch available inventory
       fetch("http://localhost:3000/api/inventory")
         .then((res) => res.json())
         .then((data) => setDbInventory(data));
 
       if (poData) {
-        // 2. Set basic form info
         setFormData({
           customerName: poData.customer || "",
           company: poData.company || "",
@@ -70,7 +69,6 @@ export default function UpdatePOModal({
           totalPrice: poData.totalPrice || 0,
         });
 
-        // 3. Fetch current items for this PO
         const cleanId = String(poData.id).split(":")[0];
         fetch(`http://localhost:3000/api/purchase-orders/${cleanId}/items`)
           .then((res) => res.json())
@@ -89,7 +87,6 @@ export default function UpdatePOModal({
     }
   }, [open, poData]);
 
-  // Re-calculate total price whenever items change
   useEffect(() => {
     const calculated = selectedItems.reduce(
       (sum, item) => sum + Number(item.qty) * Number(item.price),
@@ -197,8 +194,8 @@ export default function UpdatePOModal({
 
       <DialogContent dividers>
         <Grid container spacing={3}>
-          {/* LEFT SIDE: INFO & ITEM SEARCH */}
-          <Grid item xs={12} md={7}>
+          {/* TOP SECTION: CUSTOMER INFO */}
+          <Grid item xs={12}>
             <Typography
               variant="subtitle2"
               color="primary"
@@ -207,9 +204,8 @@ export default function UpdatePOModal({
             >
               <Person fontSize="small" /> Customer & Business Info
             </Typography>
-
-            <Grid container spacing={2} sx={{ mb: 3 }}>
-              <Grid item xs={6}>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
                   size="small"
@@ -220,7 +216,7 @@ export default function UpdatePOModal({
                   sx={fieldStyle}
                 />
               </Grid>
-              <Grid item xs={6}>
+              <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
                   size="small"
@@ -231,7 +227,7 @@ export default function UpdatePOModal({
                   sx={fieldStyle}
                 />
               </Grid>
-              <Grid item xs={6}>
+              <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
                   size="small"
@@ -242,7 +238,7 @@ export default function UpdatePOModal({
                   sx={fieldStyle}
                 />
               </Grid>
-              <Grid item xs={6}>
+              <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
                   size="small"
@@ -253,7 +249,7 @@ export default function UpdatePOModal({
                   sx={fieldStyle}
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
                   size="small"
@@ -264,7 +260,7 @@ export default function UpdatePOModal({
                   sx={fieldStyle}
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid item xs={12} md={4}>
                 <TextField
                   select
                   fullWidth
@@ -283,9 +279,14 @@ export default function UpdatePOModal({
                 </TextField>
               </Grid>
             </Grid>
+          </Grid>
 
-            <Divider sx={{ mb: 2 }} />
+          <Grid item xs={12}>
+            <Divider />
+          </Grid>
 
+          {/* LEFT SIDE: ITEM SELECTION */}
+          <Grid item xs={12} md={7}>
             <Box
               sx={{
                 display: "flex",
@@ -295,7 +296,7 @@ export default function UpdatePOModal({
               }}
             >
               <Typography variant="subtitle2" color="primary" fontWeight="bold">
-                Add Items
+                Select Items
               </Typography>
               <TextField
                 size="small"
@@ -315,7 +316,7 @@ export default function UpdatePOModal({
 
             <TableContainer
               sx={{
-                maxHeight: 300,
+                maxHeight: 400,
                 border: "1px solid",
                 borderColor: "divider",
                 borderRadius: 2,
@@ -330,15 +331,25 @@ export default function UpdatePOModal({
                         fontWeight: "bold",
                       }}
                     >
-                      ID
+                      Item Name
                     </TableCell>
                     <TableCell
+                      align="center"
                       sx={{
                         bgcolor: mode === "light" ? "#f5f5f5" : "#1e1e1e",
                         fontWeight: "bold",
                       }}
                     >
-                      Item Name
+                      Stock
+                    </TableCell>
+                    <TableCell
+                      align="center"
+                      sx={{
+                        bgcolor: mode === "light" ? "#f5f5f5" : "#1e1e1e",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      Status
                     </TableCell>
                     <TableCell
                       align="right"
@@ -364,15 +375,22 @@ export default function UpdatePOModal({
                       );
                       return (
                         <TableRow key={item.id} hover>
-                          <TableCell
-                            sx={{
-                              color: "text.secondary",
-                              fontSize: "0.75rem",
-                            }}
-                          >
-                            #{item.id}
-                          </TableCell>
                           <TableCell>{item.name}</TableCell>
+                          <TableCell align="center">{item.quantity}</TableCell>
+                          <TableCell align="center">
+                            <Chip
+                              label={item.status}
+                              size="small"
+                              color={
+                                item.status === "In Stock"
+                                  ? "success"
+                                  : item.status === "Low Stock"
+                                    ? "warning"
+                                    : "error"
+                              }
+                              sx={{ fontSize: "0.7rem", fontWeight: "bold" }}
+                            />
+                          </TableCell>
                           <TableCell align="right">
                             <Button
                               size="small"
@@ -390,7 +408,7 @@ export default function UpdatePOModal({
             </TableContainer>
           </Grid>
 
-          {/* RIGHT SIDE: SUMMARY */}
+          {/* RIGHT SIDE: SUMMARY & EDIT QUANTITIES */}
           <Grid item xs={12} md={5}>
             <Box
               sx={{
@@ -415,7 +433,7 @@ export default function UpdatePOModal({
               </Typography>
 
               <Box
-                sx={{ flexGrow: 1, maxHeight: 450, overflow: "auto", mb: 2 }}
+                sx={{ flexGrow: 1, maxHeight: 400, overflow: "auto", mb: 2 }}
               >
                 {selectedItems.length === 0 ? (
                   <Typography

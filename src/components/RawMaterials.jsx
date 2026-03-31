@@ -20,7 +20,14 @@ import {
   InputAdornment,
   TablePagination,
 } from "@mui/material";
-import { Add, Edit, Delete, Search, Print } from "@mui/icons-material"; // Added Print icon
+import {
+  Add,
+  Edit,
+  Delete,
+  Search,
+  Print,
+  FilterListOff,
+} from "@mui/icons-material";
 
 // --- MODAL IMPORTS ---
 import AddRawMaterialModal from "./AddRawMaterialModal";
@@ -30,7 +37,11 @@ import PrintRawMaterialModal from "./PrintRawMaterialModal";
 export default function RawMaterials({ mode }) {
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // --- FILTER STATES ---
   const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
 
   // --- PAGINATION STATES ---
   const [page, setPage] = useState(0);
@@ -39,7 +50,7 @@ export default function RawMaterials({ mode }) {
   // Modal States
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditModal, setOpenEditModal] = useState(false);
-  const [openPrintModal, setOpenPrintModal] = useState(false); // Added Print state
+  const [openPrintModal, setOpenPrintModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
   const [snackbar, setSnackbar] = useState({
@@ -50,7 +61,6 @@ export default function RawMaterials({ mode }) {
 
   const isDark = mode === "dark";
 
-  // --- API CALLS ---
   const fetchMaterials = async () => {
     try {
       setLoading(true);
@@ -62,6 +72,60 @@ export default function RawMaterials({ mode }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    fetchMaterials();
+  }, []);
+
+  // --- FILTER LOGIC ---
+  const getStatus = (item) => {
+    const currentVal =
+      item.minStockTarget === "base" ? item.baseValue : item.qtyValue;
+    if (currentVal <= 0) return { label: "Out of Stock", color: "error" };
+    if (currentVal <= item.minStockThreshold)
+      return { label: "Low Stock", color: "warning" };
+    return { label: "In Stock", color: "success" };
+  };
+
+  const filteredMaterials = materials.filter((m) => {
+    const statusObj = getStatus(m);
+
+    // Matches Name OR ID
+    const matchesSearch =
+      m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(m.id).includes(searchQuery);
+
+    const matchesCategory =
+      categoryFilter === "All" || m.category === categoryFilter;
+
+    const matchesStatus =
+      statusFilter === "All" || statusObj.label === statusFilter;
+
+    return matchesSearch && matchesCategory && matchesStatus;
+  });
+
+  const paginatedMaterials = filteredMaterials.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
+
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setCategoryFilter("All");
+    setStatusFilter("All");
+    setPage(0);
+  };
+
+  // --- HANDLERS ---
+  const handleChangePage = (event, newPage) => setPage(newPage);
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const showSnackbar = (message, severity = "success") => {
+    setSnackbar({ open: true, message, severity });
   };
 
   const handleDelete = async (id) => {
@@ -88,13 +152,9 @@ export default function RawMaterials({ mode }) {
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...item,
-            minStockTarget: newTarget,
-          }),
+          body: JSON.stringify({ ...item, minStockTarget: newTarget }),
         },
       );
-
       if (response.ok) {
         fetchMaterials();
         showSnackbar(
@@ -106,47 +166,6 @@ export default function RawMaterials({ mode }) {
       showSnackbar("Failed to update monitoring logic", "error");
     }
   };
-
-  useEffect(() => {
-    fetchMaterials();
-  }, []);
-
-  // --- HANDLERS ---
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
-
-  const showSnackbar = (message, severity = "success") => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const getStatus = (item) => {
-    const currentVal =
-      item.minStockTarget === "base" ? item.baseValue : item.qtyValue;
-    if (currentVal <= 0) return { label: "Out of Stock", color: "error" };
-    if (currentVal <= item.minStockThreshold)
-      return { label: "Low Stock", color: "warning" };
-    return { label: "In Stock", color: "success" };
-  };
-
-  // Search filter logic
-  const filteredMaterials = materials.filter(
-    (m) =>
-      m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      String(m.id).includes(searchQuery),
-  );
-
-  // Paginated logic
-  const paginatedMaterials = filteredMaterials.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage,
-  );
 
   return (
     <Box
@@ -169,7 +188,6 @@ export default function RawMaterials({ mode }) {
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
-          {/* Added Print Button */}
           <Button
             variant="outlined"
             startIcon={<Print />}
@@ -190,10 +208,15 @@ export default function RawMaterials({ mode }) {
       </Box>
 
       <TableContainer component={Paper} sx={{ borderRadius: 3, p: 2 }}>
-        <Box sx={{ p: 2 }}>
+        {/* --- FILTER BAR --- */}
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={2}
+          sx={{ mb: 3, p: 2, alignItems: "center" }}
+        >
           <TextField
             size="small"
-            placeholder="Search name, category, or ID..."
+            placeholder="Search Name or ID..."
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -206,9 +229,57 @@ export default function RawMaterials({ mode }) {
                 </InputAdornment>
               ),
             }}
-            sx={{ width: 300 }}
+            sx={{ flexGrow: 1 }}
           />
-        </Box>
+
+          <TextField
+            select
+            size="small"
+            label="Category"
+            value={categoryFilter}
+            onChange={(e) => {
+              setCategoryFilter(e.target.value);
+              setPage(0);
+            }}
+            sx={{ minWidth: 150 }}
+          >
+            <MenuItem value="All">All Categories</MenuItem>
+            <MenuItem value="Plastic">Plastic</MenuItem>
+            <MenuItem value="Injection">Injection</MenuItem>
+            <MenuItem value="Paper">Paper</MenuItem>
+            <MenuItem value="Trading">Trading</MenuItem>
+          </TextField>
+
+          <TextField
+            select
+            size="small"
+            label="Status"
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(0);
+            }}
+            sx={{ minWidth: 150 }}
+          >
+            <MenuItem value="All">All Status</MenuItem>
+            <MenuItem value="In Stock">In Stock</MenuItem>
+            <MenuItem value="Low Stock">Low Stock</MenuItem>
+            <MenuItem value="Out of Stock">Out of Stock</MenuItem>
+          </TextField>
+
+          {(searchQuery ||
+            categoryFilter !== "All" ||
+            statusFilter !== "All") && (
+            <Button
+              startIcon={<FilterListOff />}
+              onClick={handleResetFilters}
+              color="inherit"
+              size="small"
+            >
+              Reset
+            </Button>
+          )}
+        </Stack>
 
         {loading ? (
           <Box sx={{ display: "flex", justifyContent: "center", p: 10 }}>
@@ -243,7 +314,7 @@ export default function RawMaterials({ mode }) {
                 {paginatedMaterials.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
-                      No raw materials found.
+                      No raw materials match your filters.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -366,7 +437,6 @@ export default function RawMaterials({ mode }) {
         )}
       </TableContainer>
 
-      {/* --- MODALS --- */}
       <AddRawMaterialModal
         open={openAddModal}
         handleClose={() => setOpenAddModal(false)}
@@ -376,14 +446,11 @@ export default function RawMaterials({ mode }) {
         }}
         mode={mode}
       />
-
-      {/* Print Modal Implementation */}
       <PrintRawMaterialModal
         open={openPrintModal}
         handleClose={() => setOpenPrintModal(false)}
         materialsData={materials}
       />
-
       {selectedItem && (
         <EditRawMaterialModal
           open={openEditModal}

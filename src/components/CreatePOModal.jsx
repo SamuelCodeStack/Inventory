@@ -22,6 +22,7 @@ import {
   InputAdornment,
   Snackbar,
   Alert,
+  Chip,
 } from "@mui/material";
 import {
   Close,
@@ -58,7 +59,7 @@ export default function CreatePOModal({
     contact: "",
     address: "",
     poNumber: "",
-    deliveryDate: "", // NEW FIELD
+    deliveryDate: "",
     status: "Job Order",
     totalPrice: 0,
   });
@@ -123,7 +124,7 @@ export default function CreatePOModal({
       contact: formData.contact,
       address: formData.address,
       po_number: formData.poNumber,
-      delivery_date: formData.deliveryDate, // INCLUDED IN PAYLOAD
+      delivery_date: formData.deliveryDate,
       status: formData.status,
       total_price: formData.totalPrice,
       items: selectedItems,
@@ -159,7 +160,7 @@ export default function CreatePOModal({
       contact: "",
       address: "",
       poNumber: "",
-      deliveryDate: "", // RESET FIELD
+      deliveryDate: "",
       status: "Job Order",
       totalPrice: 0,
     });
@@ -167,7 +168,6 @@ export default function CreatePOModal({
     handleClose();
   };
 
-  // --- STYLES ---
   const fieldStyle = {
     "& .MuiOutlinedInput-root": {
       bgcolor: mode === "light" ? "#fff" : "rgba(255, 255, 255, 0.03)",
@@ -208,8 +208,8 @@ export default function CreatePOModal({
 
         <DialogContent dividers sx={{ py: 3 }}>
           <Grid container spacing={3}>
-            {/* LEFT SIDE: INPUTS */}
-            <Grid item xs={12} md={7}>
+            {/* TOP SECTION: CUSTOMER INFO */}
+            <Grid item xs={12}>
               <Typography
                 variant="subtitle2"
                 color="primary"
@@ -218,9 +218,8 @@ export default function CreatePOModal({
               >
                 <Person fontSize="small" /> Customer & Business Info
               </Typography>
-
-              <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item xs={12} md={6}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
                   <TextField
                     fullWidth
                     size="small"
@@ -231,7 +230,7 @@ export default function CreatePOModal({
                     sx={fieldStyle}
                   />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={4}>
                   <TextField
                     fullWidth
                     size="small"
@@ -242,7 +241,7 @@ export default function CreatePOModal({
                     sx={fieldStyle}
                   />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={4}>
                   <TextField
                     fullWidth
                     size="small"
@@ -253,7 +252,7 @@ export default function CreatePOModal({
                     sx={fieldStyle}
                   />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={4}>
                   <TextField
                     fullWidth
                     size="small"
@@ -264,7 +263,7 @@ export default function CreatePOModal({
                     sx={fieldStyle}
                   />
                 </Grid>
-                <Grid item xs={12}>
+                <Grid item xs={12} md={4}>
                   <TextField
                     fullWidth
                     size="small"
@@ -275,8 +274,6 @@ export default function CreatePOModal({
                     sx={fieldStyle}
                   />
                 </Grid>
-
-                {/* UPDATED SECTION: DATE, PO, STATUS */}
                 <Grid item xs={12} md={4}>
                   <TextField
                     fullWidth
@@ -288,16 +285,9 @@ export default function CreatePOModal({
                     onChange={handleInputChange}
                     sx={fieldStyle}
                     InputLabelProps={{ shrink: true }}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Event fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    }}
                   />
                 </Grid>
-                <Grid item xs={12} md={4}>
+                <Grid item xs={12} md={6}>
                   <TextField
                     fullWidth
                     size="small"
@@ -308,7 +298,7 @@ export default function CreatePOModal({
                     sx={fieldStyle}
                   />
                 </Grid>
-                <Grid item xs={12} md={4}>
+                <Grid item xs={12} md={6}>
                   <TextField
                     select
                     fullWidth
@@ -327,11 +317,21 @@ export default function CreatePOModal({
                   </TextField>
                 </Grid>
               </Grid>
+            </Grid>
 
-              <Divider sx={{ mb: 2 }} />
+            <Grid item xs={12}>
+              <Divider />
+            </Grid>
 
+            {/* LEFT SIDE: ITEM SELECTION */}
+            <Grid item xs={12} md={7}>
               <Box
-                sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  mb: 2,
+                  alignItems: "center",
+                }}
               >
                 <Typography
                   variant="subtitle2"
@@ -359,12 +359,18 @@ export default function CreatePOModal({
               <TableContainer
                 component={Paper}
                 variant="outlined"
-                sx={{ maxHeight: 300, overflow: "auto", borderRadius: 2 }}
+                sx={{ maxHeight: 450, overflow: "auto", borderRadius: 2 }}
               >
                 <Table stickyHeader size="small">
                   <TableHead>
                     <TableRow>
                       <TableCell sx={headerCellStyle}>Item</TableCell>
+                      <TableCell align="center" sx={headerCellStyle}>
+                        Stock
+                      </TableCell>
+                      <TableCell align="center" sx={headerCellStyle}>
+                        Status
+                      </TableCell>
                       <TableCell align="right" sx={headerCellStyle}>
                         Action
                       </TableCell>
@@ -384,6 +390,23 @@ export default function CreatePOModal({
                         return (
                           <TableRow key={item.id} hover>
                             <TableCell>{item.name}</TableCell>
+                            <TableCell align="center">
+                              {item.quantity}
+                            </TableCell>
+                            <TableCell align="center">
+                              <Chip
+                                label={item.status}
+                                size="small"
+                                color={
+                                  item.status === "In Stock"
+                                    ? "success"
+                                    : item.status === "Low Stock"
+                                      ? "warning"
+                                      : "error"
+                                }
+                                sx={{ fontSize: "0.7rem", fontWeight: "bold" }}
+                              />
+                            </TableCell>
                             <TableCell align="right">
                               <Button
                                 size="small"
@@ -401,7 +424,7 @@ export default function CreatePOModal({
               </TableContainer>
             </Grid>
 
-            {/* RIGHT SIDE: SUMMARY */}
+            {/* RIGHT SIDE: SUMMARY - STATIC LAYOUT */}
             <Grid item xs={12} md={5}>
               <Box
                 sx={{
@@ -410,6 +433,7 @@ export default function CreatePOModal({
                     mode === "light" ? "grey.50" : "rgba(255,255,255,0.02)",
                   borderRadius: 3,
                   height: "100%",
+                  minHeight: 500, // Fixed minimum height to prevent shifting
                   border: "1px solid",
                   borderColor: "divider",
                   display: "flex",
@@ -424,63 +448,92 @@ export default function CreatePOModal({
                   <ShoppingCart fontSize="small" color="primary" /> Order
                   Summary
                 </Typography>
+
                 <Box
-                  sx={{ flexGrow: 1, maxHeight: 400, overflow: "auto", mb: 2 }}
+                  sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}
                 >
-                  {selectedItems.map((item) => (
-                    <Paper
-                      key={`summary-${item.id}`}
-                      variant="outlined"
+                  {selectedItems.length === 0 ? (
+                    <Box
                       sx={{
-                        p: 1.5,
-                        mb: 1,
-                        borderRadius: 2,
-                        position: "relative",
+                        flexGrow: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexDirection: "column",
+                        opacity: 0.5,
                       }}
                     >
-                      <Typography variant="body2" fontWeight="bold">
-                        {item.name}
-                      </Typography>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleToggleItem(item)}
-                        sx={{ position: "absolute", top: 4, right: 4 }}
-                      >
-                        <DeleteOutline fontSize="small" />
-                      </IconButton>
-                      <Grid container spacing={1} sx={{ mt: 1 }}>
-                        <Grid item xs={6}>
-                          <TextField
-                            fullWidth
+                      <ShoppingCart sx={{ fontSize: 40, mb: 1 }} />
+                      <Typography variant="body2">No items selected</Typography>
+                    </Box>
+                  ) : (
+                    <Box sx={{ overflowY: "auto", maxHeight: 400 }}>
+                      {selectedItems.map((item) => (
+                        <Paper
+                          key={`summary-${item.id}`}
+                          variant="outlined"
+                          sx={{
+                            p: 1.5,
+                            mb: 1.5,
+                            borderRadius: 2,
+                            position: "relative",
+                          }}
+                        >
+                          <Typography variant="body2" fontWeight="bold">
+                            {item.name}
+                          </Typography>
+                          <IconButton
                             size="small"
-                            label="Qty"
-                            type="number"
-                            value={item.qty}
-                            onChange={(e) =>
-                              handleItemChange(item.id, "qty", e.target.value)
-                            }
-                          />
-                        </Grid>
-                        <Grid item xs={6}>
-                          <TextField
-                            fullWidth
-                            size="small"
-                            label="Price"
-                            type="number"
-                            value={item.price}
-                            onChange={(e) =>
-                              handleItemChange(item.id, "price", e.target.value)
-                            }
-                          />
-                        </Grid>
-                      </Grid>
-                    </Paper>
-                  ))}
+                            color="error"
+                            onClick={() => handleToggleItem(item)}
+                            sx={{ position: "absolute", top: 4, right: 4 }}
+                          >
+                            <DeleteOutline fontSize="small" />
+                          </IconButton>
+                          <Grid container spacing={1} sx={{ mt: 1 }}>
+                            <Grid item xs={6}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                label="Qty"
+                                type="number"
+                                value={item.qty}
+                                onChange={(e) =>
+                                  handleItemChange(
+                                    item.id,
+                                    "qty",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                            </Grid>
+                            <Grid item xs={6}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                label="Price"
+                                type="number"
+                                value={item.price}
+                                onChange={(e) =>
+                                  handleItemChange(
+                                    item.id,
+                                    "price",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                            </Grid>
+                          </Grid>
+                        </Paper>
+                      ))}
+                    </Box>
+                  )}
                 </Box>
+
                 <Box
                   sx={{
                     p: 2,
+                    mt: "auto",
                     bgcolor: "primary.main",
                     color: "white",
                     borderRadius: 2,
@@ -507,7 +560,7 @@ export default function CreatePOModal({
               selectedItems.length === 0 ||
               !formData.customerName.trim() ||
               !formData.poNumber.trim() ||
-              !formData.deliveryDate // Ensures date is picked
+              !formData.deliveryDate
             }
             sx={{ px: 4, fontWeight: "bold", borderRadius: 2 }}
           >

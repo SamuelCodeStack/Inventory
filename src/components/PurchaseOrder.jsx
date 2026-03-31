@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useReactToPrint } from "react-to-print";
 import {
   Box,
   Typography,
@@ -21,6 +20,7 @@ import {
   Chip,
   Divider,
   TablePagination,
+  MenuItem,
 } from "@mui/material";
 import {
   Add,
@@ -31,6 +31,7 @@ import {
   Print,
   LocalShipping,
   CheckCircleOutline,
+  FilterListOff,
 } from "@mui/icons-material";
 
 import CreatePOModal from "./CreatePOModal";
@@ -38,6 +39,9 @@ import UpdatePOModal from "./UpdatePOModal";
 import ViewPOModal from "./ViewPOModal";
 import DeliveryActionModal from "./DeliveryActionModal";
 import PrintPOReportModal from "./PrintPOReportModal";
+
+// Define consistent status options for the filter
+const statusFilterOptions = ["Job Order", "Pending", "Delivered", "Backload"];
 
 export default function PurchaseOrder({ mode }) {
   const [poData, setPoData] = useState([]);
@@ -48,7 +52,10 @@ export default function PurchaseOrder({ mode }) {
   const [openDeliveryModal, setOpenDeliveryModal] = useState(false);
   const [openPrintModal, setOpenPrintModal] = useState(false);
   const [selectedPO, setSelectedPO] = useState(null);
+
+  // --- FILTER STATES ---
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
 
   // --- PAGINATION STATE ---
   const [page, setPage] = useState(0);
@@ -60,8 +67,25 @@ export default function PurchaseOrder({ mode }) {
     severity: "success",
   });
 
-  const componentRef = useRef();
   const isDark = mode === "dark";
+
+  // --- API CALLS ---
+  const fetchPurchaseOrders = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("http://localhost:3000/api/purchase-orders");
+      const data = await response.json();
+      setPoData(data);
+    } catch (error) {
+      showSnackbar("Failed to load data", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPurchaseOrders();
+  }, []);
 
   // --- HELPERS ---
   const showSnackbar = (message, severity = "success") => {
@@ -86,20 +110,7 @@ export default function PurchaseOrder({ mode }) {
     }
   };
 
-  // --- API CALLS ---
-  const fetchPurchaseOrders = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch("http://localhost:3000/api/purchase-orders");
-      const data = await response.json();
-      setPoData(data);
-    } catch (error) {
-      showSnackbar("Failed to load data", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // --- HANDLERS ---
   const handleStatusUpdate = async (id, newStatus, remarks = "") => {
     try {
       const response = await fetch(
@@ -110,7 +121,6 @@ export default function PurchaseOrder({ mode }) {
           body: JSON.stringify({ status: newStatus, remarks: remarks }),
         },
       );
-
       if (response.ok) {
         fetchPurchaseOrders();
         showSnackbar(`Order status updated to ${newStatus}`, "success");
@@ -118,19 +128,6 @@ export default function PurchaseOrder({ mode }) {
     } catch (error) {
       showSnackbar("Error connecting to server", "error");
     }
-  };
-
-  const handleViewClick = (po) => {
-    setSelectedPO(po);
-    setOpenViewModal(true);
-  };
-  const handleEditClick = (po) => {
-    setSelectedPO(po);
-    setOpenUpdateModal(true);
-  };
-  const handleDeliveryActionClick = (po) => {
-    setSelectedPO(po);
-    setOpenDeliveryModal(true);
   };
 
   const handleDelete = async (id) => {
@@ -149,27 +146,30 @@ export default function PurchaseOrder({ mode }) {
     }
   };
 
-  // --- PAGINATION HANDLERS ---
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("All");
+    setPage(0);
   };
 
+  const handleChangePage = (event, newPage) => setPage(newPage);
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
 
-  useEffect(() => {
-    fetchPurchaseOrders();
-  }, []);
-
   // --- FILTER & SORT LOGIC ---
   const filteredAndSortedData = poData
-    .filter(
-      (row) =>
+    .filter((row) => {
+      const matchesSearch =
         row.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        row.poNo.includes(searchQuery),
-    )
+        row.poNo.includes(searchQuery);
+
+      const matchesStatus =
+        statusFilter === "All" || row.status === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    })
     .sort((a, b) => {
       const priority = { "Job Order": 1, Pending: 2 };
       const aPriority = priority[a.status] || 3;
@@ -221,17 +221,12 @@ export default function PurchaseOrder({ mode }) {
         component={Paper}
         sx={{ borderRadius: 3, p: 3, backgroundImage: "none" }}
       >
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            mb: 3,
-            alignItems: "center",
-          }}
+        {/* --- FILTER BAR --- */}
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={2}
+          sx={{ mb: 3, alignItems: "center" }}
         >
-          <Typography variant="subtitle1" fontWeight="bold">
-            Master Order List
-          </Typography>
           <TextField
             size="small"
             placeholder="Search customer or PO#..."
@@ -247,9 +242,39 @@ export default function PurchaseOrder({ mode }) {
                 </InputAdornment>
               ),
             }}
-            sx={{ width: 300 }}
+            sx={{ flexGrow: 1 }}
           />
-        </Box>
+
+          <TextField
+            select
+            size="small"
+            label="Status Filter"
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(0);
+            }}
+            sx={{ minWidth: 200 }}
+          >
+            <MenuItem value="All">All Statuses</MenuItem>
+            {statusFilterOptions.map((option) => (
+              <MenuItem key={option} value={option}>
+                {option}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          {(searchQuery || statusFilter !== "All") && (
+            <Button
+              startIcon={<FilterListOff />}
+              onClick={handleResetFilters}
+              color="inherit"
+              size="small"
+            >
+              Reset
+            </Button>
+          )}
+        </Stack>
 
         <Table size="small">
           <TableHead
@@ -272,7 +297,6 @@ export default function PurchaseOrder({ mode }) {
             {paginatedData.map((row) => {
               const style = getStatusStyle(row.status);
               const clean = row.status?.replace(/\s/g, "") || "";
-
               const isOngoing = clean === "DeliverOnGoing";
               const isFinal = clean === "Delivered" || clean === "Backload";
               const isActionAvailable =
@@ -287,7 +311,6 @@ export default function PurchaseOrder({ mode }) {
                     </Typography>
                   </TableCell>
                   <TableCell>{row.poNo}</TableCell>
-
                   <TableCell align="center">
                     <Chip
                       icon={
@@ -308,7 +331,6 @@ export default function PurchaseOrder({ mode }) {
                       }}
                     />
                   </TableCell>
-
                   <TableCell sx={{ maxWidth: 200 }}>
                     <Tooltip title={row.remarks || ""}>
                       <Typography
@@ -326,7 +348,6 @@ export default function PurchaseOrder({ mode }) {
                       </Typography>
                     </Tooltip>
                   </TableCell>
-
                   <TableCell align="right">
                     <Stack
                       direction="row"
@@ -338,7 +359,10 @@ export default function PurchaseOrder({ mode }) {
                           <IconButton
                             size="small"
                             color="primary"
-                            onClick={() => handleDeliveryActionClick(row)}
+                            onClick={() => {
+                              setSelectedPO(row);
+                              setOpenDeliveryModal(true);
+                            }}
                             sx={{ bgcolor: "rgba(25, 118, 210, 0.1)" }}
                           >
                             <CheckCircleOutline fontSize="inherit" />
@@ -347,7 +371,10 @@ export default function PurchaseOrder({ mode }) {
                       )}
                       <IconButton
                         size="small"
-                        onClick={() => handleViewClick(row)}
+                        onClick={() => {
+                          setSelectedPO(row);
+                          setOpenViewModal(true);
+                        }}
                         sx={{
                           color: "#2ecc71",
                           bgcolor: "rgba(46, 204, 113, 0.1)",
@@ -357,7 +384,10 @@ export default function PurchaseOrder({ mode }) {
                       </IconButton>
                       <IconButton
                         size="small"
-                        onClick={() => handleEditClick(row)}
+                        onClick={() => {
+                          setSelectedPO(row);
+                          setOpenUpdateModal(true);
+                        }}
                         disabled={isOngoing || isFinal}
                         sx={{
                           color: "#3498db",
@@ -381,6 +411,13 @@ export default function PurchaseOrder({ mode }) {
                 </TableRow>
               );
             })}
+            {paginatedData.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                  No purchase orders match your filters.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
 
@@ -395,7 +432,7 @@ export default function PurchaseOrder({ mode }) {
         />
       </TableContainer>
 
-      {/* Modals */}
+      {/* Modals and other components remain unchanged */}
       <DeliveryActionModal
         open={openDeliveryModal}
         handleClose={() => setOpenDeliveryModal(false)}
@@ -431,14 +468,12 @@ export default function PurchaseOrder({ mode }) {
           />
         </>
       )}
-
       <PrintPOReportModal
         open={openPrintModal}
         handleClose={() => setOpenPrintModal(false)}
         poData={poData}
       />
 
-      {/* Snackbar */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}
