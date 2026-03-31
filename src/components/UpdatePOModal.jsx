@@ -54,7 +54,8 @@ export default function UpdatePOModal({
 
   useEffect(() => {
     if (open) {
-      fetch("http://localhost:3000/api/inventory")
+      // fetch("http://localhost:3000/api/inventory")
+      fetch(`${import.meta.env.VITE_API_URL}/inventory`)
         .then((res) => res.json())
         .then((data) => setDbInventory(data));
 
@@ -70,7 +71,10 @@ export default function UpdatePOModal({
         });
 
         const cleanId = String(poData.id).split(":")[0];
-        fetch(`http://localhost:3000/api/purchase-orders/${cleanId}/items`)
+        // fetch(`http://localhost:3000/api/purchase-orders/${cleanId}/items`);
+        fetch(
+          `${import.meta.env.VITE_API_URL}/purchase-orders/${cleanId}/items`,
+        )
           .then((res) => res.json())
           .then((data) => {
             const mappedItems = data.map((item) => ({
@@ -136,7 +140,8 @@ export default function UpdatePOModal({
 
     try {
       const response = await fetch(
-        `http://localhost:3000/api/purchase-orders/${cleanId}`,
+        // `http://localhost:3000/api/purchase-orders/${cleanId}`,
+        `${import.meta.env.VITE_API_URL}/purchase-orders/${cleanId}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },

@@ -62,7 +62,8 @@ export default function EditRawMaterialModal({
   const handleSubmit = async () => {
     try {
       const response = await fetch(
-        `http://localhost:3000/api/raw-materials/${itemData.id}`,
+        // `http://localhost:3000/api/raw-materials/${itemData.id}`,
+        `${import.meta.env.VITE_API_URL}/raw-materials/${itemData.id}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },

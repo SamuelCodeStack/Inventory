@@ -66,7 +66,8 @@ export default function CreatePOModal({
 
   useEffect(() => {
     if (open) {
-      fetch("http://localhost:3000/api/inventory")
+      // fetch(`http://localhost:3000/api/inventory`)
+      fetch(`${import.meta.env.VITE_API_URL}/inventory`)
         .then((res) => res.json())
         .then((data) => setDbInventory(data))
         .catch(() => showNotification("Failed to load inventory", "error"));
@@ -132,7 +133,8 @@ export default function CreatePOModal({
 
     try {
       const response = await fetch(
-        "http://localhost:3000/api/purchase-orders",
+        // "http://localhost:3000/api/purchase-orders",
+        `${import.meta.env.VITE_API_URL}/purchase-orders`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

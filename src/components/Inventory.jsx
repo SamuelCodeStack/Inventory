@@ -64,7 +64,8 @@ export default function Inventory({ mode }) {
 
   const fetchInventory = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/inventory");
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/inventory`);
+      // const response = await fetch("http://localhost:3000/api/inventory");
       const data = await response.json();
       setInventoryData(data);
       setOriginalData(JSON.parse(JSON.stringify(data)));

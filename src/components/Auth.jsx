@@ -46,21 +46,66 @@ export default function Auth({ mode, toggleDarkMode }) {
   };
 
   // --- SUBMIT HANDLERS ---
+  // const handleAuthAction = async (e) => {
+  //   e.preventDefault();
+  //   setError("");
+
+  //   // FIXED: Endpoint selection logic
+  //   let endpoint = "";
+  //   if (view === "login") endpoint = "/api/auth/login";
+  //   else if (view === "register") endpoint = "/api/auth/register";
+  //   else if (view === "forgot") endpoint = "/api/auth/forgot-password"; // Add your forgot pw endpoint
+
+  //   try {
+  //     const response = await fetch(`http://localhost:3000${endpoint}`, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       credentials: "include", // FIXED: Required for session cookies to work
+  //       body: JSON.stringify(formData),
+  //     });
+
+  //     const data = await response.json();
+
+  //     if (response.ok) {
+  //       if (view === "login") {
+  //         // Redirect to main inventory page on successful login
+  //         window.location.href = "/";
+  //       } else if (view === "register") {
+  //         // If register success, switch to login view
+  //         setView("login");
+  //         setFormData({ ...formData, password: "" });
+  //         alert("Registration successful! Please sign in.");
+  //       } else {
+  //         // If forgot password success
+  //         alert("Reset link sent to your email!");
+  //         setView("login");
+  //       }
+  //     } else {
+  //       setError(data.error || "An error occurred. Please try again.");
+  //     }
+  //   } catch (err) {
+  //     setError("Network error: Could not connect to server.");
+  //   }
+  // };
+
   const handleAuthAction = async (e) => {
     e.preventDefault();
     setError("");
 
-    // FIXED: Endpoint selection logic
     let endpoint = "";
     if (view === "login") endpoint = "/api/auth/login";
     else if (view === "register") endpoint = "/api/auth/register";
-    else if (view === "forgot") endpoint = "/api/auth/forgot-password"; // Add your forgot pw endpoint
+    else if (view === "forgot") endpoint = "/api/auth/forgot-password";
 
     try {
-      const response = await fetch(`http://localhost:3000${endpoint}`, {
+      // FIXED: Use VITE_API_URL instead of hardcoded localhost
+      // We clean the URL to ensure it points to the correct base path
+      const apiUrl = import.meta.env.VITE_API_URL.replace(/\/api$/, "");
+
+      const response = await fetch(`${apiUrl}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // FIXED: Required for session cookies to work
+        credentials: "include", // Critical for keeping you logged in
         body: JSON.stringify(formData),
       });
 
@@ -68,17 +113,11 @@ export default function Auth({ mode, toggleDarkMode }) {
 
       if (response.ok) {
         if (view === "login") {
-          // Redirect to main inventory page on successful login
           window.location.href = "/";
-        } else if (view === "register") {
-          // If register success, switch to login view
+        } else {
           setView("login");
           setFormData({ ...formData, password: "" });
-          alert("Registration successful! Please sign in.");
-        } else {
-          // If forgot password success
-          alert("Reset link sent to your email!");
-          setView("login");
+          alert("Action successful!");
         }
       } else {
         setError(data.error || "An error occurred. Please try again.");

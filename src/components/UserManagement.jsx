@@ -43,7 +43,8 @@ export default function UserManagement({ mode }) {
   // 1. FETCH USERS FROM DATABASE
   const fetchUsers = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/users");
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/users`);
+      // const response = await fetch("http://localhost:3000/api/users");
       const data = await response.json();
       setUsers(data);
     } catch (err) {

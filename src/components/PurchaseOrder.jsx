@@ -73,7 +73,10 @@ export default function PurchaseOrder({ mode }) {
   const fetchPurchaseOrders = async () => {
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:3000/api/purchase-orders");
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/purchase-orders`,
+      );
+      // const response = await fetch("http://localhost:3000/api/purchase-orders");
       const data = await response.json();
       setPoData(data);
     } catch (error) {

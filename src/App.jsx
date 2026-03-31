@@ -27,12 +27,37 @@ function AppContent({ mode, toggleDarkMode }) {
   const [loading, setLoading] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // useEffect(() => {
+  //   const checkAuth = async () => {
+  //     try {
+  //       const response = await fetch("http://localhost:3000/api/auth/me", {
+  //         credentials: "include",
+  //       });
+  //       const data = await response.json();
+  //       if (data.loggedIn) {
+  //         setUser(data.user);
+  //       } else {
+  //         setUser(null);
+  //       }
+  //     } catch (err) {
+  //       console.error("Auth check failed", err);
+  //     } finally {
+  //       setLoading(false);
+  //     }
+  //   };
+  //   checkAuth();
+  // }, []);
+
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch("http://localhost:3000/api/auth/me", {
-          credentials: "include",
-        });
+        // FIXED: Changed "http://localhost:3000" to use your VITE_API_URL variable
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/auth/me`,
+          {
+            credentials: "include",
+          },
+        );
         const data = await response.json();
         if (data.loggedIn) {
           setUser(data.user);
@@ -41,6 +66,7 @@ function AppContent({ mode, toggleDarkMode }) {
         }
       } catch (err) {
         console.error("Auth check failed", err);
+        setUser(null);
       } finally {
         setLoading(false);
       }

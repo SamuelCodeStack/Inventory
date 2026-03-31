@@ -13,10 +13,14 @@ const port = 3000;
 
 app.use(
   cors({
-    origin: "http://localhost:5173", // Replace with your frontend URL
+    origin: [
+      "http://localhost:5173",
+      "http://192.168.1.105:5173", // Computer A's IP
+    ],
     credentials: true,
   }),
 );
+
 app.use(express.json());
 
 const pool = new pg.Pool({
@@ -32,16 +36,19 @@ const pool = new pg.Pool({
 // ==========================================
 const PostgresStore = pgSession(session);
 
+// --- UPDATED SESSION CONFIGURATION ---
 app.use(
   session({
     store: new PostgresStore({ pool: pool }),
     secret: process.env.SESSION_SECRET || "kimwin_secret_key",
     resave: false,
     saveUninitialized: false,
+    proxy: true, // Required for sessions to work over local network IPs
     cookie: {
-      secure: false, // Set to true if using HTTPS
+      secure: false, // Keep false for HTTP
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: "lax", // Changed from default to 'lax' to allow the cookie to be saved via IP access
+      maxAge: 24 * 60 * 60 * 1000,
     },
   }),
 );
@@ -615,6 +622,6 @@ app.delete("/api/users/:id", async (req, res) => {
   }
 });
 
-app.listen(port, () =>
-  console.log(`Server running on http://localhost:${port}`),
+app.listen(port, "0.0.0.0", () =>
+  console.log(`Server running on http://192.168.1.105:${port}`),
 );

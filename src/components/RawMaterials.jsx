@@ -64,7 +64,10 @@ export default function RawMaterials({ mode }) {
   const fetchMaterials = async () => {
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:3000/api/raw-materials");
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/raw-materials`,
+      );
+      // const response = await fetch("http://localhost:3000/api/raw-materials");
       const data = await response.json();
       setMaterials(data);
     } catch (error) {

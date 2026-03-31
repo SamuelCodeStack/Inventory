@@ -60,7 +60,9 @@ export default function AddInventoryModal({
     setLoading(true);
     try {
       const response = await fetch(
-        "http://localhost:3000/api/inventory/bulk-add",
+        // `http://localhost:3000/api/inventory/bulk-add`,
+        `${import.meta.env.VITE_API_URL}/inventory/bulk-add`,
+
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

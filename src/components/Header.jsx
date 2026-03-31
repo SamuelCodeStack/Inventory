@@ -33,20 +33,43 @@ export default function Header({ mode, user }) {
   };
 
   // --- LOGOUT HANDLER ---
+  // const handleLogout = async () => {
+  //   try {
+  //     const response = await fetch("http://localhost:3000/api/auth/logout", {
+  //       method: "POST",
+  //       credentials: "include", // Required to send the session cookie to be destroyed
+  //     });
+
+  //     if (response.ok) {
+  //       // Refresh the page to trigger the App.jsx auth check,
+  //       // which will redirect the user to /login
+  //       window.location.href = "/login";
+  //     }
+  //   } catch (err) {
+  //     console.error("Logout failed", err);
+  //   }
+  // };
+
   const handleLogout = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/auth/logout", {
+      // FIXED: Use VITE_API_URL from .env instead of hardcoded localhost
+      // We clean the URL to remove /api if it exists to reach the base auth route
+      const apiUrl = import.meta.env.VITE_API_URL.replace(/\/api$/, "");
+
+      const response = await fetch(`${apiUrl}/api/auth/logout`, {
         method: "POST",
-        credentials: "include", // Required to send the session cookie to be destroyed
+        credentials: "include", // Critical to send the cookie to the server to be destroyed
       });
 
       if (response.ok) {
-        // Refresh the page to trigger the App.jsx auth check,
-        // which will redirect the user to /login
+        // Force a full page reload to the login page
+        // This clears all React states and forces App.jsx to re-verify auth
         window.location.href = "/login";
       }
     } catch (err) {
       console.error("Logout failed", err);
+      // Fallback: even if API fails, clear the local view
+      window.location.href = "/login";
     }
   };
 

@@ -42,7 +42,8 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
         const cleanId = String(poData.id).split(":")[0];
         try {
           const response = await fetch(
-            `http://localhost:3000/api/purchase-orders/${cleanId}/items`,
+            // `http://localhost:3000/api/purchase-orders/${cleanId}/items`,
+            `${import.meta.env.VITE_API_URL}/purchase-orders/${cleanId}/items`,
           );
           if (!response.ok) throw new Error("Failed to fetch");
           const data = await response.json();

@@ -60,7 +60,8 @@ export default function EditInventoryModal({
   const handleSubmit = async () => {
     try {
       const response = await fetch(
-        `http://localhost:3000/api/inventory/${itemData.id}`,
+        // `http://localhost:3000/api/inventory/${itemData.id}`,
+        `${import.meta.env.VITE_API_URL}/inventory/${itemData.id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
