@@ -10,6 +10,8 @@ import {
   InputAdornment,
   Link,
   Divider,
+  Alert,
+  Tooltip,
 } from "@mui/material";
 import {
   Visibility,
@@ -18,21 +20,72 @@ import {
   Lock,
   Person,
   ArrowBack,
+  DarkMode,
+  LightMode,
 } from "@mui/icons-material";
 
-export default function Auth({ mode }) {
+export default function Auth({ mode, toggleDarkMode }) {
   // Views: 'login' | 'register' | 'forgot'
   const [view, setView] = useState("login");
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
   const isDark = mode === "dark";
+
+  // Form States
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
 
   const togglePassword = () => setShowPassword(!showPassword);
 
+  const handleInputChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+    if (error) setError(""); // Clear error when typing
+  };
+
   // --- SUBMIT HANDLERS ---
-  const handleAuthAction = (e) => {
+  const handleAuthAction = async (e) => {
     e.preventDefault();
-    console.log(`Performing ${view} action...`);
-    // Add your API logic here (fetch to /api/auth/...)
+    setError("");
+
+    // FIXED: Endpoint selection logic
+    let endpoint = "";
+    if (view === "login") endpoint = "/api/auth/login";
+    else if (view === "register") endpoint = "/api/auth/register";
+    else if (view === "forgot") endpoint = "/api/auth/forgot-password"; // Add your forgot pw endpoint
+
+    try {
+      const response = await fetch(`http://localhost:3000${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // FIXED: Required for session cookies to work
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (view === "login") {
+          // Redirect to main inventory page on successful login
+          window.location.href = "/";
+        } else if (view === "register") {
+          // If register success, switch to login view
+          setView("login");
+          setFormData({ ...formData, password: "" });
+          alert("Registration successful! Please sign in.");
+        } else {
+          // If forgot password success
+          alert("Reset link sent to your email!");
+          setView("login");
+        }
+      } else {
+        setError(data.error || "An error occurred. Please try again.");
+      }
+    } catch (err) {
+      setError("Network error: Could not connect to server.");
+    }
   };
 
   return (
@@ -44,8 +97,30 @@ export default function Auth({ mode }) {
         justifyContent: "center",
         bgcolor: isDark ? "#121212" : "#f4f7f9",
         p: 2,
+        position: "relative", // Required for absolute positioning of the toggle
       }}
     >
+      {/* --- DARK MODE TOGGLE BUTTON --- */}
+      <Box sx={{ position: "absolute", top: 20, right: 20 }}>
+        <Tooltip
+          title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+        >
+          <IconButton
+            onClick={toggleDarkMode}
+            sx={{
+              bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+              border: "1px solid",
+              borderColor: "divider",
+              "&:hover": {
+                bgcolor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)",
+              },
+            }}
+          >
+            {isDark ? <LightMode sx={{ color: "#f19149" }} /> : <DarkMode />}
+          </IconButton>
+        </Tooltip>
+      </Box>
+
       <Paper
         elevation={4}
         sx={{
@@ -54,6 +129,7 @@ export default function Auth({ mode }) {
           p: 4,
           borderRadius: 4,
           textAlign: "center",
+          backgroundImage: "none",
         }}
       >
         {/* LOGO AREA */}
@@ -78,14 +154,23 @@ export default function Auth({ mode }) {
           {view === "forgot" && "Enter your email to receive a reset link"}
         </Typography>
 
+        {error && (
+          <Alert severity="error" sx={{ mb: 2, textAlign: "left" }}>
+            {error}
+          </Alert>
+        )}
+
         <form onSubmit={handleAuthAction}>
           <Stack spacing={2.5}>
-            {/* NAME FIELD (Register only) */}
             {view === "register" && (
               <TextField
                 fullWidth
                 label="Full Name"
+                name="name"
                 size="small"
+                required
+                value={formData.name}
+                onChange={handleInputChange}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -96,13 +181,15 @@ export default function Auth({ mode }) {
               />
             )}
 
-            {/* EMAIL FIELD */}
             <TextField
               fullWidth
               label="Email Address"
+              name="email"
               type="email"
               size="small"
               required
+              value={formData.email}
+              onChange={handleInputChange}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -112,14 +199,16 @@ export default function Auth({ mode }) {
               }}
             />
 
-            {/* PASSWORD FIELD (Login/Register only) */}
             {view !== "forgot" && (
               <TextField
                 fullWidth
                 label="Password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 size="small"
                 required
+                value={formData.password}
+                onChange={handleInputChange}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -137,14 +226,16 @@ export default function Auth({ mode }) {
               />
             )}
 
-            {/* FORGOT PASSWORD LINK (Login only) */}
             {view === "login" && (
               <Box sx={{ textAlign: "right", mt: -1 }}>
                 <Link
                   component="button"
                   type="button"
                   variant="caption"
-                  onClick={() => setView("forgot")}
+                  onClick={() => {
+                    setView("forgot");
+                    setError(""); // FIXED: Clear error when switching
+                  }}
                   sx={{ textDecoration: "none", fontWeight: "bold" }}
                 >
                   Forgot Password?
@@ -152,7 +243,6 @@ export default function Auth({ mode }) {
               </Box>
             )}
 
-            {/* MAIN BUTTON */}
             <Button
               fullWidth
               variant="contained"
@@ -167,7 +257,6 @@ export default function Auth({ mode }) {
           </Stack>
         </form>
 
-        {/* BOTTOM TOGGLES */}
         <Box sx={{ mt: 4 }}>
           <Divider>
             <Typography variant="caption" color="text.disabled">
@@ -181,7 +270,10 @@ export default function Auth({ mode }) {
                 Don't have an account?{" "}
                 <Link
                   component="button"
-                  onClick={() => setView("register")}
+                  onClick={() => {
+                    setView("register");
+                    setError(""); // FIXED: Clear error when switching
+                  }}
                   sx={{ fontWeight: "bold", cursor: "pointer" }}
                 >
                   Register here
@@ -190,7 +282,10 @@ export default function Auth({ mode }) {
             ) : (
               <Button
                 startIcon={<ArrowBack />}
-                onClick={() => setView("login")}
+                onClick={() => {
+                  setView("login");
+                  setError(""); // FIXED: Clear error when switching
+                }}
                 size="small"
                 sx={{ textTransform: "none" }}
               >

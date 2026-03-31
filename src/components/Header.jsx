@@ -19,7 +19,8 @@ import {
   Logout,
 } from "@mui/icons-material";
 
-export default function Header({ mode }) {
+export default function Header({ mode, user }) {
+  // Added user prop
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
 
@@ -29,6 +30,24 @@ export default function Header({ mode }) {
 
   const handleClose = () => {
     setAnchorEl(null);
+  };
+
+  // --- LOGOUT HANDLER ---
+  const handleLogout = async () => {
+    try {
+      const response = await fetch("http://localhost:3000/api/auth/logout", {
+        method: "POST",
+        credentials: "include", // Required to send the session cookie to be destroyed
+      });
+
+      if (response.ok) {
+        // Refresh the page to trigger the App.jsx auth check,
+        // which will redirect the user to /login
+        window.location.href = "/login";
+      }
+    } catch (err) {
+      console.error("Logout failed", err);
+    }
   };
 
   return (
@@ -44,7 +63,6 @@ export default function Header({ mode }) {
         borderColor: mode === "light" ? "#eee" : "#333",
       }}
     >
-      {/* Changed justifyContent to flex-end to push items to the right */}
       <Toolbar sx={{ justifyContent: "flex-end" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
           <IconButton>
@@ -69,10 +87,20 @@ export default function Header({ mode }) {
               },
             }}
           >
-            <Avatar src="" sx={{ width: 32, height: 32 }} />
+            <Avatar
+              src={user?.avatar_url || ""}
+              sx={{
+                width: 32,
+                height: 32,
+                bgcolor: "#f19149",
+                fontSize: "0.9rem",
+              }}
+            >
+              {user?.name?.charAt(0) || "U"}
+            </Avatar>
             <Box sx={{ display: { xs: "none", sm: "block" } }}>
               <Typography variant="body2" fontWeight="bold">
-                Sam
+                {user?.name || "User"}
               </Typography>
             </Box>
             <KeyboardArrowDown
@@ -90,7 +118,6 @@ export default function Header({ mode }) {
             anchorEl={anchorEl}
             open={open}
             onClose={handleClose}
-            onClick={handleClose}
             transformOrigin={{ horizontal: "right", vertical: "top" }}
             anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
             PaperProps={{
@@ -113,7 +140,8 @@ export default function Header({ mode }) {
 
             <Divider />
 
-            <MenuItem onClick={handleClose} sx={{ color: "error.main" }}>
+            {/* TRIGGER LOGOUT HERE */}
+            <MenuItem onClick={handleLogout} sx={{ color: "error.main" }}>
               <ListItemIcon>
                 <Logout fontSize="small" color="error" />
               </ListItemIcon>

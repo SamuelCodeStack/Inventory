@@ -1,33 +1,91 @@
-import { useState, useMemo } from "react";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import { ThemeProvider, createTheme, Box, CssBaseline } from "@mui/material";
+import { useState, useMemo, useEffect } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  useLocation,
+  Navigate,
+} from "react-router-dom";
+import {
+  ThemeProvider,
+  createTheme,
+  Box,
+  CssBaseline,
+  CircularProgress,
+} from "@mui/material";
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
 import Inventory from "./components/Inventory.jsx";
 import PurchaseOrder from "./components/PurchaseOrder.jsx";
 import UserManagement from "./components/UserManagement.jsx";
 import Auth from "./components/Auth.jsx";
-
-// --- NEW IMPORTS (Ensure these files exist in your components folder) ---
-// import JobOrder from "./components/JobOrder.jsx";
 import RawMaterials from "./components/RawMaterials.jsx";
 
 function AppContent({ mode, toggleDarkMode }) {
   const location = useLocation();
-
-  // 1. State for Responsive Mobile Drawer
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch("http://localhost:3000/api/auth/me", {
+          credentials: "include",
+        });
+        const data = await response.json();
+        if (data.loggedIn) {
+          setUser(data.user);
+        } else {
+          setUser(null);
+        }
+      } catch (err) {
+        console.error("Auth check failed", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
 
-  // 2. Auth Page Detection
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          height: "100vh",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <CircularProgress color="primary" />
+      </Box>
+    );
+  }
+
   const isAuthPage = location.pathname === "/login";
 
   if (isAuthPage) {
     return (
       <Routes>
-        <Route path="/login" element={<Auth mode={mode} />} />
+        <Route
+          path="/login"
+          element={
+            !user ? (
+              <Auth mode={mode} toggleDarkMode={toggleDarkMode} />
+            ) : (
+              <Navigate to="/" />
+            )
+          }
+        />
       </Routes>
     );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   return (
@@ -38,12 +96,12 @@ function AppContent({ mode, toggleDarkMode }) {
         bgcolor: "background.default",
       }}
     >
-      {/* 3. Responsive Sidebar */}
       <Sidebar
         toggleDarkMode={toggleDarkMode}
         mode={mode}
         mobileOpen={mobileOpen}
         handleDrawerToggle={handleDrawerToggle}
+        user={user}
       />
 
       <Box
@@ -54,31 +112,24 @@ function AppContent({ mode, toggleDarkMode }) {
           transition: "margin 0.2s ease-in-out",
         }}
       >
-        {/* 4. Responsive Header */}
-        <Header mode={mode} onMenuClick={handleDrawerToggle} />
+        <Header mode={mode} onMenuClick={handleDrawerToggle} user={user} />
 
-        {/* 5. App Routes */}
         <Box sx={{ p: 0 }}>
           <Routes>
             <Route path="/" element={<Inventory mode={mode} />} />
-
             <Route
               path="/purchase-order"
               element={<PurchaseOrder mode={mode} />}
             />
-
-            {/* --- NEW ROUTES ADDED HERE --- */}
-            {/* <Route path="/job-order" element={<JobOrder mode={mode} />} /> */}
-
             <Route
               path="/raw-materials"
               element={<RawMaterials mode={mode} />}
             />
-
             <Route
               path="/user-management"
               element={<UserManagement mode={mode} />}
             />
+            <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </Box>
       </Box>
@@ -87,14 +138,17 @@ function AppContent({ mode, toggleDarkMode }) {
 }
 
 function App() {
-  const [mode, setMode] = useState("light");
+  // 1. Initialize state from localStorage so it remembers the mode on refresh/logout
+  const [mode, setMode] = useState(() => {
+    return localStorage.getItem("kimwin_theme_mode") || "light";
+  });
 
   const theme = useMemo(
     () =>
       createTheme({
         palette: {
           mode,
-          primary: { main: "#f19149" }, // Kimwin Orange
+          primary: { main: "#f19149" },
           background: {
             default: mode === "light" ? "#f8f9fa" : "#121212",
             paper: mode === "light" ? "#ffffff" : "#1e1e1e",
@@ -115,8 +169,14 @@ function App() {
     [mode],
   );
 
-  const toggleDarkMode = () =>
-    setMode((prev) => (prev === "light" ? "dark" : "light"));
+  // 2. Wrap toggle function to save the choice to localStorage
+  const toggleDarkMode = () => {
+    setMode((prev) => {
+      const newMode = prev === "light" ? "dark" : "light";
+      localStorage.setItem("kimwin_theme_mode", newMode);
+      return newMode;
+    });
+  };
 
   return (
     <BrowserRouter>

@@ -2,13 +2,21 @@ import pg from "pg";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import session from "express-session"; // Added
+import pgSession from "connect-pg-simple"; // Added
+import bcrypt from "bcrypt"; // Added
 
 dotenv.config();
 
 const app = express();
 const port = 3000;
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "http://localhost:5173", // Replace with your frontend URL
+    credentials: true,
+  }),
+);
 app.use(express.json());
 
 const pool = new pg.Pool({
@@ -19,11 +27,121 @@ const pool = new pg.Pool({
   port: process.env.PG_PORT,
 });
 
+// ==========================================
+// SESSION CONFIGURATION
+// ==========================================
+const PostgresStore = pgSession(session);
+
+app.use(
+  session({
+    store: new PostgresStore({ pool: pool }),
+    secret: process.env.SESSION_SECRET || "kimwin_secret_key",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: false, // Set to true if using HTTPS
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    },
+  }),
+);
+
 // Helper to clean IDs (Handles cases like "16:1")
 const cleanId = (id) => {
   if (typeof id === "string") return id.split(":")[0];
   return id;
 };
+
+// ==========================================
+// 0. AUTHENTICATION ENDPOINTS
+// ==========================================
+
+app.post("/api/auth/register", async (req, res) => {
+  const { name, email, password } = req.body;
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await pool.query(
+      "INSERT INTO users (full_name, email, password_hash) VALUES ($1, $2, $3)",
+      [name, email, hashedPassword],
+    );
+    res.status(201).json({ message: "User registered successfully" });
+  } catch (err) {
+    res.status(400).json({ error: "Email already exists" });
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const result = await pool.query("SELECT * FROM users WHERE email = $1", [
+      email,
+    ]);
+    if (result.rows.length === 0)
+      return res.status(401).json({ error: "Invalid credentials" });
+
+    const user = result.rows[0];
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+
+    if (isMatch) {
+      req.session.user = {
+        id: user.user_id,
+        name: user.full_name,
+        role: user.role,
+      };
+      res.json({ message: "Logged in successfully", user: req.session.user });
+    } else {
+      res.status(401).json({ error: "Invalid credentials" });
+    }
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.get("/api/auth/me", (req, res) => {
+  if (req.session.user) {
+    res.json({ loggedIn: true, user: req.session.user });
+  } else {
+    res.json({ loggedIn: false });
+  }
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  req.session.destroy((err) => {
+    if (err) return res.status(500).json({ error: "Logout failed" });
+    res.clearCookie("connect.sid");
+    res.json({ message: "Logged out" });
+  });
+});
+
+// ==========================================
+// FORGOT PASSWORD ENDPOINT
+// ==========================================
+
+app.post("/api/auth/forgot-password", async (req, res) => {
+  const { email } = req.body;
+  try {
+    // 1. Check if the user exists in the database
+    const result = await pool.query("SELECT * FROM users WHERE email = $1", [
+      email,
+    ]);
+
+    if (result.rows.length === 0) {
+      // Security Tip: Even if user doesn't exist, we usually return 200
+      // to prevent "email enumeration" (hackers checking who has an account)
+      return res
+        .status(200)
+        .json({ message: "If that email exists, a reset link has been sent." });
+    }
+
+    // 2. TODO: Generate a reset token and send an actual email here
+    console.log(`Password reset requested for: ${email}`);
+
+    res.json({ message: "Reset link sent to your email!" });
+  } catch (err) {
+    console.error("Forgot password error:", err);
+    res.status(500).json({ error: "Server error. Please try again later." });
+  }
+});
 
 // ==========================================
 // 1. INVENTORY ENDPOINTS
@@ -89,7 +207,6 @@ app.patch("/api/inventory/bulk", async (req, res) => {
   try {
     await client.query("BEGIN");
     for (const item of items) {
-      // UPDATED: CASE logic added to Bulk Update
       await client.query(
         `UPDATE inventory SET 
          quantity = $1, 
@@ -112,7 +229,6 @@ app.patch("/api/inventory/:id", async (req, res) => {
   const id = cleanId(req.params.id);
   const { name, category, uom, quantity, minStock } = req.body;
   try {
-    // UPDATED: CASE logic added to individual update to only update timestamp if quantity changes
     await pool.query(
       `UPDATE inventory SET 
        item_name=$1, category=$2, unit=$3, quantity=$4, minimum_stock=$5, 
@@ -450,6 +566,52 @@ app.delete("/api/raw-materials/:id", async (req, res) => {
     res.json({ message: "Deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: "Delete failed" });
+  }
+});
+
+// ==========================================
+// 4. USER MANAGEMENT ENDPOINTS
+// ==========================================
+
+app.get("/api/users", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT user_id, full_name, email, role FROM users ORDER BY user_id ASC",
+    );
+    res.json(
+      result.rows.map((user) => ({
+        id: user.user_id,
+        name: user.full_name,
+        email: user.email,
+        role: user.role,
+      })),
+    );
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+app.patch("/api/users/:id/role", async (req, res) => {
+  const id = req.params.id;
+  const { role } = req.body;
+  try {
+    await pool.query("UPDATE users SET role = $1 WHERE user_id = $2", [
+      role,
+      id,
+    ]);
+    res.json({ message: "Role updated successfully" });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update role" });
+  }
+});
+
+app.delete("/api/users/:id", async (req, res) => {
+  const id = req.params.id;
+  try {
+    await pool.query("DELETE FROM users WHERE user_id = $1", [id]);
+    res.json({ message: "User deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete user" });
   }
 });
 

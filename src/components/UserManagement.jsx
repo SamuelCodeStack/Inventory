@@ -35,36 +35,84 @@ export default function UserManagement({ mode }) {
   const [notification, setNotification] = useState({
     open: false,
     message: "",
+    severity: "success",
   });
 
   const isDark = mode === "dark";
 
+  // 1. FETCH USERS FROM DATABASE
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch("http://localhost:3000/api/users");
+      const data = await response.json();
+      setUsers(data);
+    } catch (err) {
+      console.error("Failed to fetch users", err);
+    }
+  };
+
   useEffect(() => {
-    const mockUsers = [
-      { id: 1, name: "Sam Win", email: "sam.win@kimwin.com", role: "Admin" },
-      { id: 2, name: "John Doe", email: "j.doe@kimwin.com", role: "Manager" },
-      {
-        id: 3,
-        name: "Alice Smith",
-        email: "alice.s@kimwin.com",
-        role: "Staff",
-      },
-      { id: 4, name: "Bob Johnson", email: "bob.j@kimwin.com", role: "Staff" },
-    ];
-    setUsers(mockUsers);
+    fetchUsers();
   }, []);
 
-  // Handler for dropdown change
-  const handleRoleChange = (userId, newRole) => {
-    setUsers((prevUsers) =>
-      prevUsers.map((user) =>
-        user.id === userId ? { ...user, role: newRole } : user,
-      ),
-    );
-    setNotification({
-      open: true,
-      message: `Role updated to ${newRole} successfully!`,
-    });
+  // 2. UPDATE ROLE IN DATABASE
+  const handleRoleChange = async (userId, newRole) => {
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/users/${userId}/role`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: newRole }),
+        },
+      );
+
+      if (response.ok) {
+        setUsers((prev) =>
+          prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u)),
+        );
+        setNotification({
+          open: true,
+          message: `Role updated to ${newRole} successfully!`,
+          severity: "success",
+        });
+      }
+    } catch (err) {
+      setNotification({
+        open: true,
+        message: "Update failed",
+        severity: "error",
+      });
+    }
+  };
+
+  // 3. DELETE USER FROM DATABASE
+  const handleDeleteUser = async (userId) => {
+    if (!window.confirm("Are you sure you want to delete this user?")) return;
+
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/users/${userId}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      if (response.ok) {
+        setUsers((prev) => prev.filter((u) => u.id !== userId));
+        setNotification({
+          open: true,
+          message: "User deleted",
+          severity: "info",
+        });
+      }
+    } catch (err) {
+      setNotification({
+        open: true,
+        message: "Delete failed",
+        severity: "error",
+      });
+    }
   };
 
   const filteredUsers = users.filter(
@@ -77,7 +125,6 @@ export default function UserManagement({ mode }) {
     <Box
       sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
     >
-      {/* HEADER SECTION */}
       <Box sx={{ mb: 4 }}>
         <Typography
           variant="h5"
@@ -91,7 +138,6 @@ export default function UserManagement({ mode }) {
         </Typography>
       </Box>
 
-      {/* TABLE CONTAINER */}
       <TableContainer
         component={Paper}
         sx={{ borderRadius: 3, p: 3, backgroundImage: "none" }}
@@ -147,9 +193,9 @@ export default function UserManagement({ mode }) {
                       sx={{
                         width: 32,
                         height: 32,
-                        fontSize: "0.9rem",
                         bgcolor: THEME_ORANGE,
                         color: "#000",
+                        fontSize: "0.9rem",
                       }}
                     >
                       {user.name.charAt(0)}
@@ -192,9 +238,12 @@ export default function UserManagement({ mode }) {
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    {/* Edit button removed from here */}
                     <Tooltip title="Delete User">
-                      <IconButton size="small" color="error">
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => handleDeleteUser(user.id)}
+                      >
                         <Delete fontSize="inherit" />
                       </IconButton>
                     </Tooltip>
@@ -206,14 +255,17 @@ export default function UserManagement({ mode }) {
         </Table>
       </TableContainer>
 
-      {/* SUCCESS NOTIFICATION */}
       <Snackbar
         open={notification.open}
         autoHideDuration={3000}
         onClose={() => setNotification({ ...notification, open: false })}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       >
-        <Alert severity="success" variant="filled" sx={{ width: "100%" }}>
+        <Alert
+          severity={notification.severity}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
           {notification.message}
         </Alert>
       </Snackbar>
