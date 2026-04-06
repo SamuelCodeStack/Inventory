@@ -19,6 +19,7 @@ import {
   CircularProgress,
   InputAdornment,
   TablePagination,
+  Grid, // Added for responsiveness
 } from "@mui/material";
 import {
   Add,
@@ -172,14 +173,21 @@ export default function RawMaterials({ mode }) {
 
   return (
     <Box
-      sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
+      sx={{
+        p: { xs: 2, sm: 4 },
+        mt: 8,
+        bgcolor: "background.default",
+        minHeight: "100vh",
+      }}
     >
       <Box
         sx={{
           display: "flex",
+          flexDirection: { xs: "column", md: "row" },
           justifyContent: "space-between",
           mb: 3,
-          alignItems: "center",
+          alignItems: { xs: "flex-start", md: "center" },
+          gap: 2,
         }}
       >
         <Box>
@@ -190,99 +198,116 @@ export default function RawMaterials({ mode }) {
             Dynamic unit tracking for chemicals & supplies
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2}>
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{ width: { xs: "100%", md: "auto" } }}
+        >
           <Button
             variant="outlined"
             startIcon={<Print />}
             onClick={() => setOpenPrintModal(true)}
-            sx={{ borderRadius: 2, fontWeight: "bold" }}
+            sx={{ borderRadius: 2, fontWeight: "bold", flex: 1 }}
           >
-            Print Report
+            Print
           </Button>
           <Button
             variant="contained"
             startIcon={<Add />}
             onClick={() => setOpenAddModal(true)}
-            sx={{ borderRadius: 2, fontWeight: "bold" }}
+            sx={{ borderRadius: 2, fontWeight: "bold", flex: 1 }}
           >
             Add Material
           </Button>
         </Stack>
       </Box>
 
-      <TableContainer component={Paper} sx={{ borderRadius: 3, p: 2 }}>
+      <TableContainer
+        component={Paper}
+        sx={{ borderRadius: 3, p: { xs: 1, sm: 2 } }}
+      >
         {/* --- FILTER BAR --- */}
-        <Stack
-          direction={{ xs: "column", md: "row" }}
+        <Grid
+          container
           spacing={2}
-          sx={{ mb: 3, p: 2, alignItems: "center" }}
+          sx={{ mb: 3, p: { xs: 1, sm: 2 } }}
+          alignItems="center"
         >
-          <TextField
-            size="small"
-            placeholder="Search Name or ID..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setPage(0);
-            }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ flexGrow: 1 }}
-          />
+          <Grid item xs={12} md={6}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search Name or ID..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(0);
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
 
-          <TextField
-            select
-            size="small"
-            label="Category"
-            value={categoryFilter}
-            onChange={(e) => {
-              setCategoryFilter(e.target.value);
-              setPage(0);
-            }}
-            sx={{ minWidth: 150 }}
-          >
-            <MenuItem value="All">All Categories</MenuItem>
-            <MenuItem value="Plastic">Plastic</MenuItem>
-            <MenuItem value="Injection">Injection</MenuItem>
-            <MenuItem value="Paper">Paper</MenuItem>
-            <MenuItem value="Trading">Trading</MenuItem>
-          </TextField>
+          <Grid item xs={6} md={2.5}>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Category"
+              value={categoryFilter}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setPage(0);
+              }}
+            >
+              <MenuItem value="All">All Categories</MenuItem>
+              <MenuItem value="Plastic">Plastic</MenuItem>
+              <MenuItem value="Injection">Injection</MenuItem>
+              <MenuItem value="Paper">Paper</MenuItem>
+              <MenuItem value="Trading">Trading</MenuItem>
+            </TextField>
+          </Grid>
 
-          <TextField
-            select
-            size="small"
-            label="Status"
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(0);
-            }}
-            sx={{ minWidth: 150 }}
-          >
-            <MenuItem value="All">All Status</MenuItem>
-            <MenuItem value="In Stock">In Stock</MenuItem>
-            <MenuItem value="Low Stock">Low Stock</MenuItem>
-            <MenuItem value="Out of Stock">Out of Stock</MenuItem>
-          </TextField>
+          <Grid item xs={6} md={2.5}>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Status"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(0);
+              }}
+            >
+              <MenuItem value="All">All Status</MenuItem>
+              <MenuItem value="In Stock">In Stock</MenuItem>
+              <MenuItem value="Low Stock">Low Stock</MenuItem>
+              <MenuItem value="Out of Stock">Out of Stock</MenuItem>
+            </TextField>
+          </Grid>
 
           {(searchQuery ||
             categoryFilter !== "All" ||
             statusFilter !== "All") && (
-            <Button
-              startIcon={<FilterListOff />}
-              onClick={handleResetFilters}
-              color="inherit"
-              size="small"
-            >
-              Reset
-            </Button>
+            <Grid item xs={12} md={1}>
+              <Button
+                startIcon={<FilterListOff />}
+                onClick={handleResetFilters}
+                color="inherit"
+                size="small"
+                fullWidth
+              >
+                Reset
+              </Button>
+            </Grid>
           )}
-        </Stack>
+        </Grid>
 
         {loading ? (
           <Box sx={{ display: "flex", justifyContent: "center", p: 10 }}>
@@ -290,143 +315,153 @@ export default function RawMaterials({ mode }) {
           </Box>
         ) : (
           <>
-            <Table size="small">
-              <TableHead
-                sx={{ bgcolor: isDark ? "rgba(255,255,255,0.05)" : "#f8f9fa" }}
-              >
-                <TableRow>
-                  <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>
-                    Material Name
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>Measurement</TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>Quantity</TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>
-                    Monitoring Logic
-                  </TableCell>
-                  <TableCell align="center" sx={{ fontWeight: "bold" }}>
-                    Status
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                    Actions
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginatedMaterials.length === 0 ? (
+            <Box sx={{ overflowX: "auto" }}>
+              <Table size="small" sx={{ minWidth: 800 }}>
+                <TableHead
+                  sx={{
+                    bgcolor: isDark ? "rgba(255,255,255,0.05)" : "#f8f9fa",
+                  }}
+                >
                   <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
-                      No raw materials match your filters.
+                    <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
+                    <TableCell sx={{ fontWeight: "bold" }}>
+                      Material Name
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
+                    <TableCell sx={{ fontWeight: "bold" }}>
+                      Measurement
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: "bold" }}>Quantity</TableCell>
+                    <TableCell sx={{ fontWeight: "bold" }}>
+                      Monitoring Logic
+                    </TableCell>
+                    <TableCell align="center" sx={{ fontWeight: "bold" }}>
+                      Status
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                      Actions
                     </TableCell>
                   </TableRow>
-                ) : (
-                  paginatedMaterials.map((row) => {
-                    const status = getStatus(row);
-                    return (
-                      <TableRow key={row.id} hover>
-                        <TableCell>#{row.id}</TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight="600">
-                            {row.name}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" color="text.secondary">
-                            {row.category}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight="bold">
-                            {row.baseValue} <small>{row.baseUnit}</small>
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {row.qtyValue} <small>{row.qtyUnit}</small>
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <TextField
-                            select
-                            size="small"
-                            value={row.minStockTarget}
-                            sx={{
-                              width: 140,
-                              "& .MuiInputBase-input": { fontSize: "0.75rem" },
-                            }}
-                            onChange={(e) =>
-                              handleTargetChange(row, e.target.value)
-                            }
-                          >
-                            <MenuItem value="base">By {row.baseUnit}</MenuItem>
-                            <MenuItem value="qty">By {row.qtyUnit}</MenuItem>
-                          </TextField>
-                          <Typography
-                            variant="caption"
-                            display="block"
-                            sx={{ mt: 0.5, color: "text.secondary" }}
-                          >
-                            Threshold: {row.minStockThreshold}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="center">
-                          <Box
-                            sx={{
-                              display: "inline-block",
-                              px: 1.5,
-                              py: 0.5,
-                              borderRadius: 1,
-                              fontSize: "0.75rem",
-                              fontWeight: "bold",
-                              bgcolor:
-                                status.color === "success"
-                                  ? "rgba(46, 204, 113, 0.15)"
-                                  : status.color === "warning"
-                                    ? "rgba(241, 145, 73, 0.15)"
-                                    : "rgba(231, 76, 60, 0.15)",
-                              color:
-                                status.color === "success"
-                                  ? "#27ae60"
-                                  : status.color === "warning"
-                                    ? "#e67e22"
-                                    : "#c0392b",
-                            }}
-                          >
-                            {status.label}
-                          </Box>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Stack
-                            direction="row"
-                            spacing={0.5}
-                            justifyContent="flex-end"
-                          >
-                            <IconButton
+                </TableHead>
+                <TableBody>
+                  {paginatedMaterials.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
+                        No raw materials match your filters.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedMaterials.map((row) => {
+                      const status = getStatus(row);
+                      return (
+                        <TableRow key={row.id} hover>
+                          <TableCell>#{row.id}</TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight="600">
+                              {row.name}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" color="text.secondary">
+                              {row.category}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight="bold">
+                              {row.baseValue} <small>{row.baseUnit}</small>
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {row.qtyValue} <small>{row.qtyUnit}</small>
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              select
                               size="small"
-                              color="info"
-                              onClick={() => {
-                                setSelectedItem(row);
-                                setOpenEditModal(true);
+                              value={row.minStockTarget}
+                              sx={{
+                                width: 140,
+                                "& .MuiInputBase-input": {
+                                  fontSize: "0.75rem",
+                                },
+                              }}
+                              onChange={(e) =>
+                                handleTargetChange(row, e.target.value)
+                              }
+                            >
+                              <MenuItem value="base">
+                                By {row.baseUnit}
+                              </MenuItem>
+                              <MenuItem value="qty">By {row.qtyUnit}</MenuItem>
+                            </TextField>
+                            <Typography
+                              variant="caption"
+                              display="block"
+                              sx={{ mt: 0.5, color: "text.secondary" }}
+                            >
+                              Threshold: {row.minStockThreshold}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="center">
+                            <Box
+                              sx={{
+                                display: "inline-block",
+                                px: 1.5,
+                                py: 0.5,
+                                borderRadius: 1,
+                                fontSize: "0.75rem",
+                                fontWeight: "bold",
+                                bgcolor:
+                                  status.color === "success"
+                                    ? "rgba(46, 204, 113, 0.15)"
+                                    : status.color === "warning"
+                                      ? "rgba(241, 145, 73, 0.15)"
+                                      : "rgba(231, 76, 60, 0.15)",
+                                color:
+                                  status.color === "success"
+                                    ? "#27ae60"
+                                    : status.color === "warning"
+                                      ? "#e67e22"
+                                      : "#c0392b",
                               }}
                             >
-                              <Edit fontSize="inherit" />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={() => handleDelete(row.id)}
+                              {status.label}
+                            </Box>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Stack
+                              direction="row"
+                              spacing={0.5}
+                              justifyContent="flex-end"
                             >
-                              <Delete fontSize="inherit" />
-                            </IconButton>
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
+                              <IconButton
+                                size="small"
+                                color="info"
+                                onClick={() => {
+                                  setSelectedItem(row);
+                                  setOpenEditModal(true);
+                                }}
+                              >
+                                <Edit fontSize="inherit" />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleDelete(row.id)}
+                              >
+                                <Delete fontSize="inherit" />
+                              </IconButton>
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </Box>
             <TablePagination
               rowsPerPageOptions={[10, 20, 50]}
               component="div"

@@ -19,8 +19,14 @@ import {
   ManageAccounts, // Icon for User Management
 } from "@mui/icons-material";
 
-export default function Sidebar({ toggleDarkMode, mode }) {
+export default function Sidebar({
+  toggleDarkMode,
+  mode,
+  mobileOpen,
+  handleDrawerToggle,
+}) {
   const location = useLocation();
+  const drawerWidth = 240;
 
   const menuItems = [
     {
@@ -35,33 +41,22 @@ export default function Sidebar({ toggleDarkMode, mode }) {
       path: "/purchase-order",
     },
 
-    {
-      text: "Raw Materials",
-      icon: <Layers />,
-      path: "/raw-materials",
-    },
-    {
-      text: "User Management",
-      icon: <ManageAccounts />,
-      section: "Administration", // New Section Header
-      path: "/user-management",
-    },
+    // {
+    //   text: "Raw Materials",
+    //   icon: <Layers />,
+    //   path: "/raw-materials",
+    // },
+    // {
+    //   text: "User Management",
+    //   icon: <ManageAccounts />,
+    //   section: "Administration", // New Section Header
+    //   path: "/user-management",
+    // },
   ];
 
-  return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: 240,
-        flexShrink: 0,
-        "& .MuiDrawer-paper": {
-          width: 240,
-          boxSizing: "border-box",
-          borderRight: mode === "light" ? "1px solid #eee" : "1px solid #333",
-          backgroundColor: mode === "light" ? "#fff" : "#121212",
-        },
-      }}
-    >
+  // Reusable content for both types of drawers
+  const drawerContent = (
+    <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
       {/* Logo Section */}
       <Box sx={{ p: 3, display: "flex", alignItems: "center", gap: 1 }}>
         <Box
@@ -88,7 +83,7 @@ export default function Sidebar({ toggleDarkMode, mode }) {
         </Typography>
       </Box>
 
-      <List sx={{ px: 2 }}>
+      <List sx={{ px: 2, order: { xs: 2, sm: 1 } }}>
         {menuItems.map((item, index) => {
           const isActive = location.pathname === item.path;
 
@@ -115,6 +110,7 @@ export default function Sidebar({ toggleDarkMode, mode }) {
                   component={Link}
                   to={item.path}
                   selected={isActive}
+                  onClick={handleDrawerToggle} // Closes drawer on mobile when link is clicked
                   sx={{
                     borderRadius: 2,
                     "&.Mui-selected": {
@@ -156,12 +152,17 @@ export default function Sidebar({ toggleDarkMode, mode }) {
 
       <Box
         sx={{
-          mt: "auto",
+          mt: { xs: 0, sm: "auto" },
           p: 2,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           borderTop: mode === "light" ? "1px solid #eee" : "1px solid #333",
+          borderBottom: {
+            xs: mode === "light" ? "1px solid #eee" : "1px solid #333",
+            sm: "none",
+          },
+          order: { xs: 1, sm: 2 }, // Moves the toggle box above the list on mobile (XS)
         }}
       >
         <Typography variant="body2" color="text.secondary">
@@ -187,6 +188,52 @@ export default function Sidebar({ toggleDarkMode, mode }) {
           }}
         />
       </Box>
-    </Drawer>
+    </Box>
+  );
+
+  return (
+    <Box
+      component="nav"
+      sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+    >
+      {/* Mobile Temporary Drawer */}
+      <Drawer
+        variant="temporary"
+        anchor="left" // Explicitly slide from left to right
+        open={mobileOpen}
+        onClose={handleDrawerToggle}
+        ModalProps={{
+          keepMounted: true, // Better open performance on mobile.
+        }}
+        sx={{
+          display: { xs: "block", sm: "none" },
+          "& .MuiDrawer-paper": {
+            width: drawerWidth,
+            boxSizing: "border-box",
+            borderRight: mode === "light" ? "1px solid #eee" : "1px solid #333",
+            backgroundColor: mode === "light" ? "#fff" : "#121212",
+          },
+        }}
+      >
+        {drawerContent}
+      </Drawer>
+
+      {/* Desktop Permanent Drawer */}
+      <Drawer
+        variant="permanent"
+        sx={{
+          display: { xs: "none", sm: "block" },
+          "& .MuiDrawer-paper": {
+            width: drawerWidth,
+            boxSizing: "border-box",
+            borderRight: mode === "light" ? "1px solid #eee" : "1px solid #333",
+            backgroundColor: mode === "light" ? "#fff" : "#121212",
+          },
+        }}
+        open
+      >
+        {drawerContent}
+      </Drawer>
+    </Box>
   );
 }

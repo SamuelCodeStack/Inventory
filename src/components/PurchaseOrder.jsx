@@ -21,6 +21,7 @@ import {
   Divider,
   TablePagination,
   MenuItem,
+  Grid, // Added for responsiveness
 } from "@mui/material";
 import {
   Add,
@@ -117,7 +118,8 @@ export default function PurchaseOrder({ mode }) {
   const handleStatusUpdate = async (id, newStatus, remarks = "") => {
     try {
       const response = await fetch(
-        `http://localhost:3000/api/purchase-orders/${id}/status`,
+        `${import.meta.env.VITE_API_URL}/purchase-orders/${id}/status`,
+        // `http://localhost:3000/api/purchase-orders/${id}/status`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -137,7 +139,8 @@ export default function PurchaseOrder({ mode }) {
     if (!window.confirm("Are you sure you want to delete this PO?")) return;
     try {
       const response = await fetch(
-        `http://localhost:3000/api/purchase-orders/${id}`,
+        `${import.meta.env.VITE_API_URL}/purchase-orders/${id}`,
+        // `http://localhost:3000/api/purchase-orders/${id}`,
         { method: "DELETE" },
       );
       if (response.ok) {
@@ -187,10 +190,23 @@ export default function PurchaseOrder({ mode }) {
 
   return (
     <Box
-      sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
+      sx={{
+        p: { xs: 2, sm: 4 },
+        mt: 8,
+        bgcolor: "background.default",
+        minHeight: "100vh",
+      }}
     >
       {/* Header Section */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 4 }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", md: "row" },
+          justifyContent: "space-between",
+          mb: 4,
+          gap: 2,
+        }}
+      >
         <Box>
           <Typography variant="h5" fontWeight="bold">
             Purchase Orders
@@ -199,20 +215,30 @@ export default function PurchaseOrder({ mode }) {
             Order Workflow Management
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2}>
+        <Stack
+          direction="row"
+          spacing={2}
+          sx={{ width: { xs: "100%", md: "auto" } }}
+        >
           <Button
             variant="outlined"
             startIcon={<Print />}
             onClick={() => setOpenPrintModal(true)}
+            fullWidth={false}
+            sx={{ flex: { xs: 1, md: "none" } }}
           >
-            Print Report
+            Print
           </Button>
           <Button
             variant="contained"
             color="primary"
             startIcon={<Add />}
             onClick={() => setOpenCreateModal(true)}
-            sx={{ fontWeight: "bold", color: "#000000" }}
+            sx={{
+              fontWeight: "bold",
+              color: "#000000",
+              flex: { xs: 1, md: "none" },
+            }}
           >
             Create PO
           </Button>
@@ -222,207 +248,214 @@ export default function PurchaseOrder({ mode }) {
       {/* Main Table Container */}
       <TableContainer
         component={Paper}
-        sx={{ borderRadius: 3, p: 3, backgroundImage: "none" }}
+        sx={{ borderRadius: 3, p: { xs: 1, sm: 3 }, backgroundImage: "none" }}
       >
         {/* --- FILTER BAR --- */}
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={2}
-          sx={{ mb: 3, alignItems: "center" }}
-        >
-          <TextField
-            size="small"
-            placeholder="Search customer or PO#..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setPage(0);
-            }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ flexGrow: 1 }}
-          />
+        <Grid container spacing={2} sx={{ mb: 3, alignItems: "center" }}>
+          <Grid item xs={12} md={6}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search customer or PO#..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(0);
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
 
-          <TextField
-            select
-            size="small"
-            label="Status Filter"
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(0);
-            }}
-            sx={{ minWidth: 200 }}
-          >
-            <MenuItem value="All">All Statuses</MenuItem>
-            {statusFilterOptions.map((option) => (
-              <MenuItem key={option} value={option}>
-                {option}
-              </MenuItem>
-            ))}
-          </TextField>
+          <Grid item xs={12} sm={8} md={4}>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Status Filter"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(0);
+              }}
+            >
+              <MenuItem value="All">All Status</MenuItem>
+              {statusFilterOptions.map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
 
           {(searchQuery || statusFilter !== "All") && (
-            <Button
-              startIcon={<FilterListOff />}
-              onClick={handleResetFilters}
-              color="inherit"
-              size="small"
-            >
-              Reset
-            </Button>
+            <Grid item xs={12} sm={4} md={2}>
+              <Button
+                startIcon={<FilterListOff />}
+                onClick={handleResetFilters}
+                color="inherit"
+                size="small"
+                fullWidth
+              >
+                Reset
+              </Button>
+            </Grid>
           )}
-        </Stack>
+        </Grid>
 
-        <Table size="small">
-          <TableHead
-            sx={{ bgcolor: isDark ? "rgba(255,255,255,0.02)" : "action.hover" }}
-          >
-            <TableRow>
-              <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Customer</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>PO Number</TableCell>
-              <TableCell align="center" sx={{ fontWeight: "bold" }}>
-                Status
-              </TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Remarks</TableCell>
-              <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                Actions
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {paginatedData.map((row) => {
-              const style = getStatusStyle(row.status);
-              const clean = row.status?.replace(/\s/g, "") || "";
-              const isOngoing = clean === "DeliverOnGoing";
-              const isFinal = clean === "Delivered" || clean === "Backload";
-              const isActionAvailable =
-                clean === "JobOrder" || clean === "Pending" || isOngoing;
-
-              return (
-                <TableRow key={row.id} hover>
-                  <TableCell>#{row.id}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight="600">
-                      {row.customer}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{row.poNo}</TableCell>
-                  <TableCell align="center">
-                    <Chip
-                      icon={
-                        isOngoing ? (
-                          <LocalShipping
-                            style={{ fontSize: "1rem", color: style.color }}
-                          />
-                        ) : null
-                      }
-                      label={row.status}
-                      sx={{
-                        fontWeight: "bold",
-                        bgcolor: style.bg,
-                        color: style.color,
-                        border: "none",
-                        fontSize: "0.75rem",
-                        height: 28,
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell sx={{ maxWidth: 200 }}>
-                    <Tooltip title={row.remarks || ""}>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{
-                          display: "-webkit-box",
-                          WebkitLineClamp: 1,
-                          WebkitBoxOrient: "vertical",
-                          overflow: "hidden",
-                          fontStyle: row.remarks ? "normal" : "italic",
-                        }}
-                      >
-                        {row.remarks || "No remarks"}
-                      </Typography>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      justifyContent="flex-end"
-                    >
-                      {isActionAvailable && (
-                        <Tooltip title="Update Status">
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => {
-                              setSelectedPO(row);
-                              setOpenDeliveryModal(true);
-                            }}
-                            sx={{ bgcolor: "rgba(25, 118, 210, 0.1)" }}
-                          >
-                            <CheckCircleOutline fontSize="inherit" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setSelectedPO(row);
-                          setOpenViewModal(true);
-                        }}
-                        sx={{
-                          color: "#2ecc71",
-                          bgcolor: "rgba(46, 204, 113, 0.1)",
-                        }}
-                      >
-                        <Visibility fontSize="inherit" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setSelectedPO(row);
-                          setOpenUpdateModal(true);
-                        }}
-                        disabled={isOngoing || isFinal}
-                        sx={{
-                          color: "#3498db",
-                          bgcolor: "rgba(52, 152, 219, 0.1)",
-                        }}
-                      >
-                        <Edit fontSize="inherit" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDelete(row.id)}
-                        sx={{
-                          color: "#e74c3c",
-                          bgcolor: "rgba(231, 76, 60, 0.1)",
-                        }}
-                      >
-                        <Delete fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-            {paginatedData.length === 0 && (
+        <Box sx={{ overflowX: "auto" }}>
+          <Table size="small" sx={{ minWidth: 800 }}>
+            <TableHead
+              sx={{
+                bgcolor: isDark ? "rgba(255,255,255,0.02)" : "action.hover",
+              }}
+            >
               <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
-                  No purchase orders match your filters.
+                <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>Customer</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>PO Number</TableCell>
+                <TableCell align="center" sx={{ fontWeight: "bold" }}>
+                  Status
+                </TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>Remarks</TableCell>
+                <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                  Actions
                 </TableCell>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {paginatedData.map((row) => {
+                const style = getStatusStyle(row.status);
+                const clean = row.status?.replace(/\s/g, "") || "";
+                const isOngoing = clean === "DeliverOnGoing";
+                const isFinal = clean === "Delivered" || clean === "Backload";
+                const isActionAvailable =
+                  clean === "JobOrder" || clean === "Pending" || isOngoing;
+
+                return (
+                  <TableRow key={row.id} hover>
+                    <TableCell>#{row.id}</TableCell>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight="600">
+                        {row.customer}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{row.poNo}</TableCell>
+                    <TableCell align="center">
+                      <Chip
+                        icon={
+                          isOngoing ? (
+                            <LocalShipping
+                              style={{ fontSize: "1rem", color: style.color }}
+                            />
+                          ) : null
+                        }
+                        label={row.status}
+                        sx={{
+                          fontWeight: "bold",
+                          bgcolor: style.bg,
+                          color: style.color,
+                          border: "none",
+                          fontSize: "0.75rem",
+                          height: 28,
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 200 }}>
+                      <Tooltip title={row.remarks || ""}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{
+                            display: "-webkit-box",
+                            WebkitLineClamp: 1,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                            fontStyle: row.remarks ? "normal" : "italic",
+                          }}
+                        >
+                          {row.remarks || "No remarks"}
+                        </Typography>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Stack
+                        direction="row"
+                        spacing={0.5}
+                        justifyContent="flex-end"
+                      >
+                        {isActionAvailable && (
+                          <Tooltip title="Update Status">
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => {
+                                setSelectedPO(row);
+                                setOpenDeliveryModal(true);
+                              }}
+                              sx={{ bgcolor: "rgba(25, 118, 210, 0.1)" }}
+                            >
+                              <CheckCircleOutline fontSize="inherit" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setSelectedPO(row);
+                            setOpenViewModal(true);
+                          }}
+                          sx={{
+                            color: "#2ecc71",
+                            bgcolor: "rgba(46, 204, 113, 0.1)",
+                          }}
+                        >
+                          <Visibility fontSize="inherit" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setSelectedPO(row);
+                            setOpenUpdateModal(true);
+                          }}
+                          disabled={isOngoing || isFinal}
+                          sx={{
+                            color: "#3498db",
+                            bgcolor: "rgba(52, 152, 219, 0.1)",
+                          }}
+                        >
+                          <Edit fontSize="inherit" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDelete(row.id)}
+                          sx={{
+                            color: "#e74c3c",
+                            bgcolor: "rgba(231, 76, 60, 0.1)",
+                          }}
+                        >
+                          <Delete fontSize="inherit" />
+                        </IconButton>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {paginatedData.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                    No purchase orders match your filters.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Box>
 
         <TablePagination
           rowsPerPageOptions={[10, 20, 50]}

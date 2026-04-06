@@ -19,6 +19,7 @@ import {
   Alert,
   TablePagination,
   MenuItem,
+  Grid, // Added for responsiveness
 } from "@mui/material";
 import {
   Add,
@@ -183,32 +184,51 @@ export default function Inventory({ mode }) {
 
   return (
     <Box
-      sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
+      sx={{
+        p: { xs: 2, sm: 4 }, // Reduced padding on mobile
+        mt: 8,
+        bgcolor: "background.default",
+        minHeight: "100vh",
+      }}
     >
       <Box
         sx={{
           display: "flex",
+          flexDirection: { xs: "column", md: "row" }, // Stack on mobile
           justifyContent: "space-between",
           mb: 3,
-          alignItems: "center",
+          alignItems: { xs: "flex-start", md: "center" },
+          gap: 2,
         }}
       >
         <Typography variant="h5" fontWeight="bold">
           Inventory Management
         </Typography>
-        <Stack direction="row" spacing={2}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            width: { xs: "100%", sm: "auto" },
+            overflowX: "auto", // Allow buttons to scroll if they overflow
+            pb: { xs: 1, sm: 0 },
+          }}
+        >
           <Button
             variant="outlined"
             startIcon={<Print />}
             onClick={() => setOpenPrintModal(true)}
+            size="small"
+            sx={{ flexShrink: 0 }}
           >
-            Print Report
+            Print
           </Button>
           <Button
             variant={isEditingQty ? "contained" : "outlined"}
             color={isEditingQty ? "warning" : "primary"}
             startIcon={<EditNote />}
             onClick={() => setIsEditingQty(!isEditingQty)}
+            size="small"
+            sx={{ flexShrink: 0 }}
           >
             {isEditingQty ? "Lock" : "Edit Qty"}
           </Button>
@@ -216,200 +236,226 @@ export default function Inventory({ mode }) {
             variant="contained"
             startIcon={<Add />}
             onClick={() => setOpenAddModal(true)}
+            size="small"
+            sx={{ flexShrink: 0 }}
           >
             Add Item
           </Button>
         </Stack>
       </Box>
 
-      <TableContainer component={Paper} sx={{ borderRadius: 3, p: 2 }}>
+      <TableContainer
+        component={Paper}
+        sx={{ borderRadius: 3, p: { xs: 1, sm: 2 } }}
+      >
         {/* --- FILTER BAR --- */}
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={2}
-          sx={{ mb: 3, alignItems: "center" }}
-        >
-          <TextField
-            size="small"
-            placeholder="Search Name or ID..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setPage(0);
-            }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ flexGrow: 1 }}
-          />
+        <Grid container spacing={2} sx={{ mb: 3, px: { xs: 1, sm: 0 } }}>
+          <Grid item xs={12} md={6}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search Name or ID..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(0);
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
 
-          <TextField
-            select
-            size="small"
-            label="Category"
-            value={categoryFilter}
-            onChange={(e) => {
-              setCategoryFilter(e.target.value);
-              setPage(0);
-            }}
-            sx={{ minWidth: 150 }}
-          >
-            <MenuItem value="All">All Categories</MenuItem>
-            <MenuItem value="Plastic">Plastic</MenuItem>
-            <MenuItem value="Injection">Injection</MenuItem>
-            <MenuItem value="Paper">Paper</MenuItem>
-            <MenuItem value="Trading">Trading</MenuItem>
-          </TextField>
+          <Grid item xs={6} md={2.5}>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Category"
+              value={categoryFilter}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setPage(0);
+              }}
+            >
+              <MenuItem value="All">All Categories</MenuItem>
+              <MenuItem value="Plastic">Plastic</MenuItem>
+              <MenuItem value="Injection">Injection</MenuItem>
+              <MenuItem value="Paper">Paper</MenuItem>
+              <MenuItem value="Trading">Trading</MenuItem>
+            </TextField>
+          </Grid>
 
-          <TextField
-            select
-            size="small"
-            label="Status"
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(0);
-            }}
-            sx={{ minWidth: 150 }}
-          >
-            <MenuItem value="All">All Status</MenuItem>
-            <MenuItem value="In Stock">In Stock</MenuItem>
-            <MenuItem value="Low Stock">Low Stock</MenuItem>
-            <MenuItem value="Out of Stock">Out of Stock</MenuItem>
-          </TextField>
+          <Grid item xs={6} md={2.5}>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Status"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(0);
+              }}
+            >
+              <MenuItem value="All">All Status</MenuItem>
+              <MenuItem value="In Stock">In Stock</MenuItem>
+              <MenuItem value="Low Stock">Low Stock</MenuItem>
+              <MenuItem value="Out of Stock">Out of Stock</MenuItem>
+            </TextField>
+          </Grid>
 
           {(searchQuery ||
             categoryFilter !== "All" ||
             statusFilter !== "All") && (
-            <Button
-              startIcon={<FilterListOff />}
-              onClick={handleResetFilters}
-              color="inherit"
-              size="small"
-            >
-              Reset
-            </Button>
+            <Grid item xs={12}>
+              <Button
+                startIcon={<FilterListOff />}
+                onClick={handleResetFilters}
+                color="inherit"
+                size="small"
+              >
+                Reset Filters
+              </Button>
+            </Grid>
           )}
-        </Stack>
+        </Grid>
 
-        <Table size="small">
-          <TableHead
-            sx={{ bgcolor: isDark ? "rgba(255,255,255,0.02)" : "action.hover" }}
-          >
-            <TableRow>
-              <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Item Name</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Unit</TableCell>
-              <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                Quantity
-              </TableCell>
-              <TableCell align="center" sx={{ fontWeight: "bold" }}>
-                Status
-              </TableCell>
-              <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                Action
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {paginatedData.map((row) => (
-              <TableRow key={row.id} hover>
-                <TableCell>#{String(row.id).split(":")[0]}</TableCell>
-                <TableCell>
-                  <Typography variant="body2" fontWeight="bold">
-                    {row.name}
-                  </Typography>
+        <Box sx={{ overflowX: "auto" }}>
+          {" "}
+          {/* Added horizontal scroll for table */}
+          <Table size="small" sx={{ minWidth: 650 }}>
+            <TableHead
+              sx={{
+                bgcolor: isDark ? "rgba(255,255,255,0.02)" : "action.hover",
+              }}
+            >
+              <TableRow>
+                <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>Item Name</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>Unit</TableCell>
+                <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                  Quantity
                 </TableCell>
-                <TableCell>
-                  <Chip label={row.category} size="small" variant="outlined" />
+                <TableCell align="center" sx={{ fontWeight: "bold" }}>
+                  Status
                 </TableCell>
-                <TableCell>{row.uom}</TableCell>
-                <TableCell align="right">
-                  <TextField
-                    type="number"
-                    variant={isEditingQty ? "outlined" : "standard"}
-                    size="small"
-                    disabled={!isEditingQty}
-                    value={row.quantity}
-                    onChange={(e) =>
-                      handleQuantityChangeLocal(row.id, e.target.value)
-                    }
-                    InputProps={{
-                      disableUnderline: true,
-                      sx: {
-                        fontWeight: "bold",
-                        width: "110px",
-                        "& input": { textAlign: "right", paddingRight: "8px" },
-                      },
-                    }}
-                  />
+                <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                  Action
                 </TableCell>
-                <TableCell align="center">
-                  <Box
-                    sx={{
-                      display: "inline-block",
-                      px: 1.5,
-                      py: 0.5,
-                      borderRadius: 1,
-                      fontSize: "0.75rem",
-                      fontWeight: "bold",
-                      bgcolor:
-                        row.status === "In Stock"
-                          ? "rgba(46, 204, 113, 0.15)"
-                          : row.status === "Low Stock"
-                            ? "rgba(241, 145, 73, 0.15)"
-                            : "rgba(231, 76, 60, 0.15)",
-                      color:
-                        row.status === "In Stock"
-                          ? "#27ae60"
-                          : row.status === "Low Stock"
-                            ? "#e67e22"
-                            : "#c0392b",
-                    }}
-                  >
-                    {row.status}
-                  </Box>
-                </TableCell>
-                <TableCell align="right">
-                  <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    <IconButton
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {paginatedData.map((row) => (
+                <TableRow key={row.id} hover>
+                  <TableCell>#{String(row.id).split(":")[0]}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight="bold">
+                      {row.name}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={row.category}
                       size="small"
-                      color="info"
-                      onClick={() => {
-                        setSelectedItem({
-                          ...row,
-                          id: String(row.id).split(":")[0],
-                        });
-                        setOpenEditModal(true);
+                      variant="outlined"
+                    />
+                  </TableCell>
+                  <TableCell>{row.uom}</TableCell>
+                  <TableCell align="right">
+                    <TextField
+                      type="number"
+                      variant={isEditingQty ? "outlined" : "standard"}
+                      size="small"
+                      disabled={!isEditingQty}
+                      value={row.quantity}
+                      onChange={(e) =>
+                        handleQuantityChangeLocal(row.id, e.target.value)
+                      }
+                      InputProps={{
+                        disableUnderline: true,
+                        sx: {
+                          fontWeight: "bold",
+                          width: "80px",
+                          "& input": {
+                            textAlign: "right",
+                            paddingRight: "8px",
+                          },
+                        },
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell align="center">
+                    <Box
+                      sx={{
+                        display: "inline-block",
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: 1,
+                        fontSize: "0.75rem",
+                        fontWeight: "bold",
+                        bgcolor:
+                          row.status === "In Stock"
+                            ? "rgba(46, 204, 113, 0.15)"
+                            : row.status === "Low Stock"
+                              ? "rgba(241, 145, 73, 0.15)"
+                              : "rgba(231, 76, 60, 0.15)",
+                        color:
+                          row.status === "In Stock"
+                            ? "#27ae60"
+                            : row.status === "Low Stock"
+                              ? "#e67e22"
+                              : "#c0392b",
                       }}
                     >
-                      <Edit fontSize="inherit" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => handleDelete(row.id)}
+                      {row.status}
+                    </Box>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      justifyContent="flex-end"
                     >
-                      <Delete fontSize="inherit" />
-                    </IconButton>
-                  </Stack>
-                </TableCell>
-              </TableRow>
-            ))}
-            {paginatedData.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
-                  No items match your filters.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+                      <IconButton
+                        size="small"
+                        color="info"
+                        onClick={() => {
+                          setSelectedItem({
+                            ...row,
+                            id: String(row.id).split(":")[0],
+                          });
+                          setOpenEditModal(true);
+                        }}
+                      >
+                        <Edit fontSize="inherit" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => handleDelete(row.id)}
+                      >
+                        <Delete fontSize="inherit" />
+                      </IconButton>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {paginatedData.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
+                    No items match your filters.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Box>
 
         <TablePagination
           rowsPerPageOptions={[10, 20, 50]}
@@ -427,6 +473,7 @@ export default function Inventory({ mode }) {
               mt: 2,
               p: 2,
               display: "flex",
+              flexDirection: { xs: "column", sm: "row" },
               justifyContent: "flex-end",
               gap: 2,
               borderTop: "1px solid",
@@ -440,14 +487,39 @@ export default function Inventory({ mode }) {
                 setInventoryData(JSON.parse(JSON.stringify(originalData)));
                 setIsEditingQty(false);
               }}
+              fullWidth={true}
+              sx={{ display: { sm: "none" } }} // Show full width button only on mobile
             >
               Discard
+            </Button>
+            <Button
+              variant="text"
+              color="inherit"
+              onClick={() => {
+                setInventoryData(JSON.parse(JSON.stringify(originalData)));
+                setIsEditingQty(false);
+              }}
+              sx={{ display: { xs: "none", sm: "inline-flex" } }} // Standard button for desktop
+            >
+              Discard
+            </Button>
+
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<Save />}
+              onClick={handleBulkSave}
+              fullWidth={true}
+              sx={{ display: { sm: "none" } }} // Show full width button only on mobile
+            >
+              Save Changes
             </Button>
             <Button
               variant="contained"
               color="success"
               startIcon={<Save />}
               onClick={handleBulkSave}
+              sx={{ display: { xs: "none", sm: "inline-flex" } }} // Standard button for desktop
             >
               Save Changes
             </Button>

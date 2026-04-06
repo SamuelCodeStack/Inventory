@@ -17,9 +17,11 @@ import {
   KeyboardArrowDown,
   History,
   Logout,
+  Menu as MenuIcon, // Added back for mobile responsiveness
 } from "@mui/icons-material";
 
-export default function Header({ mode, user }) {
+export default function Header({ mode, user, onMenuClick }) {
+  // Added onMenuClick prop back
   // Added user prop
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
@@ -84,9 +86,26 @@ export default function Header({ mode, user }) {
         ml: { sm: "240px" },
         borderBottom: "1px solid",
         borderColor: mode === "light" ? "#eee" : "#333",
+        left: "auto",
+        right: 0,
       }}
     >
-      <Toolbar sx={{ justifyContent: "flex-end" }}>
+      {/* Changed to space-between so menu icon is left and profile is right */}
+      <Toolbar sx={{ justifyContent: "space-between" }}>
+        {/* FIXED: This button was missing. It only shows on mobile (xs) */}
+        <IconButton
+          color="inherit"
+          aria-label="open drawer"
+          edge="start"
+          onClick={onMenuClick} // This triggers the handleDrawerToggle in App.jsx
+          sx={{ mr: 2, display: { sm: "none" } }}
+        >
+          <MenuIcon />
+        </IconButton>
+
+        {/* Empty Box to push items to right on desktop */}
+        <Box sx={{ flexGrow: 1, display: { xs: "none", sm: "block" } }} />
+
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
           <IconButton>
             <Badge variant="dot" color="error">
@@ -141,6 +160,7 @@ export default function Header({ mode, user }) {
             anchorEl={anchorEl}
             open={open}
             onClose={handleClose}
+            disableScrollLock={true} // Prevents shifting
             transformOrigin={{ horizontal: "right", vertical: "top" }}
             anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
             PaperProps={{
