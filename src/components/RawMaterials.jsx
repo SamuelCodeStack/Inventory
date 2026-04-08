@@ -137,8 +137,13 @@ export default function RawMaterials({ mode }) {
       return;
     try {
       const response = await fetch(
-        `http://localhost:3000/api/raw-materials/${id}`,
-        { method: "DELETE" },
+        // `http://localhost:3000/api/raw-materials/${id}`,
+        `${import.meta.env.VITE_API_URL}/raw-materials/${id}`,
+
+        {
+          method: "DELETE",
+          credentials: "include", // Required to send session cookies for activity logs
+        },
       );
       if (response.ok) {
         setMaterials(materials.filter((m) => m.id !== id));

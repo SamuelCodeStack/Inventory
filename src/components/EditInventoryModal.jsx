@@ -65,6 +65,7 @@ export default function EditInventoryModal({
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
+          credentials: "include", // Required to send session cookies for activity logs
           body: JSON.stringify({
             ...formData,
             quantity: itemData.quantity,

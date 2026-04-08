@@ -144,6 +144,15 @@ export default function Header({ mode, user, onMenuClick }) {
               <Typography variant="body2" fontWeight="bold">
                 {user?.name || "User"}
               </Typography>
+              {/* DISPLAY CLEANED USER ID HERE */}
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                display="block"
+                sx={{ lineHeight: 1 }}
+              >
+                ID: #{user?.id ? String(user.id).split(":")[0] : "N/A"}
+              </Typography>
             </Box>
             <KeyboardArrowDown
               fontSize="small"

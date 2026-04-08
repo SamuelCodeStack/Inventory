@@ -144,6 +144,7 @@ export default function UpdatePOModal({
         `${import.meta.env.VITE_API_URL}/purchase-orders/${cleanId}`,
         {
           method: "PUT",
+          credentials: "include", // Required to send session cookies for activity logs
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         },

@@ -24,7 +24,9 @@ import {
   Search,
   ManageAccounts,
   MailOutline,
+  History, // Added for Activity Log icon
 } from "@mui/icons-material";
+import UserActivityModal from "./UserActivityModal"; // Ensure you create this file
 
 const THEME_ORANGE = "#f2994a";
 const roles = ["Admin", "Manager", "Staff"];
@@ -37,6 +39,10 @@ export default function UserManagement({ mode }) {
     message: "",
     severity: "success",
   });
+
+  // Modal States for Activity Log
+  const [openLogModal, setOpenLogModal] = useState(false);
+  const [selectedUserForLog, setSelectedUserForLog] = useState(null);
 
   const isDark = mode === "dark";
 
@@ -93,9 +99,11 @@ export default function UserManagement({ mode }) {
 
     try {
       const response = await fetch(
-        `http://localhost:3000/api/users/${userId}`,
+        // `http://localhost:3000/api/users/${userId}`,
+        `${import.meta.env.VITE_API_URL}/users/${userId}`,
         {
           method: "DELETE",
+          credentials: "include", // Required to send session cookies for activity logs
         },
       );
 
@@ -239,6 +247,21 @@ export default function UserManagement({ mode }) {
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={1} justifyContent="flex-end">
+                    {/* ADDED VIEW LOG BUTTON */}
+                    <Tooltip title="View Activity Logs">
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={() => {
+                          setSelectedUserForLog(user);
+                          setOpenLogModal(true);
+                        }}
+                        sx={{ bgcolor: "rgba(242, 153, 74, 0.1)" }}
+                      >
+                        <History fontSize="inherit" />
+                      </IconButton>
+                    </Tooltip>
+
                     <Tooltip title="Delete User">
                       <IconButton
                         size="small"
@@ -255,6 +278,16 @@ export default function UserManagement({ mode }) {
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* ACTIVITY LOG MODAL COMPONENT */}
+      <UserActivityModal
+        open={openLogModal}
+        handleClose={() => {
+          setOpenLogModal(false);
+          setSelectedUserForLog(null);
+        }}
+        user={selectedUserForLog}
+      />
 
       <Snackbar
         open={notification.open}

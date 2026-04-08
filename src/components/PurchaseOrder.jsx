@@ -122,6 +122,7 @@ export default function PurchaseOrder({ mode }) {
         // `http://localhost:3000/api/purchase-orders/${id}/status`,
         {
           method: "PATCH",
+          credentials: "include", // FIXED: Added to ensure the user session is sent for logging
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: newStatus, remarks: remarks }),
         },
@@ -141,7 +142,10 @@ export default function PurchaseOrder({ mode }) {
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/purchase-orders/${id}`,
         // `http://localhost:3000/api/purchase-orders/${id}`,
-        { method: "DELETE" },
+        {
+          method: "DELETE",
+          credentials: "include", // Required to send session cookies for activity logs
+        },
       );
       if (response.ok) {
         fetchPurchaseOrders();

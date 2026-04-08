@@ -49,6 +49,7 @@ export default function AddRawMaterialModal({
         `${import.meta.env.VITE_API_URL}/raw-materials`,
         {
           method: "POST",
+          credentials: "include", // Required to send session cookies for activity logs
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ...formData,

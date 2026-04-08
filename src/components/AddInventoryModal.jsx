@@ -66,6 +66,7 @@ export default function AddInventoryModal({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include", // Required to send session cookies for activity logs
           body: JSON.stringify({ items }),
         },
       );
@@ -81,7 +82,6 @@ export default function AddInventoryModal({
       setLoading(false);
     }
   };
-
   return (
     <Modal open={open} onClose={handleClose}>
       <Box

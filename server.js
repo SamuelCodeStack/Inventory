@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import session from "express-session"; // Added
 import pgSession from "connect-pg-simple"; // Added
 import bcrypt from "bcrypt"; // Added
+import cron from "node-cron";
 
 dotenv.config();
 
@@ -57,6 +58,27 @@ app.use(
 const cleanId = (id) => {
   if (typeof id === "string") return id.split(":")[0];
   return id;
+};
+
+// --- ACTIVITY LOG HELPER ---
+const logActivity = async (
+  req,
+  actionType,
+  tableName,
+  recordId,
+  description,
+) => {
+  try {
+    const userId = req.session?.user?.id || null;
+    const userName = req.session?.user?.name || "System";
+    await pool.query(
+      `INSERT INTO activity_logs (user_id, user_name, action_type, table_name, record_id, description) 
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [userId, userName, actionType, tableName, recordId, description],
+    );
+  } catch (err) {
+    console.error("Failed to write activity log:", err);
+  }
 };
 
 // ==========================================
@@ -187,8 +209,8 @@ app.post("/api/inventory/bulk-add", async (req, res) => {
   try {
     await client.query("BEGIN");
     for (const item of items) {
-      await client.query(
-        "INSERT INTO inventory (item_name, category, unit, quantity, minimum_stock, created_at) VALUES ($1, $2, $3, $4, $5, CURRENT_DATE)",
+      const result = await client.query(
+        "INSERT INTO inventory (item_name, category, unit, quantity, minimum_stock, created_at) VALUES ($1, $2, $3, $4, $5, CURRENT_DATE) RETURNING item_id",
         [
           item.name,
           item.category,
@@ -196,6 +218,13 @@ app.post("/api/inventory/bulk-add", async (req, res) => {
           item.quantity || 0,
           item.minStock || 10,
         ],
+      );
+      await logActivity(
+        req,
+        "INSERT",
+        "inventory",
+        result.rows[0].item_id,
+        `Added new item: ${item.name}`,
       );
     }
     await client.query("COMMIT");
@@ -214,12 +243,20 @@ app.patch("/api/inventory/bulk", async (req, res) => {
   try {
     await client.query("BEGIN");
     for (const item of items) {
+      const id = cleanId(item.id);
       await client.query(
         `UPDATE inventory SET 
          quantity = $1, 
          updated_at = CASE WHEN quantity != $1 THEN now() ELSE updated_at END 
          WHERE item_id = $2`,
-        [item.quantity, cleanId(item.id)],
+        [item.quantity, id],
+      );
+      await logActivity(
+        req,
+        "UPDATE",
+        "inventory",
+        id,
+        `Bulk updated quantity to ${item.quantity}`,
       );
     }
     await client.query("COMMIT");
@@ -243,6 +280,13 @@ app.patch("/api/inventory/:id", async (req, res) => {
        WHERE item_id=$6`,
       [name, category, uom, quantity, minStock, id],
     );
+    await logActivity(
+      req,
+      "UPDATE",
+      "inventory",
+      id,
+      `Updated item details for: ${name}`,
+    );
     res.json({ message: "Item updated" });
   } catch (err) {
     res.status(500).json({ error: "Update failed" });
@@ -252,7 +296,21 @@ app.patch("/api/inventory/:id", async (req, res) => {
 app.delete("/api/inventory/:id", async (req, res) => {
   const id = cleanId(req.params.id);
   try {
+    const itemInfo = await pool.query(
+      "SELECT item_name FROM inventory WHERE item_id = $1",
+      [id],
+    );
+    const itemName = itemInfo.rows[0]?.item_name || "Unknown Item";
+
     await pool.query("DELETE FROM inventory WHERE item_id = $1", [id]);
+
+    await logActivity(
+      req,
+      "DELETE",
+      "inventory",
+      id,
+      `Deleted item: ${itemName}`,
+    );
     res.json({ message: "Deleted" });
   } catch (err) {
     res.status(500).json({ error: "Delete failed" });
@@ -351,6 +409,13 @@ app.post("/api/purchase-orders", async (req, res) => {
       ]);
     }
 
+    await logActivity(
+      req,
+      "INSERT",
+      "purchase_order",
+      newPoId,
+      `Created PO #${po_number} for ${customer_name}`,
+    );
     await client.query("COMMIT");
     res
       .status(201)
@@ -427,6 +492,13 @@ app.put("/api/purchase-orders/:id", async (req, res) => {
       ]);
     }
 
+    await logActivity(
+      req,
+      "UPDATE",
+      "purchase_order",
+      id,
+      `Updated details for PO #${po_number}`,
+    );
     await client.query("COMMIT");
     res.json({ message: "Purchase Order updated successfully" });
   } catch (err) {
@@ -458,6 +530,13 @@ app.patch("/api/purchase-orders/:id/status", async (req, res) => {
     await pool.query(
       "UPDATE purchase_order SET status = $1, remarks = $2, status_date = CURRENT_DATE WHERE po_id = $3",
       [status, remarks || "", id],
+    );
+    await logActivity(
+      req,
+      "FINALIZE", // Changed from "UPDATE" to "FINALIZE"
+      "purchase_order",
+      id,
+      `Changed status to ${status}`,
     );
     res.json({ message: "Status updated" });
   } catch (err) {
@@ -520,6 +599,13 @@ app.post("/api/raw-materials", async (req, res) => {
         minStockTarget,
       ],
     );
+    await logActivity(
+      req,
+      "INSERT",
+      "raw_materials",
+      result.rows[0].material_id,
+      `Added raw material: ${name}`,
+    );
     res.status(201).json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -560,6 +646,13 @@ app.put("/api/raw-materials/:id", async (req, res) => {
         id,
       ],
     );
+    await logActivity(
+      req,
+      "UPDATE",
+      "raw_materials",
+      id,
+      `Updated raw material: ${name}`,
+    );
     res.json({ message: "Raw material updated" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -569,7 +662,21 @@ app.put("/api/raw-materials/:id", async (req, res) => {
 app.delete("/api/raw-materials/:id", async (req, res) => {
   const id = cleanId(req.params.id);
   try {
+    const info = await pool.query(
+      "SELECT material_name FROM raw_materials WHERE material_id = $1",
+      [id],
+    );
+    const name = info.rows[0]?.material_name || "Unknown Material";
+
     await pool.query("DELETE FROM raw_materials WHERE material_id = $1", [id]);
+
+    await logActivity(
+      req,
+      "DELETE",
+      "raw_materials",
+      id,
+      `Deleted raw material: ${name}`,
+    );
     res.json({ message: "Deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: "Delete failed" });
@@ -606,6 +713,13 @@ app.patch("/api/users/:id/role", async (req, res) => {
       role,
       id,
     ]);
+    await logActivity(
+      req,
+      "UPDATE",
+      "users",
+      id,
+      `Changed user role to ${role}`,
+    );
     res.json({ message: "Role updated successfully" });
   } catch (err) {
     res.status(500).json({ error: "Failed to update role" });
@@ -615,10 +729,70 @@ app.patch("/api/users/:id/role", async (req, res) => {
 app.delete("/api/users/:id", async (req, res) => {
   const id = req.params.id;
   try {
+    const userInfo = await pool.query(
+      "SELECT full_name FROM users WHERE user_id = $1",
+      [id],
+    );
+    const name = userInfo.rows[0]?.full_name || "Unknown User";
+
     await pool.query("DELETE FROM users WHERE user_id = $1", [id]);
+
+    await logActivity(
+      req,
+      "DELETE",
+      "users",
+      id,
+      `Deleted user account: ${name}`,
+    );
     res.json({ message: "User deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: "Failed to delete user" });
+  }
+});
+
+// ==========================================
+// 5. ACTIVITY LOGS ENDPOINTS
+// ==========================================
+
+app.get("/api/logs/user/:userId", async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const result = await pool.query(
+      "SELECT * FROM activity_logs WHERE user_id = $1 ORDER BY created_at DESC",
+      [userId],
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: "Fetch logs failed" });
+  }
+});
+
+app.get("/api/logs", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 200",
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: "Fetch logs failed" });
+  }
+});
+
+// ==========================================
+// AUTOMATIC LOG CLEANUP
+// Runs every day at 00:00 (Midnight)
+// ==========================================
+cron.schedule("0 0 * * *", async () => {
+  console.log("--- Starting Scheduled Log Cleanup ---");
+  try {
+    const result = await pool.query(
+      "DELETE FROM activity_logs WHERE created_at < NOW() - INTERVAL '7 days'",
+    );
+    console.log(
+      `Cleanup complete: Deleted ${result.rowCount} logs older than 7 days.`,
+    );
+  } catch (err) {
+    console.error("Scheduled cleanup failed:", err);
   }
 });
 

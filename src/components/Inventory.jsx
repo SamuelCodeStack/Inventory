@@ -150,11 +150,16 @@ export default function Inventory({ mode }) {
         })),
     };
     try {
-      const response = await fetch(`http://localhost:3000/api/inventory/bulk`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const response = await fetch(
+        // `http://localhost:3000/api/inventory/bulk`,
+        `${import.meta.env.VITE_API_URL}/inventory/bulk`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
       if (response.ok) {
         showMessage("Quantities updated!", "info");
         setIsEditingQty(false);
@@ -170,8 +175,12 @@ export default function Inventory({ mode }) {
     if (!window.confirm(`Delete item #${cleanId}?`)) return;
     try {
       const res = await fetch(
-        `http://localhost:3000/api/inventory/${cleanId}`,
-        { method: "DELETE" },
+        // `http://localhost:3000/api/inventory/${cleanId}`,
+        `${import.meta.env.VITE_API_URL}/inventory/${cleanId}`,
+        {
+          method: "DELETE",
+          credentials: "include", // Required to send session cookies for activity logs
+        },
       );
       if (res.ok) {
         setInventoryData((prev) => prev.filter((item) => item.id !== id));

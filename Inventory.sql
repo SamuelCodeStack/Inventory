@@ -1,3 +1,4 @@
+
 CREATE TABLE inventory (
     item_id SERIAL PRIMARY KEY,
     item_name VARCHAR(255) NOT NULL,
@@ -51,17 +52,17 @@ CREATE TABLE raw_materials (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- CREATE TABLE activity_log (
---     activity_log_id SERIAL PRIMARY KEY,
---     item_id INT REFERENCES inventory(item_id) ON DELETE SET NULL,   
---     item_name VARCHAR(50),
---     quantity INT,
---     action_type VARCHAR(50) NOT NULL, -- e.g., 'Stock In', 'Stock Out', 'Deletion'
--- 	users_id INT REFERENCES users(users_id) ON DELETE SET NULL, -- THE FOREIGN KEY
---     handled_by VARCHAR(255), -- Keep this for a text snapshot of the name
---     remarks VARCHAR(255) NOT NULL,
---     logged_at TIMESTAMPTZ DEFAULT NOW()
--- );
+CREATE TABLE activity_logs (
+    log_id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(user_id) ON DELETE SET NULL,
+    user_name VARCHAR(255), -- Stores name at time of action in case user is deleted
+    action_type VARCHAR(50) NOT NULL, -- 'INSERT', 'UPDATE', 'DELETE'
+    table_name VARCHAR(100) NOT NULL, -- 'inventory', 'purchase_order', etc.
+    record_id INT, -- The ID of the item affected
+    description TEXT, -- Summary of what changed (e.g., "Updated quantity from 10 to 50")
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 
 CREATE TABLE users (
     user_id SERIAL PRIMARY KEY,

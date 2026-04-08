@@ -66,6 +66,7 @@ export default function EditRawMaterialModal({
         `${import.meta.env.VITE_API_URL}/raw-materials/${itemData.id}`,
         {
           method: "PUT",
+          credentials: "include", // Required to send session cookies for activity logs
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: formData.name,
