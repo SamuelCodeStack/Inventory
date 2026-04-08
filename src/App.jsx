@@ -20,6 +20,7 @@ import PurchaseOrder from "./components/PurchaseOrder.jsx";
 import UserManagement from "./components/UserManagement.jsx";
 import Auth from "./components/Auth.jsx";
 import RawMaterials from "./components/RawMaterials.jsx";
+import AllActivityLogs from "./components/AllActivityLogs.jsx";
 
 function AppContent({ mode, toggleDarkMode }) {
   const location = useLocation();
@@ -154,6 +155,11 @@ function AppContent({ mode, toggleDarkMode }) {
             <Route
               path="/user-management"
               element={<UserManagement mode={mode} />}
+            />
+
+            <Route
+              path="/activity-logs"
+              element={<AllActivityLogs mode={mode} />}
             />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
+  AppBar,
+  Toolbar,
   Box,
   Typography,
   Button,
@@ -89,6 +91,12 @@ export default function PurchaseOrder({ mode }) {
 
   useEffect(() => {
     fetchPurchaseOrders();
+
+    // --- CLEANUP EFFECT TO FIX DISABLED SCROLLBAR ---
+    return () => {
+      document.body.style.overflow = "auto";
+      document.body.style.paddingRight = "0px";
+    };
   }, []);
 
   // --- HELPERS ---
@@ -287,6 +295,9 @@ export default function PurchaseOrder({ mode }) {
                 setStatusFilter(e.target.value);
                 setPage(0);
               }}
+              SelectProps={{
+                MenuProps: { disableScrollLock: true }, // Prevents scroll lock on select
+              }}
             >
               <MenuItem value="All">All Status</MenuItem>
               {statusFilterOptions.map((option) => (
@@ -392,6 +403,7 @@ export default function PurchaseOrder({ mode }) {
                         direction="row"
                         spacing={0.5}
                         justifyContent="flex-end"
+                        member="true"
                       >
                         {isActionAvailable && (
                           <Tooltip title="Update Status">
@@ -469,6 +481,9 @@ export default function PurchaseOrder({ mode }) {
           page={page}
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
+          SelectProps={{
+            MenuProps: { disableScrollLock: true }, // Prevents scroll lock on rows per page select
+          }}
         />
       </TableContainer>
 

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom"; // Added for navigation
 import {
   AppBar,
   Toolbar,
@@ -17,13 +18,18 @@ import {
   KeyboardArrowDown,
   History,
   Logout,
+  Person, // Added for Profile icon
   Menu as MenuIcon, // Added back for mobile responsiveness
 } from "@mui/icons-material";
+import UserActivityModal from "./UserActivityModal"; // Import the modal
 
 export default function Header({ mode, user, onMenuClick }) {
   // Added onMenuClick prop back
   // Added user prop
+  const navigate = useNavigate(); // Hook for navigation
   const [anchorEl, setAnchorEl] = useState(null);
+  const [unreadLogs, setUnreadLogs] = useState(0); // State for notification badge
+  const [openPersonalLogs, setOpenPersonalLogs] = useState(false); // Modal state
   const open = Boolean(anchorEl);
 
   const handleClick = (event) => {
@@ -75,6 +81,44 @@ export default function Header({ mode, user, onMenuClick }) {
     }
   };
 
+  // FETCH ACTIVITY LOG COUNT (Polling for notifications)
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const cleanId = String(user?.id).split(":")[0];
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/logs/user/${cleanId}`,
+          {
+            credentials: "include",
+          },
+        );
+        const data = await response.json();
+
+        // --- LOCAL STORAGE LOGIC ---
+        // Get the last time the user checked notifications from their browser
+        const lastRead = localStorage.getItem(`lastReadLogs_${cleanId}`);
+
+        if (lastRead) {
+          // Only count logs that happened AFTER the stored timestamp
+          const newLogs = data.filter(
+            (log) => new Date(log.created_at) > new Date(lastRead),
+          );
+          setUnreadLogs(newLogs.length);
+        } else {
+          setUnreadLogs(data.length);
+        }
+      } catch (err) {
+        console.error("Notification fetch failed", err);
+      }
+    };
+
+    if (user) {
+      fetchUnreadCount();
+      const interval = setInterval(fetchUnreadCount, 30000); // Check every 30 seconds
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+
   return (
     <AppBar
       position="fixed"
@@ -107,8 +151,20 @@ export default function Header({ mode, user, onMenuClick }) {
         <Box sx={{ flexGrow: 1, display: { xs: "none", sm: "block" } }} />
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <IconButton>
-            <Badge variant="dot" color="error">
+          {/* UPDATED: Clears badge using LocalStorage and navigates */}
+          <IconButton
+            onClick={() => {
+              const cleanId = String(user?.id).split(":")[0];
+              // Save the current time to LocalStorage so these logs are now "read"
+              localStorage.setItem(
+                `lastReadLogs_${cleanId}`,
+                new Date().toISOString(),
+              );
+              setUnreadLogs(0);
+              navigate("/activity-logs");
+            }}
+          >
+            <Badge badgeContent={unreadLogs} color="error" max={99}>
               <NotificationsNone sx={{ color: "text.primary" }} />
             </Badge>
           </IconButton>
@@ -185,6 +241,18 @@ export default function Header({ mode, user, onMenuClick }) {
           >
             <MenuItem onClick={handleClose}>
               <ListItemIcon>
+                <Person fontSize="small" />
+              </ListItemIcon>
+              Profile
+            </MenuItem>
+
+            <MenuItem
+              onClick={() => {
+                handleClose();
+                setOpenPersonalLogs(true);
+              }}
+            >
+              <ListItemIcon>
                 <History fontSize="small" />
               </ListItemIcon>
               Activity
@@ -202,6 +270,13 @@ export default function Header({ mode, user, onMenuClick }) {
           </Menu>
         </Box>
       </Toolbar>
+
+      {/* MODAL FOR LOGGED IN USER'S ACTIVITY */}
+      <UserActivityModal
+        open={openPersonalLogs}
+        handleClose={() => setOpenPersonalLogs(false)}
+        user={user}
+      />
     </AppBar>
   );
 }
