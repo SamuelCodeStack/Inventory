@@ -21,6 +21,7 @@ import UserManagement from "./components/UserManagement.jsx";
 import Auth from "./components/Auth.jsx";
 import RawMaterials from "./components/RawMaterials.jsx";
 import AllActivityLogs from "./components/AllActivityLogs.jsx";
+import Dashboard from "./components/Dashboard.jsx"; // ADDED: Dashboard Import
 
 function AppContent({ mode, toggleDarkMode }) {
   const location = useLocation();
@@ -143,7 +144,12 @@ function AppContent({ mode, toggleDarkMode }) {
 
         <Box sx={{ p: 0 }}>
           <Routes>
-            <Route path="/" element={<Inventory mode={mode} />} />
+            {/* ADDED: Dashboard as Home */}
+            <Route path="/" element={<Dashboard mode={mode} />} />
+
+            {/* UPDATED: Inventory moved to /inventory */}
+            <Route path="/inventory" element={<Inventory mode={mode} />} />
+
             <Route
               path="/purchase-order"
               element={<PurchaseOrder mode={mode} />}
@@ -161,6 +167,7 @@ function AppContent({ mode, toggleDarkMode }) {
               path="/activity-logs"
               element={<AllActivityLogs mode={mode} />}
             />
+            {/* UPDATED: Redirect to Dashboard instead of Inventory */}
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </Box>

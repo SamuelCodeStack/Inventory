@@ -210,9 +210,15 @@ export default function Inventory({ mode }) {
           gap: 2,
         }}
       >
-        <Typography variant="h5" fontWeight="bold">
-          Inventory Management
-        </Typography>
+        <Box>
+          <Typography variant="h5" fontWeight="bold">
+            Inventory Management
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Stock Control & Material Tracking
+          </Typography>
+        </Box>
+
         <Stack
           direction="row"
           spacing={1}

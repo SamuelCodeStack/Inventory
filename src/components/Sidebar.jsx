@@ -14,6 +14,7 @@ import {
 import {
   Inventory,
   ShoppingCart,
+  Dashboard,
   Assignment, // Icon for Job Order
   Layers, // Icon for Raw Materials
   ManageAccounts, // Icon for User Management
@@ -30,10 +31,16 @@ export default function Sidebar({
 
   const menuItems = [
     {
+      text: "Dashboard",
+      icon: <Dashboard />, // Import Dashboard from @mui/icons-material
+      section: "Main Menu",
+      path: "/",
+    },
+    {
       text: "Inventory",
       icon: <Inventory />,
-      section: "Main Menu", // Section Header
-      path: "/",
+      // section: "Main Menu", // Section Header
+      path: "/inventory",
     },
     {
       text: "Purchase Order",
