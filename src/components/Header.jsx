@@ -45,6 +45,7 @@ export default function Header({ mode, user, onMenuClick }) {
   //   try {
   //     const response = await fetch("http://localhost:3000/api/auth/logout", {
   //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
   //       credentials: "include", // Required to send the session cookie to be destroyed
   //     });
 
@@ -58,29 +59,27 @@ export default function Header({ mode, user, onMenuClick }) {
   //   }
   // };
 
+  // Inside handleLogout in Header.jsx
   const handleLogout = async () => {
     try {
-      // FIXED: Use VITE_API_URL from .env instead of hardcoded localhost
-      // We clean the URL to remove /api if it exists to reach the base auth route
-      const apiUrl = import.meta.env.VITE_API_URL.replace(/\/api$/, "");
-
-      const response = await fetch(`${apiUrl}/api/auth/logout`, {
+      const apiUrl = import.meta.env.VITE_API_URL;
+      const response = await fetch(`${apiUrl}/auth/logout`, {
         method: "POST",
-        credentials: "include", // Critical to send the cookie to the server to be destroyed
+        credentials: "include",
       });
 
       if (response.ok) {
-        // Force a full page reload to the login page
-        // This clears all React states and forces App.jsx to re-verify auth
+        // TRIGGER ALL OTHER TABS TO LOGOUT
+        localStorage.setItem("kimwin_logout", Date.now());
         window.location.href = "/login";
       }
     } catch (err) {
       console.error("Logout failed", err);
-      // Fallback: even if API fails, clear the local view
+      // Even if network fails, we clear local state to prevent "zombie" sessions
+      localStorage.setItem("kimwin_logout", Date.now());
       window.location.href = "/login";
     }
   };
-
   // FETCH ACTIVITY LOG COUNT (Polling for notifications)
   useEffect(() => {
     const fetchUnreadCount = async () => {

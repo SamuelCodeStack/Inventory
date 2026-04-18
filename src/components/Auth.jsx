@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Paper,
@@ -37,6 +37,23 @@ export default function Auth({ mode, toggleDarkMode }) {
     email: "",
     password: "",
   });
+
+  // FIXED: Immediate cross-tab synchronization for Login and Logout
+  useEffect(() => {
+    const syncAuth = (event) => {
+      // If any tab logs in, all other tabs on the login page must redirect to home
+      if (event.key === "kimwin_login") {
+        window.location.href = "/";
+      }
+      // If any tab logs out, all other tabs must return to login
+      if (event.key === "kimwin_logout") {
+        window.location.href = "/login";
+      }
+    };
+
+    window.addEventListener("storage", syncAuth);
+    return () => window.removeEventListener("storage", syncAuth);
+  }, []);
 
   const togglePassword = () => setShowPassword(!showPassword);
 
@@ -113,6 +130,9 @@ export default function Auth({ mode, toggleDarkMode }) {
 
       if (response.ok) {
         if (view === "login") {
+          // CRITICAL: Set the login signal BEFORE redirecting the current tab
+          // This ensures other tabs receive the "storage" event immediately
+          localStorage.setItem("kimwin_login", Date.now().toString());
           window.location.href = "/";
         } else {
           setView("login");

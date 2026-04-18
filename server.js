@@ -136,9 +136,17 @@ app.get("/api/auth/me", (req, res) => {
 
 app.post("/api/auth/logout", (req, res) => {
   req.session.destroy((err) => {
-    if (err) return res.status(500).json({ error: "Logout failed" });
-    res.clearCookie("connect.sid");
-    res.json({ message: "Logged out" });
+    if (err) {
+      return res.status(500).json({ error: "Could not log out" });
+    }
+    // This is the critical part: it clears the session cookie from the browser
+    res.clearCookie("connect.sid", {
+      path: "/",
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    });
+    return res.status(200).json({ message: "Logged out" });
   });
 });
 
@@ -451,8 +459,8 @@ app.put("/api/purchase-orders/:id", async (req, res) => {
 
     await client.query(
       `UPDATE purchase_order SET 
-        customer_name=$1, email=$2, contact=$3, company=$4, address=$5, 
-        total_price=$6, status=$7, status_date=CURRENT_DATE 
+         customer_name=$1, email=$2, contact=$3, company=$4, address=$5, 
+         total_price=$6, status=$7, status_date=CURRENT_DATE 
        WHERE po_id=$8`,
       [
         customer_name,
@@ -794,6 +802,17 @@ cron.schedule("0 0 * * *", async () => {
   } catch (err) {
     console.error("Scheduled cleanup failed:", err);
   }
+});
+
+// ==========================================
+// CATCH-ALL ERROR HANDLER
+// ==========================================
+app.use((err, req, res, next) => {
+  console.error("Global Error Handler:", err.stack);
+  res.status(500).json({
+    error: "Internal Server Error",
+    message: "An unexpected error occurred on the server.",
+  });
 });
 
 app.listen(port, "0.0.0.0", () =>

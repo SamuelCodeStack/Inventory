@@ -18,6 +18,7 @@ import {
   Assignment, // Icon for Job Order
   Layers, // Icon for Raw Materials
   ManageAccounts, // Icon for User Management
+  Storage,
 } from "@mui/icons-material";
 
 export default function Sidebar({
@@ -47,7 +48,11 @@ export default function Sidebar({
       icon: <ShoppingCart />,
       path: "/purchase-order",
     },
-
+    // {
+    //   text: "Backup",
+    //   icon: <Storage />,
+    //   path: "/backup",
+    // },
     // {
     //   text: "Raw Materials",
     //   icon: <Layers />,

@@ -22,59 +22,11 @@ import Auth from "./components/Auth.jsx";
 import RawMaterials from "./components/RawMaterials.jsx";
 import AllActivityLogs from "./components/AllActivityLogs.jsx";
 import Dashboard from "./components/Dashboard.jsx"; // ADDED: Dashboard Import
+import Backup from "./components/Backup.jsx";
 
-function AppContent({ mode, toggleDarkMode }) {
+function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
   const location = useLocation();
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  // useEffect(() => {
-  //   const checkAuth = async () => {
-  //     try {
-  //       const response = await fetch("http://localhost:3000/api/auth/me", {
-  //         credentials: "include",
-  //       });
-  //       const data = await response.json();
-  //       if (data.loggedIn) {
-  //         setUser(data.user);
-  //       } else {
-  //         setUser(null);
-  //       }
-  //     } catch (err) {
-  //       console.error("Auth check failed", err);
-  //     } finally {
-  //       setLoading(false);
-  //     }
-  //   };
-  //   checkAuth();
-  // }, []);
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        // FIXED: Changed "http://localhost:3000" to use your VITE_API_URL variable
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/auth/me`,
-          {
-            credentials: "include",
-          },
-        );
-        const data = await response.json();
-        if (data.loggedIn) {
-          setUser(data.user);
-        } else {
-          setUser(null);
-        }
-      } catch (err) {
-        console.error("Auth check failed", err);
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-    checkAuth();
-  }, []);
 
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
 
@@ -95,25 +47,22 @@ function AppContent({ mode, toggleDarkMode }) {
 
   const isAuthPage = location.pathname === "/login";
 
-  if (isAuthPage) {
+  // STRICT GUARD: If no user, only the login route exists in the entire app
+  if (!user) {
     return (
       <Routes>
         <Route
           path="/login"
-          element={
-            !user ? (
-              <Auth mode={mode} toggleDarkMode={toggleDarkMode} />
-            ) : (
-              <Navigate to="/" />
-            )
-          }
+          element={<Auth mode={mode} toggleDarkMode={toggleDarkMode} />}
         />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
   }
 
-  if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+  // If logged in, redirect away from login
+  if (isAuthPage && user) {
+    return <Navigate to="/" replace />;
   }
 
   return (
@@ -144,12 +93,8 @@ function AppContent({ mode, toggleDarkMode }) {
 
         <Box sx={{ p: 0 }}>
           <Routes>
-            {/* ADDED: Dashboard as Home */}
             <Route path="/" element={<Dashboard mode={mode} />} />
-
-            {/* UPDATED: Inventory moved to /inventory */}
             <Route path="/inventory" element={<Inventory mode={mode} />} />
-
             <Route
               path="/purchase-order"
               element={<PurchaseOrder mode={mode} />}
@@ -162,12 +107,11 @@ function AppContent({ mode, toggleDarkMode }) {
               path="/user-management"
               element={<UserManagement mode={mode} />}
             />
-
             <Route
               path="/activity-logs"
               element={<AllActivityLogs mode={mode} />}
             />
-            {/* UPDATED: Redirect to Dashboard instead of Inventory */}
+            <Route path="/backup" element={<Backup mode={mode} />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </Box>
@@ -177,10 +121,47 @@ function AppContent({ mode, toggleDarkMode }) {
 }
 
 function App() {
-  // 1. Initialize state from localStorage so it remembers the mode on refresh/logout
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState(() => {
     return localStorage.getItem("kimwin_theme_mode") || "light";
   });
+
+  // Check Auth on Load
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/auth/me`,
+          { credentials: "include" },
+        );
+        const data = await response.json();
+        if (data.loggedIn) {
+          setUser(data.user);
+        } else {
+          setUser(null);
+        }
+      } catch (err) {
+        console.error("Auth check failed", err);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  // ADDED: Sync logout across all open tabs
+  useEffect(() => {
+    const syncLogout = (event) => {
+      if (event.key === "kimwin_logout") {
+        // Force a reload to clear all state and trigger auth check
+        window.location.reload();
+      }
+    };
+    window.addEventListener("storage", syncLogout);
+    return () => window.removeEventListener("storage", syncLogout);
+  }, []);
 
   const theme = useMemo(
     () =>
@@ -208,7 +189,6 @@ function App() {
     [mode],
   );
 
-  // 2. Wrap toggle function to save the choice to localStorage
   const toggleDarkMode = () => {
     setMode((prev) => {
       const newMode = prev === "light" ? "dark" : "light";
@@ -221,7 +201,16 @@ function App() {
     <BrowserRouter>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <AppContent mode={mode} toggleDarkMode={toggleDarkMode} />
+        {/* The key prop here is MAGIC. When user changes to null, 
+            the whole AppContent is destroyed and reset. */}
+        <AppContent
+          key={user ? user.id : "guest"}
+          mode={mode}
+          toggleDarkMode={toggleDarkMode}
+          user={user}
+          setUser={setUser}
+          loading={loading}
+        />
       </ThemeProvider>
     </BrowserRouter>
   );
