@@ -118,7 +118,11 @@ export default function UserActivityModal({ open, handleClose, user }) {
                 {logs.map((log) => (
                   <TableRow key={log.log_id} hover>
                     <TableCell sx={{ whiteSpace: "nowrap" }}>
-                      {new Date(log.created_at).toLocaleString()}
+                      {/* FIX: Ensuring date is parsed correctly to local time */}
+                      {new Date(log.created_at).toLocaleString(undefined, {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}
                     </TableCell>
                     <TableCell>
                       <Chip

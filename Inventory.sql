@@ -7,7 +7,7 @@ CREATE TABLE inventory (
     quantity INTEGER DEFAULT 0,
     minimum_stock INTEGER DEFAULT 10,
 	created_at DATE NOT NULL,
-	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE purchase_order(
@@ -48,8 +48,8 @@ CREATE TABLE raw_materials (
     qty_unit VARCHAR(50) NOT NULL, 
     min_stock_threshold NUMERIC(12, 2) NOT NULL,
     min_stock_target VARCHAR(10) DEFAULT 'base', 
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE activity_logs (
@@ -60,7 +60,7 @@ CREATE TABLE activity_logs (
     table_name VARCHAR(100) NOT NULL, -- 'inventory', 'purchase_order', etc.
     record_id INT, -- The ID of the item affected
     description TEXT, -- Summary of what changed (e.g., "Updated quantity from 10 to 50")
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 

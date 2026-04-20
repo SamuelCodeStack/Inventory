@@ -233,11 +233,7 @@ export default function Dashboard({ mode }) {
               sx={{ mb: 3 }}
             >
               <Inventory2 sx={{ color: "#ffa726" }} />
-              <Typography
-                variant="h6"
-                fontWeight={800}
-                sx={{ color: headerText }}
-              >
+              <Typography variant="h6" fontWeight="bold">
                 Inventory Attention
               </Typography>
               <Box sx={{ flexGrow: 1 }} />
@@ -272,11 +268,7 @@ export default function Dashboard({ mode }) {
               sx={{ mb: 3 }}
             >
               <ListAlt sx={{ color: "#29b6f6" }} />
-              <Typography
-                variant="h6"
-                fontWeight={800}
-                sx={{ color: headerText }}
-              >
+              <Typography variant="h6" fontWeight="bold">
                 Active Orders
               </Typography>
               <Box sx={{ flexGrow: 1 }} />
