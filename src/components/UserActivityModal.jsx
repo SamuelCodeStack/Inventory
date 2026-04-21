@@ -115,34 +115,52 @@ export default function UserActivityModal({ open, handleClose, user }) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {logs.map((log) => (
-                  <TableRow key={log.log_id} hover>
-                    <TableCell sx={{ whiteSpace: "nowrap" }}>
-                      {/* FIX: Ensuring date is parsed correctly to local time */}
-                      {new Date(log.created_at).toLocaleString(undefined, {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={log.action_type}
-                        size="small"
-                        color={getActionColor(log.action_type)}
-                        variant="outlined"
-                        sx={{ fontWeight: "bold", fontSize: "0.7rem" }}
-                      />
-                    </TableCell>
-                    <TableCell sx={{ textTransform: "capitalize" }}>
-                      {log.table_name}
-                    </TableCell>
-                    {/* DISPLAY THE ITEM/RECORD ID HERE */}
-                    <TableCell sx={{ fontWeight: "bold" }}>
-                      #{log.record_id}
-                    </TableCell>
-                    <TableCell>{log.description}</TableCell>
-                  </TableRow>
-                ))}
+                {logs.map((log) => {
+                  // Specific logic to identify and format profile updates
+                  const isProfileUpdate =
+                    log.table_name === "users" && log.action_type === "UPDATE";
+                  let displayAction = log.action_type;
+                  let displayDescription = log.description;
+
+                  if (isProfileUpdate) {
+                    if (log.description.toLowerCase().includes("name")) {
+                      displayAction = "CHANGE NAME";
+                    } else if (
+                      log.description.toLowerCase().includes("email")
+                    ) {
+                      displayAction = "CHANGE EMAIL";
+                    }
+                  }
+
+                  return (
+                    <TableRow key={log.log_id} hover>
+                      <TableCell sx={{ whiteSpace: "nowrap" }}>
+                        {/* FIX: Ensuring date is parsed correctly to local time */}
+                        {new Date(log.created_at).toLocaleString(undefined, {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={displayAction}
+                          size="small"
+                          color={getActionColor(log.action_type)}
+                          variant="outlined"
+                          sx={{ fontWeight: "bold", fontSize: "0.7rem" }}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ textTransform: "capitalize" }}>
+                        {log.table_name}
+                      </TableCell>
+                      {/* DISPLAY THE ITEM/RECORD ID HERE */}
+                      <TableCell sx={{ fontWeight: "bold" }}>
+                        #{log.record_id}
+                      </TableCell>
+                      <TableCell>{displayDescription}</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>

@@ -31,12 +31,12 @@ export default function Sidebar({
   const drawerWidth = 240;
 
   const menuItems = [
-    {
-      text: "Dashboard",
-      icon: <Dashboard />, // Import Dashboard from @mui/icons-material
-      section: "Main Menu",
-      path: "/",
-    },
+    // {
+    //   text: "Dashboard",
+    //   icon: <Dashboard />, // Import Dashboard from @mui/icons-material
+    //   section: "Main Menu",
+    //   path: "/",
+    // },
     {
       text: "Inventory",
       icon: <Inventory />,

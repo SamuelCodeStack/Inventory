@@ -97,44 +97,56 @@ export default function AllActivityLogs({ mode }) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {logs.map((log) => (
-              <TableRow key={log.log_id} hover>
-                <TableCell sx={{ whiteSpace: "nowrap" }}>
-                  {new Date(log.created_at).toLocaleString()}
-                </TableCell>
-                <TableCell>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Avatar
-                      sx={{
-                        width: 24,
-                        height: 24,
-                        fontSize: "0.7rem",
-                        bgcolor: "#f19149",
-                      }}
-                    >
-                      {log.user_name?.charAt(0) || "S"}
-                    </Avatar>
-                    <Typography variant="body2">{log.user_name}</Typography>
-                  </Stack>
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    label={log.action_type}
-                    size="small"
-                    color={getActionColor(log.action_type)}
-                    variant="outlined"
-                    sx={{ fontWeight: "bold", fontSize: "0.7rem" }}
-                  />
-                </TableCell>
-                <TableCell sx={{ textTransform: "capitalize" }}>
-                  {log.table_name}
-                </TableCell>
-                <TableCell sx={{ fontWeight: "bold" }}>
-                  #{log.record_id}
-                </TableCell>
-                <TableCell>{log.description}</TableCell>
-              </TableRow>
-            ))}
+            {logs.map((log) => {
+              // --- LOGIC TO CUSTOMIZE ACTION LABELS ---
+              let displayAction = log.action_type;
+              if (log.table_name === "users" && log.action_type === "UPDATE") {
+                if (log.description.toLowerCase().includes("name")) {
+                  displayAction = "CHANGE NAME";
+                } else if (log.description.toLowerCase().includes("email")) {
+                  displayAction = "CHANGE EMAIL";
+                }
+              }
+
+              return (
+                <TableRow key={log.log_id} hover>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>
+                    {new Date(log.created_at).toLocaleString()}
+                  </TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Avatar
+                        sx={{
+                          width: 24,
+                          height: 24,
+                          fontSize: "0.7rem",
+                          bgcolor: "#f19149",
+                        }}
+                      >
+                        {log.user_name?.charAt(0) || "S"}
+                      </Avatar>
+                      <Typography variant="body2">{log.user_name}</Typography>
+                    </Stack>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={displayAction}
+                      size="small"
+                      color={getActionColor(log.action_type)}
+                      variant="outlined"
+                      sx={{ fontWeight: "bold", fontSize: "0.7rem" }}
+                    />
+                  </TableCell>
+                  <TableCell sx={{ textTransform: "capitalize" }}>
+                    {log.table_name}
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>
+                    #{log.record_id}
+                  </TableCell>
+                  <TableCell>{log.description}</TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>

@@ -115,6 +115,7 @@ app.post("/api/auth/login", async (req, res) => {
       req.session.user = {
         id: user.user_id,
         name: user.full_name,
+        email: user.email, // ADDED: Mapping email from database to session
         role: user.role,
       };
       res.json({ message: "Logged in successfully", user: req.session.user });
@@ -250,27 +251,48 @@ app.patch("/api/inventory/bulk", async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+
     for (const item of items) {
       const id = cleanId(item.id);
-      await client.query(
-        `UPDATE inventory SET 
-         quantity = $1, 
-         updated_at = CASE WHEN quantity != $1 THEN now() ELSE updated_at END 
-         WHERE item_id = $2`,
-        [item.quantity, id],
+      const newQty = item.quantity;
+
+      // 1. Fetch current details to get the Name and Old Quantity
+      const currentRes = await client.query(
+        "SELECT item_name, quantity FROM inventory WHERE item_id = $1",
+        [id],
       );
-      await logActivity(
-        req,
-        "UPDATE",
-        "inventory",
-        id,
-        `Bulk updated quantity to ${item.quantity}`,
-      );
+
+      if (currentRes.rows.length > 0) {
+        const itemName = currentRes.rows[0].item_name;
+        const oldQty = currentRes.rows[0].quantity;
+
+        // 2. Only update and log if the quantity actually changed
+        if (oldQty !== newQty) {
+          await client.query(
+            `UPDATE inventory SET 
+             quantity = $1, 
+             updated_at = now() 
+             WHERE item_id = $2`,
+            [newQty, id],
+          );
+
+          // 3. Log using the format: [Item Name]: [Old Qty] to [New Qty]
+          await logActivity(
+            req,
+            "UPDATE",
+            "inventory",
+            id,
+            `${itemName} update quantity : ${oldQty} to ${newQty}`,
+          );
+        }
+      }
     }
+
     await client.query("COMMIT");
-    res.json({ message: "Quantities updated" });
+    res.json({ message: "Quantities updated successfully" });
   } catch (err) {
     await client.query("ROLLBACK");
+    console.error("Bulk Update Error:", err);
     res.status(500).json({ error: "Bulk update failed" });
   } finally {
     client.release();
@@ -813,6 +835,111 @@ app.use((err, req, res, next) => {
     error: "Internal Server Error",
     message: "An unexpected error occurred on the server.",
   });
+});
+
+// ==========================================
+// PROFILE UPDATE ENDPOINT
+// ==========================================
+app.patch("/api/auth/profile", async (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+
+  const { fullName, email, newPassword, verifyPassword } = req.body;
+  const userId = req.session.user.id;
+
+  try {
+    // 1. Get current user data for verification and logging
+    const userRes = await pool.query(
+      "SELECT full_name, email, password_hash FROM users WHERE user_id = $1",
+      [userId],
+    );
+
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const currentUser = userRes.rows[0];
+
+    // 2. Verify current password
+    const isMatch = await bcrypt.compare(
+      verifyPassword,
+      currentUser.password_hash,
+    );
+    if (!isMatch) {
+      return res.status(401).json({ error: "Incorrect current password." });
+    }
+
+    // 3. Prepare logging descriptions
+    let descriptions = [];
+    if (fullName !== currentUser.full_name) {
+      descriptions.push(
+        `name from "${currentUser.full_name}" to "${fullName}"`,
+      );
+    }
+    if (email !== currentUser.email) {
+      descriptions.push(`email from "${currentUser.email}" to "${email}"`);
+    }
+    if (newPassword) {
+      descriptions.push("password");
+    }
+
+    let query;
+    let params;
+
+    if (newPassword && newPassword.trim() !== "") {
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      query = `
+        UPDATE users 
+        SET full_name = $1, email = $2, password_hash = $3 
+        WHERE user_id = $4 
+        RETURNING user_id, full_name, email, role`;
+      params = [fullName, email, hashedPassword, userId];
+    } else {
+      query = `
+        UPDATE users 
+        SET full_name = $1, email = $2 
+        WHERE user_id = $3 
+        RETURNING user_id, full_name, email, role`;
+      params = [fullName, email, userId];
+    }
+
+    const result = await pool.query(query, params);
+    const updatedUser = result.rows[0];
+
+    // Update session
+    req.session.user = {
+      id: updatedUser.user_id,
+      name: updatedUser.full_name,
+      email: updatedUser.email,
+      role: updatedUser.role,
+    };
+
+    // Log the activity with the specific changes
+    if (descriptions.length > 0) {
+      await logActivity(
+        req,
+        "UPDATE",
+        "users",
+        userId,
+        `Updated ${descriptions.join(" and ")}`,
+      );
+    }
+
+    req.session.save((err) => {
+      if (err) return res.status(500).json({ error: "Session save failed" });
+      res.json({
+        message: "Profile updated successfully",
+        user: req.session.user,
+      });
+    });
+  } catch (err) {
+    console.error("Profile Update Error:", err);
+    if (err.code === "23505") {
+      return res.status(400).json({ error: "Email is already in use." });
+    }
+    res.status(500).json({ error: "Internal Server Error" });
+  }
 });
 
 app.listen(port, "0.0.0.0", () =>

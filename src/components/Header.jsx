@@ -238,7 +238,12 @@ export default function Header({ mode, user, onMenuClick }) {
               },
             }}
           >
-            <MenuItem onClick={handleClose}>
+            <MenuItem
+              onClick={() => {
+                handleClose();
+                navigate("/profile"); // Routes to the profile page
+              }}
+            >
               <ListItemIcon>
                 <Person fontSize="small" />
               </ListItemIcon>

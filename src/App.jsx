@@ -23,6 +23,7 @@ import RawMaterials from "./components/RawMaterials.jsx";
 import AllActivityLogs from "./components/AllActivityLogs.jsx";
 import Dashboard from "./components/Dashboard.jsx"; // ADDED: Dashboard Import
 import Backup from "./components/Backup.jsx";
+import Profile from "./components/UserProfile.jsx"; // ADDED: Profile Import
 
 function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
   const location = useLocation();
@@ -112,6 +113,10 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
               element={<AllActivityLogs mode={mode} />}
             />
             <Route path="/backup" element={<Backup mode={mode} />} />
+            <Route
+              path="/profile"
+              element={<Profile mode={mode} userData={user} />}
+            />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </Box>
@@ -202,7 +207,7 @@ function App() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         {/* The key prop here is MAGIC. When user changes to null, 
-            the whole AppContent is destroyed and reset. */}
+            the whole AppContent is destroyed and reset. */}
         <AppContent
           key={user ? user.id : "guest"}
           mode={mode}
