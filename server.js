@@ -6,6 +6,7 @@ import session from "express-session"; // Added
 import pgSession from "connect-pg-simple"; // Added
 import bcrypt from "bcrypt"; // Added
 import cron from "node-cron";
+import nodemailer from "nodemailer"; // Added
 
 dotenv.config();
 
@@ -80,6 +81,17 @@ const logActivity = async (
     console.error("Failed to write activity log:", err);
   }
 };
+
+// ==========================================
+// EMAIL CONFIGURATION
+// ==========================================
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
 // ==========================================
 // 0. AUTHENTICATION ENDPOINTS
@@ -158,29 +170,46 @@ app.post("/api/auth/logout", (req, res) => {
 app.post("/api/auth/forgot-password", async (req, res) => {
   const { email } = req.body;
   try {
-    // 1. Check if the user exists in the database
     const result = await pool.query("SELECT * FROM users WHERE email = $1", [
       email,
     ]);
 
     if (result.rows.length === 0) {
-      // Security Tip: Even if user doesn't exist, we usually return 200
-      // to prevent "email enumeration" (hackers checking who has an account)
       return res
         .status(200)
         .json({ message: "If that email exists, a reset link has been sent." });
     }
 
-    // 2. TODO: Generate a reset token and send an actual email here
-    console.log(`Password reset requested for: ${email}`);
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    await pool.query(
+      "UPDATE users SET reset_otp = $1, otp_expiry = NOW() + INTERVAL '10 minutes' WHERE email = $2",
+      [otp, email],
+    );
 
-    res.json({ message: "Reset link sent to your email!" });
+    const mailOptions = {
+      from: `"Kimwin Systems" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "Password Reset OTP",
+      text: `Your OTP for password reset is: ${otp}. It will expire in 10 minutes.`,
+      html: `<h3>Password Reset</h3><p>Your OTP is: <b>${otp}</b></p>`,
+    };
+
+    // Use a nested try-catch specifically for the mailer
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ OTP sent successfully to: ${email}`);
+      res.json({ message: "Reset link sent to your email!" });
+    } catch (mailError) {
+      console.error("❌ NODEMAILER ERROR:", mailError.message);
+      res
+        .status(500)
+        .json({ error: "Failed to send email. Check server configuration." });
+    }
   } catch (err) {
-    console.error("Forgot password error:", err);
+    console.error("DATABASE ERROR:", err);
     res.status(500).json({ error: "Server error. Please try again later." });
   }
 });
-
 // ==========================================
 // 1. INVENTORY ENDPOINTS
 // ==========================================
@@ -481,9 +510,9 @@ app.put("/api/purchase-orders/:id", async (req, res) => {
 
     await client.query(
       `UPDATE purchase_order SET 
-         customer_name=$1, email=$2, contact=$3, company=$4, address=$5, 
-         total_price=$6, status=$7, status_date=CURRENT_DATE 
-       WHERE po_id=$8`,
+          customer_name=$1, email=$2, contact=$3, company=$4, address=$5, 
+          total_price=$6, status=$7, status_date=CURRENT_DATE 
+        WHERE po_id=$8`,
       [
         customer_name,
         email,
@@ -616,8 +645,8 @@ app.post("/api/raw-materials", async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO raw_materials 
-      (material_name, category, base_value, base_unit, qty_value, qty_unit, min_stock_threshold, min_stock_target) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+       (material_name, category, base_value, base_unit, qty_value, qty_unit, min_stock_threshold, min_stock_target) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
       [
         name,
         category,
@@ -657,13 +686,13 @@ app.put("/api/raw-materials/:id", async (req, res) => {
   try {
     await pool.query(
       `UPDATE raw_materials SET 
-      material_name=$1, category=$2, base_value=$3, base_unit=$4, 
-      qty_value=$5, qty_unit=$6, min_stock_threshold=$7, min_stock_target=$8,
-      updated_at = CASE 
-        WHEN base_value != $3 OR qty_value != $5 THEN now() 
-        ELSE updated_at 
-      END
-      WHERE material_id=$9`,
+       material_name=$1, category=$2, base_value=$3, base_unit=$4, 
+       qty_value=$5, qty_unit=$6, min_stock_threshold=$7, min_stock_target=$8,
+       updated_at = CASE 
+         WHEN base_value != $3 OR qty_value != $5 THEN now() 
+         ELSE updated_at 
+       END
+       WHERE material_id=$9`,
       [
         name,
         category,
@@ -939,6 +968,45 @@ app.patch("/api/auth/profile", async (req, res) => {
       return res.status(400).json({ error: "Email is already in use." });
     }
     res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// ==========================================
+// OTP VERIFICATION AND RESET
+// ==========================================
+
+app.post("/api/auth/verify-otp", async (req, res) => {
+  const { email, otp } = req.body;
+  try {
+    const result = await pool.query(
+      "SELECT * FROM users WHERE email = $1 AND reset_otp = $2 AND otp_expiry > NOW()",
+      [email, otp],
+    );
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: "Invalid or expired OTP." });
+    }
+    res.json({ message: "OTP verified. Proceed to reset password." });
+  } catch (err) {
+    res.status(500).json({ error: "Verification failed." });
+  }
+});
+
+app.post("/api/auth/reset-password", async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+  try {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const result = await pool.query(
+      "UPDATE users SET password_hash = $1, reset_otp = NULL, otp_expiry = NULL WHERE email = $2 AND reset_otp = $3 AND otp_expiry > NOW() RETURNING user_id",
+      [hashedPassword, email, otp],
+    );
+    if (result.rowCount === 0) {
+      return res
+        .status(400)
+        .json({ error: "Reset failed. OTP may have expired." });
+    }
+    res.json({ message: "Password updated successfully!" });
+  } catch (err) {
+    res.status(500).json({ error: "Reset failed." });
   }
 });
 

@@ -12,6 +12,7 @@ import {
   Divider,
   Alert,
   Tooltip,
+  CircularProgress,
 } from "@mui/material";
 import {
   Visibility,
@@ -22,13 +23,15 @@ import {
   ArrowBack,
   DarkMode,
   LightMode,
+  VpnKey,
 } from "@mui/icons-material";
 
 export default function Auth({ mode, toggleDarkMode }) {
-  // Views: 'login' | 'register' | 'forgot'
+  // Views: 'login' | 'register' | 'forgot' | 'verify-otp'
   const [view, setView] = useState("login");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false); // New Loading State
   const isDark = mode === "dark";
 
   // Form States
@@ -36,6 +39,7 @@ export default function Auth({ mode, toggleDarkMode }) {
     name: "",
     email: "",
     password: "",
+    otp: "", // Added for OTP verification
   });
 
   // FIXED: Immediate cross-tab synchronization for Login and Logout
@@ -63,56 +67,16 @@ export default function Auth({ mode, toggleDarkMode }) {
   };
 
   // --- SUBMIT HANDLERS ---
-  // const handleAuthAction = async (e) => {
-  //   e.preventDefault();
-  //   setError("");
-
-  //   // FIXED: Endpoint selection logic
-  //   let endpoint = "";
-  //   if (view === "login") endpoint = "/api/auth/login";
-  //   else if (view === "register") endpoint = "/api/auth/register";
-  //   else if (view === "forgot") endpoint = "/api/auth/forgot-password"; // Add your forgot pw endpoint
-
-  //   try {
-  //     const response = await fetch(`http://localhost:3000${endpoint}`, {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       credentials: "include", // FIXED: Required for session cookies to work
-  //       body: JSON.stringify(formData),
-  //     });
-
-  //     const data = await response.json();
-
-  //     if (response.ok) {
-  //       if (view === "login") {
-  //         // Redirect to main inventory page on successful login
-  //         window.location.href = "/";
-  //       } else if (view === "register") {
-  //         // If register success, switch to login view
-  //         setView("login");
-  //         setFormData({ ...formData, password: "" });
-  //         alert("Registration successful! Please sign in.");
-  //       } else {
-  //         // If forgot password success
-  //         alert("Reset link sent to your email!");
-  //         setView("login");
-  //       }
-  //     } else {
-  //       setError(data.error || "An error occurred. Please try again.");
-  //     }
-  //   } catch (err) {
-  //     setError("Network error: Could not connect to server.");
-  //   }
-  // };
-
   const handleAuthAction = async (e) => {
     e.preventDefault();
     setError("");
+    setIsLoading(true); // Start animation
 
     let endpoint = "";
     if (view === "login") endpoint = "/api/auth/login";
     else if (view === "register") endpoint = "/api/auth/register";
     else if (view === "forgot") endpoint = "/api/auth/forgot-password";
+    else if (view === "verify-otp") endpoint = "/api/auth/reset-password"; // Use reset endpoint when submitting OTP + New Password
 
     try {
       // FIXED: Use VITE_API_URL instead of hardcoded localhost
@@ -123,7 +87,10 @@ export default function Auth({ mode, toggleDarkMode }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include", // Critical for keeping you logged in
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          newPassword: formData.password, // Mapping for reset-password endpoint
+        }),
       });
 
       const data = await response.json();
@@ -134,16 +101,22 @@ export default function Auth({ mode, toggleDarkMode }) {
           // This ensures other tabs receive the "storage" event immediately
           localStorage.setItem("kimwin_login", Date.now().toString());
           window.location.href = "/";
+        } else if (view === "forgot") {
+          // After requesting reset, move to OTP entry
+          setView("verify-otp");
+          alert("OTP sent! Please check your email.");
         } else {
           setView("login");
-          setFormData({ ...formData, password: "" });
-          alert("Action successful!");
+          setFormData({ name: "", email: "", password: "", otp: "" });
+          alert(data.message || "Action successful!");
         }
       } else {
         setError(data.error || "An error occurred. Please try again.");
       }
     } catch (err) {
       setError("Network error: Could not connect to server.");
+    } finally {
+      setIsLoading(false); // Stop animation regardless of outcome
     }
   };
 
@@ -205,12 +178,14 @@ export default function Auth({ mode, toggleDarkMode }) {
           {view === "login" && "Welcome Back"}
           {view === "register" && "Create Account"}
           {view === "forgot" && "Reset Password"}
+          {view === "verify-otp" && "Verify OTP"}
         </Typography>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
           {view === "login" && "Please enter your details to sign in"}
           {view === "register" && "Join us to start managing your inventory"}
           {view === "forgot" && "Enter your email to receive a reset link"}
+          {view === "verify-otp" && "Enter the 6-digit code sent to your email"}
         </Typography>
 
         {error && (
@@ -228,6 +203,7 @@ export default function Auth({ mode, toggleDarkMode }) {
                 name="name"
                 size="small"
                 required
+                disabled={isLoading}
                 value={formData.name}
                 onChange={handleInputChange}
                 InputProps={{
@@ -247,6 +223,7 @@ export default function Auth({ mode, toggleDarkMode }) {
               type="email"
               size="small"
               required
+              disabled={view === "verify-otp" || isLoading} // Prevent email change during OTP entry
               value={formData.email}
               onChange={handleInputChange}
               InputProps={{
@@ -258,14 +235,43 @@ export default function Auth({ mode, toggleDarkMode }) {
               }}
             />
 
+            {view === "verify-otp" && (
+              <TextField
+                fullWidth
+                label="Enter OTP"
+                name="otp"
+                size="small"
+                required
+                disabled={isLoading}
+                value={formData.otp}
+                onChange={handleInputChange}
+                inputProps={{
+                  maxLength: 6,
+                  style: {
+                    letterSpacing: "4px",
+                    textAlign: "center",
+                    fontWeight: "bold",
+                  },
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <VpnKey fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            )}
+
             {view !== "forgot" && (
               <TextField
                 fullWidth
-                label="Password"
+                label={view === "verify-otp" ? "New Password" : "Password"}
                 name="password"
                 type={showPassword ? "text" : "password"}
                 size="small"
                 required
+                disabled={isLoading}
                 value={formData.password}
                 onChange={handleInputChange}
                 InputProps={{
@@ -276,7 +282,11 @@ export default function Auth({ mode, toggleDarkMode }) {
                   ),
                   endAdornment: (
                     <InputAdornment position="end">
-                      <IconButton onClick={togglePassword} edge="end">
+                      <IconButton
+                        onClick={togglePassword}
+                        edge="end"
+                        disabled={isLoading}
+                      >
                         {showPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
                     </InputAdornment>
@@ -291,9 +301,10 @@ export default function Auth({ mode, toggleDarkMode }) {
                   component="button"
                   type="button"
                   variant="caption"
+                  disabled={isLoading}
                   onClick={() => {
                     setView("forgot");
-                    setError(""); // FIXED: Clear error when switching
+                    setError("");
                   }}
                   sx={{ textDecoration: "none", fontWeight: "bold" }}
                 >
@@ -307,11 +318,24 @@ export default function Auth({ mode, toggleDarkMode }) {
               variant="contained"
               size="large"
               type="submit"
-              sx={{ py: 1.2, fontWeight: "bold", textTransform: "none" }}
+              disabled={isLoading}
+              sx={{
+                py: 1.2,
+                fontWeight: "bold",
+                textTransform: "none",
+                minHeight: "48px",
+              }}
             >
-              {view === "login" && "Sign In"}
-              {view === "register" && "Sign Up"}
-              {view === "forgot" && "Send Reset Link"}
+              {isLoading ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                <>
+                  {view === "login" && "Sign In"}
+                  {view === "register" && "Sign Up"}
+                  {view === "forgot" && "Send Reset Link"}
+                  {view === "verify-otp" && "Reset Password"}
+                </>
+              )}
             </Button>
           </Stack>
         </form>
@@ -329,9 +353,10 @@ export default function Auth({ mode, toggleDarkMode }) {
                 Don't have an account?{" "}
                 <Link
                   component="button"
+                  disabled={isLoading}
                   onClick={() => {
                     setView("register");
-                    setError(""); // FIXED: Clear error when switching
+                    setError("");
                   }}
                   sx={{ fontWeight: "bold", cursor: "pointer" }}
                 >
@@ -341,9 +366,10 @@ export default function Auth({ mode, toggleDarkMode }) {
             ) : (
               <Button
                 startIcon={<ArrowBack />}
+                disabled={isLoading}
                 onClick={() => {
                   setView("login");
-                  setError(""); // FIXED: Clear error when switching
+                  setError("");
                 }}
                 size="small"
                 sx={{ textTransform: "none" }}

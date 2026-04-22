@@ -44,20 +44,22 @@ export default function Sidebar({
       path: "/inventory",
     },
     {
+      text: "Raw Materials",
+      icon: <Layers />,
+      path: "/raw-materials",
+    },
+    {
       text: "Purchase Order",
       icon: <ShoppingCart />,
       path: "/purchase-order",
     },
+
     // {
     //   text: "Backup",
     //   icon: <Storage />,
     //   path: "/backup",
     // },
-    // {
-    //   text: "Raw Materials",
-    //   icon: <Layers />,
-    //   path: "/raw-materials",
-    // },
+
     // {
     //   text: "User Management",
     //   icon: <ManageAccounts />,
