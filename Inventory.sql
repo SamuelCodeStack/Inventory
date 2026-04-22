@@ -1,4 +1,5 @@
 
+
 CREATE TABLE inventory (
     item_id SERIAL PRIMARY KEY,
     item_name VARCHAR(255) NOT NULL,
@@ -71,6 +72,6 @@ CREATE TABLE users (
     password_hash TEXT NOT NULL,
     role VARCHAR(50) DEFAULT 'Staff', -- Admin, Manager, Staff
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    reset_token TEXT,
-    reset_expires TIMESTAMP
+    reset_otp VARCHAR(6),
+    otp_expiry TIMESTAMP
 );

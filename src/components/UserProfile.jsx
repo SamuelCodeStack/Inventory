@@ -91,6 +91,8 @@ export default function UserProfile({ mode, userData, onSave }) {
     setPasswordFields({ ...passwordFields, [e.target.name]: e.target.value });
   };
 
+  // --- UPDATED SUBMIT LOGIC (Skip Modal) ---
+  // --- RESTORED MODAL LOGIC ---
   const handleSubmit = (e) => {
     e.preventDefault();
     if (
@@ -100,24 +102,24 @@ export default function UserProfile({ mode, userData, onSave }) {
       alert("New passwords do not match!");
       return;
     }
-    setShowVerifyModal(true); // Open modal to verify with current password
+    setShowVerifyModal(true); // Open the verification modal
   };
 
   const handleConfirmUpdate = async () => {
     setLoading(true);
 
     try {
-      // Inside handleConfirmUpdate
+      // Fixed the URL to avoid the double /api/
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/auth/profile`, // ✅ Correct path
+        `${import.meta.env.VITE_API_URL}/auth/profile`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          credentials: "include", // Ensure this is present for sessions
+          credentials: "include",
           body: JSON.stringify({
             fullName: profile.fullName,
             email: profile.email,
-            verifyPassword: verificationPassword,
+            verifyPassword: verificationPassword, // Sending the password from the modal
             newPassword: showPasswordSection
               ? passwordFields.newPassword
               : null,
@@ -131,15 +133,12 @@ export default function UserProfile({ mode, userData, onSave }) {
         alert("Profile updated successfully!");
         if (onSave) onSave(data.user);
 
-        // Reset state after success
+        // Reset all states
         setInitialProfile({ fullName: profile.fullName, email: profile.email });
         setVerificationPassword("");
         setShowVerifyModal(false);
         setShowPasswordSection(false);
-        setPasswordFields({
-          newPassword: "",
-          confirmPassword: "",
-        });
+        setPasswordFields({ newPassword: "", confirmPassword: "" });
       } else {
         alert(data.error || "Update failed");
       }

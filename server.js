@@ -838,7 +838,7 @@ app.use((err, req, res, next) => {
 });
 
 // ==========================================
-// PROFILE UPDATE ENDPOINT
+// PROFILE UPDATE ENDPOINT (With Verification)
 // ==========================================
 app.patch("/api/auth/profile", async (req, res) => {
   if (!req.session.user) {
@@ -861,7 +861,7 @@ app.patch("/api/auth/profile", async (req, res) => {
 
     const currentUser = userRes.rows[0];
 
-    // 2. Verify current password
+    // 2. Verify current password (REQUIRED for security)
     const isMatch = await bcrypt.compare(
       verifyPassword,
       currentUser.password_hash,
@@ -915,7 +915,7 @@ app.patch("/api/auth/profile", async (req, res) => {
       role: updatedUser.role,
     };
 
-    // Log the activity with the specific changes
+    // Log the activity
     if (descriptions.length > 0) {
       await logActivity(
         req,
