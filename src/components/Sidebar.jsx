@@ -31,23 +31,25 @@ export default function Sidebar({
   const drawerWidth = 240;
 
   const menuItems = [
-    // {
-    //   text: "Dashboard",
-    //   icon: <Dashboard />, // Import Dashboard from @mui/icons-material
-    //   section: "Main Menu",
-    //   path: "/",
-    // },
+    {
+      text: "Dashboard",
+      icon: <Dashboard />, // Import Dashboard from @mui/icons-material
+      section: "Main Menu",
+      path: "/",
+    },
     {
       text: "Inventory",
       icon: <Inventory />,
       // section: "Main Menu", // Section Header
       path: "/inventory",
     },
+
     {
       text: "Raw Materials",
       icon: <Layers />,
       path: "/raw-materials",
     },
+
     {
       text: "Purchase Order",
       icon: <ShoppingCart />,
@@ -218,6 +220,7 @@ export default function Sidebar({
         onClose={handleDrawerToggle}
         ModalProps={{
           keepMounted: true, // Better open performance on mobile.
+          disableScrollLock: true, // FIX: Prevents layout shift/scrollbar flashing when drawer toggles
         }}
         sx={{
           display: { xs: "block", sm: "none" },

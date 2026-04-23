@@ -31,6 +31,7 @@ import {
   EditNote,
   Print,
   FilterListOff,
+  Undo, // Added for Discard icon consistency
 } from "@mui/icons-material";
 import AddInventoryModal from "./AddInventoryModal";
 import EditInventoryModal from "./EditInventoryModal";
@@ -137,6 +138,12 @@ export default function Inventory({ mode }) {
     );
   };
 
+  const handleDiscard = () => {
+    setInventoryData(JSON.parse(JSON.stringify(originalData)));
+    setIsEditingQty(false); // This locks the quantity fields
+    showMessage("Changes discarded", "info");
+  };
+
   const handleBulkSave = async () => {
     const payload = {
       items: inventoryData
@@ -221,19 +228,57 @@ export default function Inventory({ mode }) {
 
         <Stack
           direction="row"
-          spacing={1}
+          spacing={1.5}
           sx={{
             width: { xs: "100%", sm: "auto" },
             overflowX: "auto", // Allow buttons to scroll if they overflow
             pb: { xs: 1, sm: 0 },
           }}
         >
+          {hasChanges && (
+            <>
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<Undo />}
+                onClick={handleDiscard}
+                sx={{
+                  borderRadius: 2,
+                  fontWeight: "bold",
+                  textTransform: "none",
+                  px: 3,
+                }}
+              >
+                Discard
+              </Button>
+              <Button
+                variant="contained"
+                color="success"
+                startIcon={<Save />}
+                onClick={handleBulkSave}
+                sx={{
+                  borderRadius: 2,
+                  fontWeight: "bold",
+                  textTransform: "none",
+                  px: 3,
+                }}
+              >
+                Save Changes
+              </Button>
+            </>
+          )}
           <Button
             variant="outlined"
             startIcon={<Print />}
             onClick={() => setOpenPrintModal(true)}
             size="small"
-            sx={{ flexShrink: 0 }}
+            sx={{
+              borderRadius: 2,
+              fontWeight: "bold",
+              textTransform: "none",
+              px: 3,
+              flexShrink: 0,
+            }}
           >
             Print
           </Button>
@@ -243,7 +288,13 @@ export default function Inventory({ mode }) {
             startIcon={<EditNote />}
             onClick={() => setIsEditingQty(!isEditingQty)}
             size="small"
-            sx={{ flexShrink: 0 }}
+            sx={{
+              borderRadius: 2,
+              fontWeight: "bold",
+              textTransform: "none",
+              px: 3,
+              flexShrink: 0,
+            }}
           >
             {isEditingQty ? "Lock" : "Edit Qty"}
           </Button>
@@ -252,7 +303,13 @@ export default function Inventory({ mode }) {
             startIcon={<Add />}
             onClick={() => setOpenAddModal(true)}
             size="small"
-            sx={{ flexShrink: 0 }}
+            sx={{
+              borderRadius: 2,
+              fontWeight: "bold",
+              textTransform: "none",
+              px: 3,
+              flexShrink: 0,
+            }}
           >
             Add Item
           </Button>
@@ -481,65 +538,6 @@ export default function Inventory({ mode }) {
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
         />
-
-        {hasChanges && (
-          <Box
-            sx={{
-              mt: 2,
-              p: 2,
-              display: "flex",
-              flexDirection: { xs: "column", sm: "row" },
-              justifyContent: "flex-end",
-              gap: 2,
-              borderTop: "1px solid",
-              borderColor: "divider",
-            }}
-          >
-            <Button
-              variant="text"
-              color="inherit"
-              onClick={() => {
-                setInventoryData(JSON.parse(JSON.stringify(originalData)));
-                setIsEditingQty(false);
-              }}
-              fullWidth={true}
-              sx={{ display: { sm: "none" } }} // Show full width button only on mobile
-            >
-              Discard
-            </Button>
-            <Button
-              variant="text"
-              color="inherit"
-              onClick={() => {
-                setInventoryData(JSON.parse(JSON.stringify(originalData)));
-                setIsEditingQty(false);
-              }}
-              sx={{ display: { xs: "none", sm: "inline-flex" } }} // Standard button for desktop
-            >
-              Discard
-            </Button>
-
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<Save />}
-              onClick={handleBulkSave}
-              fullWidth={true}
-              sx={{ display: { sm: "none" } }} // Show full width button only on mobile
-            >
-              Save Changes
-            </Button>
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<Save />}
-              onClick={handleBulkSave}
-              sx={{ display: { xs: "none", sm: "inline-flex" } }} // Standard button for desktop
-            >
-              Save Changes
-            </Button>
-          </Box>
-        )}
       </TableContainer>
 
       <AddInventoryModal

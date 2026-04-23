@@ -19,7 +19,7 @@ import {
   CircularProgress,
   InputAdornment,
   TablePagination,
-  Grid, // Added for responsiveness
+  Grid,
 } from "@mui/material";
 import {
   Add,
@@ -28,6 +28,10 @@ import {
   Search,
   Print,
   FilterListOff,
+  Save,
+  RestartAlt,
+  EditNote,
+  Undo,
 } from "@mui/icons-material";
 
 // --- MODAL IMPORTS ---
@@ -37,7 +41,9 @@ import PrintRawMaterialModal from "./PrintRawMaterialModal";
 
 export default function RawMaterials({ mode }) {
   const [materials, setMaterials] = useState([]);
+  const [originalData, setOriginalData] = useState([]); // Added to track changes
   const [loading, setLoading] = useState(true);
+  const [isEditingQty, setIsEditingQty] = useState(false); // Toggle for bulk edit mode
 
   // --- FILTER STATES ---
   const [searchQuery, setSearchQuery] = useState("");
@@ -68,9 +74,9 @@ export default function RawMaterials({ mode }) {
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/raw-materials`,
       );
-      // const response = await fetch("http://localhost:3000/api/raw-materials");
       const data = await response.json();
       setMaterials(data);
+      setOriginalData(JSON.parse(JSON.stringify(data))); // Keep a deep copy
     } catch (error) {
       showSnackbar("Failed to load raw materials", "error");
     } finally {
@@ -82,12 +88,66 @@ export default function RawMaterials({ mode }) {
     fetchMaterials();
   }, []);
 
+  // --- BULK EDIT LOGIC ---
+  const handleQuantityChangeLocal = (id, newQuantity) => {
+    const qty = parseInt(newQuantity) || 0;
+    setMaterials((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          return { ...item, quantity: qty };
+        }
+        return item;
+      }),
+    );
+  };
+
+  const hasChanges = materials.some((item) => {
+    const original = originalData.find((o) => o.id === item.id);
+    return original && item.quantity !== original.quantity;
+  });
+
+  const handleDiscard = () => {
+    setMaterials(JSON.parse(JSON.stringify(originalData)));
+    setIsEditingQty(false); // <--- THIS LOCKS THE QUANTITY AUTOMATICALLY
+    showSnackbar("Changes discarded", "info");
+  };
+
+  const handleBulkSave = async () => {
+    const updates = materials
+      .filter((item) => {
+        const original = originalData.find((o) => o.id === item.id);
+        return original && item.quantity !== original.quantity;
+      })
+      .map((item) => ({
+        id: item.id,
+        quantity: item.quantity,
+      }));
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/raw-materials/bulk`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: updates }),
+        },
+      );
+      if (response.ok) {
+        showSnackbar("Quantities updated successfully!", "success");
+        setIsEditingQty(false);
+        fetchMaterials();
+      }
+    } catch (error) {
+      showSnackbar("Save failed", "error");
+    }
+  };
+
   // --- FILTER LOGIC ---
   const getStatus = (item) => {
-    const currentVal =
-      item.minStockTarget === "base" ? item.baseValue : item.qtyValue;
+    const currentVal = item.quantity;
     if (currentVal <= 0) return { label: "Out of Stock", color: "error" };
-    if (currentVal <= item.minStockThreshold)
+    if (currentVal <= item.minStock)
       return { label: "Low Stock", color: "warning" };
     return { label: "In Stock", color: "success" };
   };
@@ -137,9 +197,7 @@ export default function RawMaterials({ mode }) {
       return;
     try {
       const response = await fetch(
-        // `http://localhost:3000/api/raw-materials/${id}`,
         `${import.meta.env.VITE_API_URL}/raw-materials/${id}`,
-
         {
           method: "DELETE",
           credentials: "include", // Required to send session cookies for activity logs
@@ -151,28 +209,6 @@ export default function RawMaterials({ mode }) {
       }
     } catch (error) {
       showSnackbar("Error deleting material", "error");
-    }
-  };
-
-  const handleTargetChange = async (item, newTarget) => {
-    try {
-      const response = await fetch(
-        `http://localhost:3000/api/raw-materials/${item.id}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...item, minStockTarget: newTarget }),
-        },
-      );
-      if (response.ok) {
-        fetchMaterials();
-        showSnackbar(
-          `Monitoring changed to ${newTarget === "base" ? item.baseUnit : item.qtyUnit}`,
-          "success",
-        );
-      }
-    } catch (error) {
-      showSnackbar("Failed to update monitoring logic", "error");
     }
   };
 
@@ -188,10 +224,10 @@ export default function RawMaterials({ mode }) {
       <Box
         sx={{
           display: "flex",
-          flexDirection: { xs: "column", md: "row" },
+          flexDirection: { xs: "column", sm: "row" },
           justifyContent: "space-between",
           mb: 3,
-          alignItems: { xs: "flex-start", md: "center" },
+          alignItems: { xs: "flex-start", sm: "center" },
           gap: 2,
         }}
       >
@@ -203,24 +239,78 @@ export default function RawMaterials({ mode }) {
             Dynamic unit tracking for chemicals & supplies
           </Typography>
         </Box>
-        <Stack
-          direction="row"
-          spacing={2}
-          sx={{ width: { xs: "100%", md: "auto" } }}
-        >
+        <Stack direction="row" spacing={1.5} sx={{ width: "auto" }}>
+          {hasChanges && (
+            <>
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<Undo />}
+                onClick={handleDiscard}
+                sx={{
+                  borderRadius: 2,
+                  fontWeight: "bold",
+                  textTransform: "none",
+                  px: 3,
+                }}
+              >
+                Discard
+              </Button>
+              <Button
+                variant="contained"
+                color="success"
+                startIcon={<Save />}
+                onClick={handleBulkSave}
+                sx={{
+                  borderRadius: 2,
+                  fontWeight: "bold",
+                  textTransform: "none",
+                  px: 3,
+                }}
+              >
+                Save Changes
+              </Button>
+            </>
+          )}
           <Button
             variant="outlined"
+            size="small"
             startIcon={<Print />}
             onClick={() => setOpenPrintModal(true)}
-            sx={{ borderRadius: 2, fontWeight: "bold", flex: 1 }}
+            sx={{
+              borderRadius: 2,
+              fontWeight: "bold",
+              textTransform: "none",
+              px: 3,
+            }}
           >
             Print
           </Button>
           <Button
+            variant={isEditingQty ? "contained" : "outlined"}
+            color={isEditingQty ? "warning" : "primary"}
+            startIcon={<EditNote />}
+            onClick={() => setIsEditingQty(!isEditingQty)}
+            sx={{
+              borderRadius: 2,
+              fontWeight: "bold",
+              textTransform: "none",
+              px: 3,
+            }}
+          >
+            {isEditingQty ? "Lock" : "Edit Qty"}
+          </Button>
+          <Button
             variant="contained"
+            size="small"
             startIcon={<Add />}
             onClick={() => setOpenAddModal(true)}
-            sx={{ borderRadius: 2, fontWeight: "bold", flex: 1 }}
+            sx={{
+              borderRadius: 2,
+              fontWeight: "bold",
+              textTransform: "none",
+              px: 3,
+            }}
           >
             Add Material
           </Button>
@@ -336,9 +426,8 @@ export default function RawMaterials({ mode }) {
                     <TableCell sx={{ fontWeight: "bold" }}>
                       Measurement
                     </TableCell>
-                    <TableCell sx={{ fontWeight: "bold" }}>Quantity</TableCell>
                     <TableCell sx={{ fontWeight: "bold" }}>
-                      Monitoring Logic
+                      Stock Quantity
                     </TableCell>
                     <TableCell align="center" sx={{ fontWeight: "bold" }}>
                       Status
@@ -351,7 +440,7 @@ export default function RawMaterials({ mode }) {
                 <TableBody>
                   {paginatedMaterials.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
+                      <TableCell colSpan={7} align="center" sx={{ py: 5 }}>
                         No raw materials match your filters.
                       </TableCell>
                     </TableRow>
@@ -373,41 +462,34 @@ export default function RawMaterials({ mode }) {
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" fontWeight="bold">
-                              {row.baseValue} <small>{row.baseUnit}</small>
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2">
-                              {row.qtyValue} <small>{row.qtyUnit}</small>
+                              {row.measurementValue}
+                              {row.measurementUnit} {row.packaging}
                             </Typography>
                           </TableCell>
                           <TableCell>
                             <TextField
-                              select
+                              type="number"
                               size="small"
-                              value={row.minStockTarget}
-                              sx={{
-                                width: 140,
-                                "& .MuiInputBase-input": {
-                                  fontSize: "0.75rem",
+                              variant={isEditingQty ? "outlined" : "standard"}
+                              disabled={!isEditingQty}
+                              value={row.quantity}
+                              onChange={(e) =>
+                                handleQuantityChangeLocal(
+                                  row.id,
+                                  e.target.value,
+                                )
+                              }
+                              InputProps={{
+                                disableUnderline: true,
+                                sx: {
+                                  fontWeight: "bold",
+                                  width: "100px",
+                                  "& input": {
+                                    textAlign: "left",
+                                  },
                                 },
                               }}
-                              onChange={(e) =>
-                                handleTargetChange(row, e.target.value)
-                              }
-                            >
-                              <MenuItem value="base">
-                                By {row.baseUnit}
-                              </MenuItem>
-                              <MenuItem value="qty">By {row.qtyUnit}</MenuItem>
-                            </TextField>
-                            <Typography
-                              variant="caption"
-                              display="block"
-                              sx={{ mt: 0.5, color: "text.secondary" }}
-                            >
-                              Threshold: {row.minStockThreshold}
-                            </Typography>
+                            />
                           </TableCell>
                           <TableCell align="center">
                             <Box

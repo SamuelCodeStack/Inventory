@@ -616,14 +616,13 @@ app.get("/api/raw-materials", async (req, res) => {
       id: m.material_id,
       name: m.material_name,
       category: m.category,
-      baseValue: parseFloat(m.base_value),
-      baseUnit: m.base_unit,
-      qtyValue: parseFloat(m.qty_value),
-      qtyUnit: m.qty_unit,
-      minStockThreshold: parseFloat(m.min_stock_threshold),
-      minStockTarget: m.min_stock_target,
+      measurementValue: parseFloat(m.measurement_value),
+      measurementUnit: m.measurement_unit,
+      packaging: m.packaging,
+      quantity: parseFloat(m.quantity),
+      minStock: parseFloat(m.min_stock),
       createdAt: m.created_at,
-      updatedAt: m.updated_at,
+      updated_at: m.updated_at,
     }));
     res.json(mappedData);
   } catch (err) {
@@ -635,27 +634,25 @@ app.post("/api/raw-materials", async (req, res) => {
   const {
     name,
     category,
-    baseValue,
-    baseUnit,
-    qtyValue,
-    qtyUnit,
-    minStockThreshold,
-    minStockTarget,
+    measurementValue,
+    measurementUnit,
+    packaging,
+    quantity,
+    minStock,
   } = req.body;
   try {
     const result = await pool.query(
       `INSERT INTO raw_materials 
-       (material_name, category, base_value, base_unit, qty_value, qty_unit, min_stock_threshold, min_stock_target) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        (material_name, category, measurement_value, measurement_unit, packaging, quantity, min_stock) 
+        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [
         name,
         category,
-        baseValue,
-        baseUnit,
-        qtyValue,
-        qtyUnit,
-        minStockThreshold,
-        minStockTarget,
+        measurementValue,
+        measurementUnit,
+        packaging,
+        quantity,
+        minStock,
       ],
     );
     await logActivity(
@@ -671,37 +668,97 @@ app.post("/api/raw-materials", async (req, res) => {
   }
 });
 
+// --- ADDED BULK ADD ENDPOINT ---
+app.post("/api/raw-materials/bulk-add", async (req, res) => {
+  const { items } = req.body;
+  try {
+    const results = [];
+    for (const item of items) {
+      const result = await pool.query(
+        `INSERT INTO raw_materials 
+         (material_name, category, measurement_value, measurement_unit, packaging, quantity, min_stock) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [
+          item.name,
+          item.category,
+          item.measurementValue,
+          item.measurementUnit,
+          item.packaging,
+          item.quantity,
+          item.minStock,
+        ],
+      );
+
+      await logActivity(
+        req,
+        "INSERT",
+        "raw_materials",
+        result.rows[0].material_id,
+        `Bulk added material: ${item.name}`,
+      );
+      results.push(result.rows[0]);
+    }
+    res.status(201).json({
+      message: "Bulk items added successfully",
+      count: results.length,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- ADDED BULK UPDATE ENDPOINT (For Edit Qty) ---
+app.patch("/api/raw-materials/bulk", async (req, res) => {
+  const { items } = req.body;
+  try {
+    for (const item of items) {
+      await pool.query(
+        "UPDATE raw_materials SET quantity = $1, updated_at = now() WHERE material_id = $2",
+        [item.quantity, item.id],
+      );
+      await logActivity(
+        req,
+        "UPDATE",
+        "raw_materials",
+        item.id,
+        `Bulk quantity update for ID ${item.id} to ${item.quantity}`,
+      );
+    }
+    res.json({ message: "Bulk update successful" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.put("/api/raw-materials/:id", async (req, res) => {
   const id = cleanId(req.params.id);
   const {
     name,
     category,
-    baseValue,
-    baseUnit,
-    qtyValue,
-    qtyUnit,
-    minStockThreshold,
-    minStockTarget,
+    measurementValue,
+    measurementUnit,
+    packaging,
+    quantity,
+    minStock,
   } = req.body;
   try {
     await pool.query(
       `UPDATE raw_materials SET 
-       material_name=$1, category=$2, base_value=$3, base_unit=$4, 
-       qty_value=$5, qty_unit=$6, min_stock_threshold=$7, min_stock_target=$8,
-       updated_at = CASE 
-         WHEN base_value != $3 OR qty_value != $5 THEN now() 
-         ELSE updated_at 
-       END
-       WHERE material_id=$9`,
+        material_name=$1, category=$2, measurement_value=$3, measurement_unit=$4, 
+        packaging=$5, quantity=$6, min_stock=$7,
+        updated_at = CASE 
+          WHEN quantity != $6 THEN now() 
+          ELSE updated_at 
+        END
+        WHERE material_id=$8`,
       [
         name,
         category,
-        baseValue,
-        baseUnit,
-        qtyValue,
-        qtyUnit,
-        minStockThreshold,
-        minStockTarget,
+        measurementValue,
+        measurementUnit,
+        packaging,
+        quantity,
+        minStock,
         id,
       ],
     );

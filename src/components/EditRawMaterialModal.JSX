@@ -15,8 +15,18 @@ import {
 } from "@mui/material";
 import { Close } from "@mui/icons-material";
 
-const BASE_UNITS = ["KG", "ML", "L", "METER", "CM", "GRAMS"];
-const QTY_UNITS = ["Sacks", "Bottles", "Rolls", "Pcs", "Drums", "Boxes"];
+const BASE_UNITS = ["KG", "ML", "L", "M", "CM", "GRAMS"];
+const PACKAGING_OPTIONS = [
+  "Sacks",
+  "Bottles",
+  "Rolls",
+  "Pcs",
+  "Drums",
+  "Boxes",
+  "Gallon",
+  "Bundle",
+  "Pail",
+];
 
 // --- CATEGORY OPTIONS ---
 const CATEGORIES = ["Paper", "Plastic", "Injection", "Trading"];
@@ -31,12 +41,10 @@ export default function EditRawMaterialModal({
   const [formData, setFormData] = useState({
     name: "",
     category: "Paper",
-    baseValue: "",
-    baseUnit: "KG",
-    qtyValue: "",
-    qtyUnit: "Sacks",
-    minStockThreshold: "",
-    minStockTarget: "base",
+    measurementValue: "",
+    measurementUnit: "KG",
+    packaging: "Sacks",
+    minStock: "",
   });
 
   // Sync state when itemData changes
@@ -45,18 +53,33 @@ export default function EditRawMaterialModal({
       setFormData({
         name: itemData.name || "",
         category: itemData.category || "Paper",
-        baseValue: itemData.baseValue || 0,
-        baseUnit: itemData.baseUnit || "KG",
-        qtyValue: itemData.qtyValue || 0,
-        qtyUnit: itemData.qtyUnit || "Sacks",
-        minStockThreshold: itemData.minStockThreshold || 0,
-        minStockTarget: itemData.minStockTarget || "base",
+        measurementValue: itemData.measurementValue || 0,
+        measurementUnit: itemData.measurementUnit || "KG",
+        packaging: itemData.packaging || "Sacks",
+        minStock: itemData.minStock || 0,
       });
     }
   }, [itemData]);
 
+  // --- LOGIC: CHECK IF ANYTHING CHANGED ---
+  const isUnchanged =
+    itemData &&
+    formData.name === (itemData.name || "") &&
+    formData.category === (itemData.category || "Paper") &&
+    formData.measurementValue === (itemData.measurementValue || 0) &&
+    formData.measurementUnit === (itemData.measurementUnit || "KG") &&
+    formData.packaging === (itemData.packaging || "Sacks") &&
+    formData.minStock === (itemData.minStock || 0);
+
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]:
+        name === "measurementValue" || name === "minStock"
+          ? parseFloat(value) || 0
+          : value,
+    });
   };
 
   const handleSubmit = async () => {
@@ -71,12 +94,12 @@ export default function EditRawMaterialModal({
           body: JSON.stringify({
             name: formData.name,
             category: formData.category,
-            baseValue: parseFloat(formData.baseValue),
-            baseUnit: formData.baseUnit,
-            qtyValue: parseFloat(formData.qtyValue),
-            qtyUnit: formData.qtyUnit,
-            minStockThreshold: parseFloat(formData.minStockThreshold),
-            minStockTarget: formData.minStockTarget,
+            measurementValue: formData.measurementValue,
+            measurementUnit: formData.measurementUnit,
+            packaging: formData.packaging,
+            minStock: formData.minStock,
+            // Keeping current quantity unchanged during standard edit
+            quantity: itemData.quantity,
           }),
         },
       );
@@ -106,7 +129,9 @@ export default function EditRawMaterialModal({
           fontWeight: "bold",
         }}
       >
-        Edit Raw Material
+        <Typography variant="h6" fontWeight="bold">
+          Edit Raw Material Details
+        </Typography>
         <IconButton onClick={handleClose}>
           <Close />
         </IconButton>
@@ -145,27 +170,17 @@ export default function EditRawMaterialModal({
           </Grid>
 
           <Grid item xs={12}>
-            <Divider sx={{ my: 1 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  fontWeight: "bold",
-                  color: "primary.main",
-                  textTransform: "uppercase",
-                }}
-              >
-                Update Stock Levels
-              </Typography>
-            </Divider>
+            <Divider sx={{ my: 1 }} />
           </Grid>
 
+          {/* Measurement Specs */}
           <Grid item xs={7}>
             <TextField
               fullWidth
               type="number"
-              label={`Current ${formData.baseUnit}`}
-              name="baseValue"
-              value={formData.baseValue}
+              label="Measurement Value"
+              name="measurementValue"
+              value={formData.measurementValue}
               onChange={handleChange}
               size="small"
             />
@@ -175,8 +190,8 @@ export default function EditRawMaterialModal({
               select
               fullWidth
               label="Unit"
-              name="baseUnit"
-              value={formData.baseUnit}
+              name="measurementUnit"
+              value={formData.measurementUnit}
               onChange={handleChange}
               size="small"
             >
@@ -188,28 +203,18 @@ export default function EditRawMaterialModal({
             </TextField>
           </Grid>
 
-          <Grid item xs={7}>
-            <TextField
-              fullWidth
-              type="number"
-              label={`Current ${formData.qtyUnit}`}
-              name="qtyValue"
-              value={formData.qtyValue}
-              onChange={handleChange}
-              size="small"
-            />
-          </Grid>
-          <Grid item xs={5}>
+          {/* Packaging Type */}
+          <Grid item xs={12}>
             <TextField
               select
               fullWidth
-              label="Packaging"
-              name="qtyUnit"
-              value={formData.qtyUnit}
+              label="Packaging Type"
+              name="packaging"
+              value={formData.packaging}
               onChange={handleChange}
               size="small"
             >
-              {QTY_UNITS.map((u) => (
+              {PACKAGING_OPTIONS.map((u) => (
                 <MenuItem key={u} value={u}>
                   {u}
                 </MenuItem>
@@ -218,44 +223,20 @@ export default function EditRawMaterialModal({
           </Grid>
 
           <Grid item xs={12}>
-            <Divider sx={{ my: 1 }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  fontWeight: "bold",
-                  color: "primary.main",
-                  textTransform: "uppercase",
-                }}
-              >
-                Monitoring Logic
-              </Typography>
-            </Divider>
+            <Divider sx={{ my: 1 }} />
           </Grid>
 
-          <Grid item xs={6}>
+          {/* Alert Logic */}
+          <Grid item xs={12}>
             <TextField
               fullWidth
               type="number"
-              label="Alert Threshold"
-              name="minStockThreshold"
-              value={formData.minStockThreshold}
+              label="Low Stock Alert Threshold"
+              name="minStock"
+              value={formData.minStock}
               onChange={handleChange}
               size="small"
             />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              select
-              fullWidth
-              label="Alert Target"
-              name="minStockTarget"
-              value={formData.minStockTarget}
-              onChange={handleChange}
-              size="small"
-            >
-              <MenuItem value="base">By {formData.baseUnit}</MenuItem>
-              <MenuItem value="qty">By {formData.qtyUnit}</MenuItem>
-            </TextField>
           </Grid>
         </Grid>
       </DialogContent>
@@ -267,10 +248,10 @@ export default function EditRawMaterialModal({
         <Button
           variant="contained"
           onClick={handleSubmit}
-          disabled={!formData.name}
+          disabled={isUnchanged || !formData.name} // --- DISABLED IF NO CHANGES ---
           sx={{ px: 4, fontWeight: "bold" }}
         >
-          Update Changes
+          Update Material
         </Button>
       </DialogActions>
     </Dialog>

@@ -69,6 +69,34 @@ export default function UserActivityModal({ open, handleClose, user }) {
     }
   };
 
+  // --- HELPER TO GROUP BY DATE ---
+  const getGroupedLogs = () => {
+    const groups = {};
+    logs.forEach((log) => {
+      const date = new Date(log.created_at);
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      let dateKey = date.toDateString();
+      if (dateKey === today.toDateString()) {
+        dateKey = "Today";
+      } else if (dateKey === yesterday.toDateString()) {
+        dateKey = "Yesterday";
+      } else {
+        dateKey = date.toLocaleDateString(undefined, {
+          dateStyle: "long",
+        });
+      }
+
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(log);
+    });
+    return groups;
+  };
+
+  const groupedLogs = getGroupedLogs();
+
   return (
     <Dialog
       open={open}
@@ -107,7 +135,7 @@ export default function UserActivityModal({ open, handleClose, user }) {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: "bold" }}>Date & Time</TableCell>
+                  <TableCell sx={{ fontWeight: "bold" }}>Time</TableCell>
                   <TableCell sx={{ fontWeight: "bold" }}>Action</TableCell>
                   <TableCell sx={{ fontWeight: "bold" }}>Module</TableCell>
                   <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
@@ -115,52 +143,74 @@ export default function UserActivityModal({ open, handleClose, user }) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {logs.map((log) => {
-                  // Specific logic to identify and format profile updates
-                  const isProfileUpdate =
-                    log.table_name === "users" && log.action_type === "UPDATE";
-                  let displayAction = log.action_type;
-                  let displayDescription = log.description;
-
-                  if (isProfileUpdate) {
-                    if (log.description.toLowerCase().includes("name")) {
-                      displayAction = "CHANGE NAME";
-                    } else if (
-                      log.description.toLowerCase().includes("email")
-                    ) {
-                      displayAction = "CHANGE EMAIL";
-                    }
-                  }
-
-                  return (
-                    <TableRow key={log.log_id} hover>
-                      <TableCell sx={{ whiteSpace: "nowrap" }}>
-                        {/* FIX: Ensuring date is parsed correctly to local time */}
-                        {new Date(log.created_at).toLocaleString(undefined, {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
+                {Object.keys(groupedLogs).map((dateGroup) => (
+                  <React.Fragment key={dateGroup}>
+                    {/* Date Header Row */}
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        sx={{
+                          bgcolor: "action.hover",
+                          fontWeight: "bold",
+                          color: "primary.main",
+                          py: 1,
+                        }}
+                      >
+                        {dateGroup}
                       </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={displayAction}
-                          size="small"
-                          color={getActionColor(log.action_type)}
-                          variant="outlined"
-                          sx={{ fontWeight: "bold", fontSize: "0.7rem" }}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ textTransform: "capitalize" }}>
-                        {log.table_name}
-                      </TableCell>
-                      {/* DISPLAY THE ITEM/RECORD ID HERE */}
-                      <TableCell sx={{ fontWeight: "bold" }}>
-                        #{log.record_id}
-                      </TableCell>
-                      <TableCell>{displayDescription}</TableCell>
                     </TableRow>
-                  );
-                })}
+                    {groupedLogs[dateGroup].map((log) => {
+                      // Specific logic to identify and format profile updates
+                      const isProfileUpdate =
+                        log.table_name === "users" &&
+                        log.action_type === "UPDATE";
+                      let displayAction = log.action_type;
+                      let displayDescription = log.description;
+
+                      if (isProfileUpdate) {
+                        if (log.description.toLowerCase().includes("name")) {
+                          displayAction = "CHANGE NAME";
+                        } else if (
+                          log.description.toLowerCase().includes("email")
+                        ) {
+                          displayAction = "CHANGE EMAIL";
+                        }
+                      }
+
+                      return (
+                        <TableRow key={log.log_id} hover>
+                          <TableCell sx={{ whiteSpace: "nowrap" }}>
+                            {/* Displaying only time since header shows the date */}
+                            {new Date(log.created_at).toLocaleTimeString(
+                              undefined,
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              },
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={displayAction}
+                              size="small"
+                              color={getActionColor(log.action_type)}
+                              variant="outlined"
+                              sx={{ fontWeight: "bold", fontSize: "0.7rem" }}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ textTransform: "capitalize" }}>
+                            {log.table_name}
+                          </TableCell>
+                          {/* DISPLAY THE ITEM/RECORD ID HERE */}
+                          <TableCell sx={{ fontWeight: "bold" }}>
+                            #{log.record_id}
+                          </TableCell>
+                          <TableCell>{displayDescription}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
               </TableBody>
             </Table>
           </TableContainer>
