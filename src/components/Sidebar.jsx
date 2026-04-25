@@ -62,12 +62,12 @@ export default function Sidebar({
     //   path: "/backup",
     // },
 
-    // {
-    //   text: "User Management",
-    //   icon: <ManageAccounts />,
-    //   section: "Administration", // New Section Header
-    //   path: "/user-management",
-    // },
+    {
+      text: "User Management",
+      icon: <ManageAccounts />,
+      section: "Administration", // New Section Header
+      path: "/user-management",
+    },
   ];
 
   // Reusable content for both types of drawers

@@ -27,8 +27,8 @@ export default function EditInventoryModal({
     name: "",
     category: "Plastic",
     uom: "Pieces",
-    price: 0,
     minStock: 10,
+    price: 0,
   });
 
   useEffect(() => {
@@ -37,8 +37,8 @@ export default function EditInventoryModal({
         name: itemData.name || "",
         category: itemData.category || "Plastic",
         uom: itemData.uom || "Pieces",
-        price: itemData.price || 0,
         minStock: itemData.minStock || 10,
+        price: itemData.price || 0,
       });
     }
   }, [itemData]);
@@ -49,8 +49,8 @@ export default function EditInventoryModal({
     formData.name === (itemData.name || "") &&
     formData.category === (itemData.category || "Plastic") &&
     formData.uom === (itemData.uom || "Pieces") &&
-    formData.price === (itemData.price || 0) &&
-    formData.minStock === (itemData.minStock || 10);
+    formData.minStock === (itemData.minStock || 10) &&
+    formData.price === (itemData.price || 0);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -153,9 +153,9 @@ export default function EditInventoryModal({
             <TextField
               fullWidth
               type="number"
-              label="Price"
-              name="price"
-              value={formData.price}
+              label="Minimum Stock Level"
+              name="minStock"
+              value={formData.minStock}
               onChange={handleChange}
             />
           </Grid>
@@ -163,9 +163,9 @@ export default function EditInventoryModal({
             <TextField
               fullWidth
               type="number"
-              label="Minimum Stock Level"
-              name="minStock"
-              value={formData.minStock}
+              label="Price"
+              name="price"
+              value={formData.price}
               onChange={handleChange}
             />
           </Grid>
