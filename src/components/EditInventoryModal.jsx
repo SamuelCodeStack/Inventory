@@ -27,6 +27,7 @@ export default function EditInventoryModal({
     name: "",
     category: "Plastic",
     uom: "Pieces",
+    price: 0,
     minStock: 10,
   });
 
@@ -36,6 +37,7 @@ export default function EditInventoryModal({
         name: itemData.name || "",
         category: itemData.category || "Plastic",
         uom: itemData.uom || "Pieces",
+        price: itemData.price || 0,
         minStock: itemData.minStock || 10,
       });
     }
@@ -47,13 +49,17 @@ export default function EditInventoryModal({
     formData.name === (itemData.name || "") &&
     formData.category === (itemData.category || "Plastic") &&
     formData.uom === (itemData.uom || "Pieces") &&
+    formData.price === (itemData.price || 0) &&
     formData.minStock === (itemData.minStock || 10);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]: name === "minStock" ? parseInt(value) || 0 : value,
+      [name]:
+        name === "minStock" || name === "price"
+          ? parseFloat(value) || 0
+          : value,
     });
   };
 
@@ -143,7 +149,17 @@ export default function EditInventoryModal({
               ))}
             </TextField>
           </Grid>
-          <Grid item xs={12}>
+          <Grid item xs={6}>
+            <TextField
+              fullWidth
+              type="number"
+              label="Price"
+              name="price"
+              value={formData.price}
+              onChange={handleChange}
+            />
+          </Grid>
+          <Grid item xs={6}>
             <TextField
               fullWidth
               type="number"

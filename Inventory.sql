@@ -1,11 +1,10 @@
-
-
 CREATE TABLE inventory (
     item_id SERIAL PRIMARY KEY,
     item_name VARCHAR(255) NOT NULL,
     category VARCHAR(255),
     unit VARCHAR(255),
     quantity INTEGER DEFAULT 0,
+	price DECIMAL(12, 2) DEFAULT 0.00,
     minimum_stock INTEGER DEFAULT 10,
 	created_at DATE NOT NULL,
 	updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP

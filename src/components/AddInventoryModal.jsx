@@ -26,6 +26,7 @@ export default function AddInventoryModal({
     category: "",
     uom: "",
     quantity: "",
+    price: "",
     minStock: "",
   };
   const [items, setItems] = useState([emptyRow]);
@@ -39,6 +40,7 @@ export default function AddInventoryModal({
       !item.category ||
       !item.uom ||
       item.quantity === "" ||
+      item.price === "" ||
       item.minStock === "",
   );
 
@@ -108,7 +110,7 @@ export default function AddInventoryModal({
             <Box key={index}>
               <Grid container spacing={2} alignItems="flex-end">
                 {/* ITEM NAME */}
-                <Grid item xs={12} md={4}>
+                <Grid item xs={12} md={3}>
                   <Typography
                     variant="caption"
                     fontWeight="bold"
@@ -129,7 +131,7 @@ export default function AddInventoryModal({
                 </Grid>
 
                 {/* CATEGORY */}
-                <Grid item xs={6} md={2.5}>
+                <Grid item xs={6} md={2}>
                   <Typography
                     variant="caption"
                     fontWeight="bold"
@@ -156,7 +158,7 @@ export default function AddInventoryModal({
                 </Grid>
 
                 {/* UNIT */}
-                <Grid item xs={6} md={2}>
+                <Grid item xs={6} md={1.5}>
                   <Typography
                     variant="caption"
                     fontWeight="bold"
@@ -180,8 +182,30 @@ export default function AddInventoryModal({
                   </TextField>
                 </Grid>
 
+                {/* PRICE */}
+                <Grid item xs={6} md={1.5}>
+                  <Typography
+                    variant="caption"
+                    fontWeight="bold"
+                    sx={{ mb: 1, display: "block", color: "text.secondary" }}
+                  >
+                    PRICE *
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    size="small"
+                    placeholder="0.00"
+                    value={item.price}
+                    error={item.price === ""}
+                    onChange={(e) =>
+                      handleChange(index, "price", e.target.value)
+                    }
+                  />
+                </Grid>
+
                 {/* QTY */}
-                <Grid item xs={6} md={1.2}>
+                <Grid item xs={6} md={1.5}>
                   <Typography
                     variant="caption"
                     fontWeight="bold"
@@ -202,7 +226,7 @@ export default function AddInventoryModal({
                 </Grid>
 
                 {/* MIN STOCK */}
-                <Grid item xs={6} md={1.2}>
+                <Grid item xs={6} md={1.5}>
                   <Typography
                     variant="caption"
                     fontWeight="bold"

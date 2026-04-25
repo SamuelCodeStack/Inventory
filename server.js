@@ -221,10 +221,6 @@ app.post("/api/auth/forgot-password", async (req, res) => {
     res.status(500).json({ error: "Server error. Please try again later." });
   }
 });
-// ==========================================
-// 1. INVENTORY ENDPOINTS
-// ==========================================
-
 app.get("/api/inventory", async (req, res) => {
   try {
     const result = await pool.query(
@@ -236,6 +232,7 @@ app.get("/api/inventory", async (req, res) => {
       category: item.category || "General",
       uom: item.unit || "pcs",
       quantity: item.quantity || 0,
+      price: item.price || 0,
       minStock: item.minimum_stock || 10,
       status:
         item.quantity === 0
@@ -259,12 +256,13 @@ app.post("/api/inventory/bulk-add", async (req, res) => {
     await client.query("BEGIN");
     for (const item of items) {
       const result = await client.query(
-        "INSERT INTO inventory (item_name, category, unit, quantity, minimum_stock, created_at) VALUES ($1, $2, $3, $4, $5, CURRENT_DATE) RETURNING item_id",
+        "INSERT INTO inventory (item_name, category, unit, quantity, price, minimum_stock, created_at) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE) RETURNING item_id",
         [
           item.name,
           item.category,
           item.uom,
           item.quantity || 0,
+          item.price || 0,
           item.minStock || 10,
         ],
       );
@@ -341,14 +339,14 @@ app.patch("/api/inventory/bulk", async (req, res) => {
 
 app.patch("/api/inventory/:id", async (req, res) => {
   const id = cleanId(req.params.id);
-  const { name, category, uom, quantity, minStock } = req.body;
+  const { name, category, uom, quantity, price, minStock } = req.body;
   try {
     await pool.query(
       `UPDATE inventory SET 
-       item_name=$1, category=$2, unit=$3, quantity=$4, minimum_stock=$5, 
+       item_name=$1, category=$2, unit=$3, quantity=$4, price=$5, minimum_stock=$6, 
        updated_at = CASE WHEN quantity != $4 THEN now() ELSE updated_at END
-       WHERE item_id=$6`,
-      [name, category, uom, quantity, minStock, id],
+       WHERE item_id=$7`,
+      [name, category, uom, quantity, price, minStock, id],
     );
     await logActivity(
       req,

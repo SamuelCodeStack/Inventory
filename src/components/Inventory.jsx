@@ -412,6 +412,9 @@ export default function Inventory({ mode }) {
                 <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
                 <TableCell sx={{ fontWeight: "bold" }}>Unit</TableCell>
                 <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                  Price
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: "bold" }}>
                   Quantity
                 </TableCell>
                 <TableCell align="center" sx={{ fontWeight: "bold" }}>
@@ -439,6 +442,12 @@ export default function Inventory({ mode }) {
                     />
                   </TableCell>
                   <TableCell>{row.uom}</TableCell>
+                  <TableCell align="right">
+                    ₱
+                    {Number(row.price).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
+                  </TableCell>
                   <TableCell align="right">
                     <TextField
                       type="number"
@@ -520,7 +529,7 @@ export default function Inventory({ mode }) {
               ))}
               {paginatedData.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
                     No items match your filters.
                   </TableCell>
                 </TableRow>
