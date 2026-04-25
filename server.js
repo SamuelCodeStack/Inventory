@@ -13,12 +13,23 @@ dotenv.config();
 const app = express();
 const port = 3000;
 
+// Split the string into an array, or default to an empty array if not found
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",")
+  : [];
+
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "http://192.168.1.105:5173", // Computer A's IP
-    ],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   }),
 );

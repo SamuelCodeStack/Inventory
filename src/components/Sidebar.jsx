@@ -44,11 +44,11 @@ export default function Sidebar({
       path: "/inventory",
     },
 
-    {
-      text: "Raw Materials",
-      icon: <Layers />,
-      path: "/raw-materials",
-    },
+    // {
+    //   text: "Raw Materials",
+    //   icon: <Layers />,
+    //   path: "/raw-materials",
+    // },
 
     {
       text: "Purchase Order",
