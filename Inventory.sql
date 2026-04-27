@@ -18,7 +18,7 @@ CREATE TABLE purchase_order(
 	contact BIGINT NOT NULL,
 	company VARCHAR(255) NOT NULL,
 	address VARCHAR(255) NOT NULL,
-	total_price INT NOT NULL,
+	total_price DECIMAL(12, 2) NOT NULL,
     status VARCHAR(255) NOT NULL,
 	remarks VARCHAR(255) NOT NULL,
 	delivery_date DATE NOT NULL,
@@ -34,7 +34,7 @@ CREATE TABLE item_order(
     category VARCHAR(255) NOT NULL,
     unit VARCHAR(255) NOT NULL,
 	quantity INTEGER NOT NULL,
-	price INT NOT NULL
+	price DECIMAL(12, 2) NOT NULL	
 );
 
 

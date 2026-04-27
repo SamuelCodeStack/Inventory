@@ -95,31 +95,45 @@ export default function Dashboard({ mode }) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {inventory.slice(0, 5).map((item) => {
-            const style = getStatusStyle(item.status);
-            return (
-              <TableRow key={item.id} hover>
-                <TableCell sx={commonTableCellStyle}>{item.name}</TableCell>
-                <TableCell sx={commonTableCellStyle}>
-                  {item.quantity} {item.uom}
-                </TableCell>
-                <TableCell sx={{ borderColor: borderColor }}>
-                  <Chip
-                    label={item.status}
-                    size="small"
-                    sx={{
-                      fontWeight: 700,
-                      fontSize: "0.75rem",
-                      borderRadius: "6px",
-                      color: style.color,
-                      bgcolor: style.bgcolor,
-                      border: "none",
-                    }}
-                  />
-                </TableCell>
-              </TableRow>
-            );
-          })}
+          {inventory.length === 0 ? (
+            <TableRow>
+              <TableCell
+                colSpan={3}
+                align="center"
+                sx={{ ...commonTableCellStyle, py: 4, border: "none" }}
+              >
+                <Typography variant="body2" color="text.secondary" italic>
+                  No items currently low or out of stock.
+                </Typography>
+              </TableCell>
+            </TableRow>
+          ) : (
+            inventory.slice(0, 5).map((item) => {
+              const style = getStatusStyle(item.status);
+              return (
+                <TableRow key={item.id} hover>
+                  <TableCell sx={commonTableCellStyle}>{item.name}</TableCell>
+                  <TableCell sx={commonTableCellStyle}>
+                    {item.quantity} {item.uom}
+                  </TableCell>
+                  <TableCell sx={{ borderColor: borderColor }}>
+                    <Chip
+                      label={item.status}
+                      size="small"
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: "0.75rem",
+                        borderRadius: "6px",
+                        color: style.color,
+                        bgcolor: style.bgcolor,
+                        border: "none",
+                      }}
+                    />
+                  </TableCell>
+                </TableRow>
+              );
+            })
+          )}
         </TableBody>
       </Table>
     </TableContainer>

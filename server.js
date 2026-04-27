@@ -412,6 +412,7 @@ app.get("/api/purchase-orders", async (req, res) => {
       })),
     );
   } catch (err) {
+    console.error("Fetch PO Error:", err);
     res.status(500).json({ error: "Fetch failed" });
   }
 });

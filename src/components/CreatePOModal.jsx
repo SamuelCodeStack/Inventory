@@ -76,7 +76,7 @@ export default function CreatePOModal({
 
   useEffect(() => {
     const calculated = selectedItems.reduce(
-      (sum, item) => sum + item.qty * (item.price || 0),
+      (sum, item) => sum + (item.price || 0) * (item.qty || 1),
       0,
     );
     setFormData((prev) => ({ ...prev, totalPrice: calculated }));
@@ -372,6 +372,9 @@ export default function CreatePOModal({
                         Stock
                       </TableCell>
                       <TableCell align="center" sx={headerCellStyle}>
+                        Price
+                      </TableCell>
+                      <TableCell align="center" sx={headerCellStyle}>
                         Status
                       </TableCell>
                       <TableCell align="right" sx={headerCellStyle}>
@@ -397,17 +400,33 @@ export default function CreatePOModal({
                               {item.quantity}
                             </TableCell>
                             <TableCell align="center">
+                              ₱
+                              {(item.price || 0).toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </TableCell>
+                            <TableCell align="center">
                               <Chip
                                 label={item.status}
                                 size="small"
-                                color={
-                                  item.status === "In Stock"
-                                    ? "success"
-                                    : item.status === "Low Stock"
-                                      ? "warning"
-                                      : "error"
-                                }
-                                sx={{ fontSize: "0.7rem", fontWeight: "bold" }}
+                                sx={{
+                                  fontSize: "0.75rem",
+                                  fontWeight: "bold",
+                                  borderRadius: "6px",
+                                  bgcolor:
+                                    item.status === "In Stock"
+                                      ? "#2e4a3f"
+                                      : item.status === "Low Stock"
+                                        ? "#4a3e2e"
+                                        : "#4a2e2e",
+                                  color:
+                                    item.status === "In Stock"
+                                      ? "#26d672"
+                                      : item.status === "Low Stock"
+                                        ? "#ffa726"
+                                        : "#ff5252",
+                                }}
                               />
                             </TableCell>
                             <TableCell align="right">
@@ -510,21 +529,30 @@ export default function CreatePOModal({
                                 }
                               />
                             </Grid>
-                            <Grid item xs={6}>
-                              <TextField
-                                fullWidth
-                                size="small"
-                                label="Price"
-                                type="number"
-                                value={item.price}
-                                onChange={(e) =>
-                                  handleItemChange(
-                                    item.id,
-                                    "price",
-                                    e.target.value,
-                                  )
-                                }
-                              />
+                            <Grid
+                              item
+                              xs={6}
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "flex-end",
+                              }}
+                            >
+                              <Box sx={{ textAlign: "right" }}>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  Price
+                                </Typography>
+                                <Typography variant="body2" fontWeight="bold">
+                                  ₱
+                                  {(item.price || 0).toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </Typography>
+                              </Box>
                             </Grid>
                           </Grid>
                         </Paper>
@@ -544,7 +572,11 @@ export default function CreatePOModal({
                 >
                   <Typography variant="caption">Total Amount</Typography>
                   <Typography variant="h5" fontWeight="900">
-                    ₱{formData.totalPrice.toLocaleString()}
+                    ₱
+                    {formData.totalPrice.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </Typography>
                 </Box>
               </Box>
