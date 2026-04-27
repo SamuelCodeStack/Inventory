@@ -221,10 +221,19 @@ app.post("/api/auth/forgot-password", async (req, res) => {
     res.status(500).json({ error: "Server error. Please try again later." });
   }
 });
+
+// ==========================================
+// INVENTORY ENDPOINT
+// ==========================================
+
 app.get("/api/inventory", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT *, created_at, updated_at FROM inventory ORDER BY item_id DESC",
+      `SELECT i.*, 
+        (SELECT old_quantity FROM inventory_ledger l 
+         WHERE l.item_id = i.item_id 
+         ORDER BY recorded_at DESC LIMIT 1) as prev_qty
+       FROM inventory i ORDER BY i.item_id DESC`,
     );
     const mappedData = result.rows.map((item) => ({
       id: item.item_id,
@@ -232,6 +241,7 @@ app.get("/api/inventory", async (req, res) => {
       category: item.category || "General",
       uom: item.unit || "pcs",
       quantity: item.quantity || 0,
+      previousQuantity: item.prev_qty !== null ? item.prev_qty : item.quantity,
       price: item.price || 0,
       minStock: item.minimum_stock || 10,
       status:
@@ -306,6 +316,13 @@ app.patch("/api/inventory/bulk", async (req, res) => {
 
         // 2. Only update and log if the quantity actually changed
         if (oldQty !== newQty) {
+          // RECORD TO LEDGER
+          await client.query(
+            `INSERT INTO inventory_ledger (item_id, old_quantity, new_quantity, change_amount)
+             VALUES ($1, $2, $3, $4)`,
+            [id, oldQty, newQty, newQty - oldQty],
+          );
+
           await client.query(
             `UPDATE inventory SET 
              quantity = $1, 
@@ -341,6 +358,21 @@ app.patch("/api/inventory/:id", async (req, res) => {
   const id = cleanId(req.params.id);
   const { name, category, uom, quantity, price, minStock } = req.body;
   try {
+    // GET OLD QUANTITY FOR LEDGER
+    const oldData = await pool.query(
+      "SELECT quantity FROM inventory WHERE item_id = $1",
+      [id],
+    );
+    const oldQty = oldData.rows[0]?.quantity || 0;
+
+    if (oldQty !== quantity) {
+      await pool.query(
+        `INSERT INTO inventory_ledger (item_id, old_quantity, new_quantity, change_amount)
+         VALUES ($1, $2, $3, $4)`,
+        [id, oldQty, quantity, quantity - oldQty],
+      );
+    }
+
     await pool.query(
       `UPDATE inventory SET 
        item_name=$1, category=$2, unit=$3, quantity=$4, price=$5, minimum_stock=$6, 
@@ -620,7 +652,11 @@ app.patch("/api/purchase-orders/:id/status", async (req, res) => {
 app.get("/api/raw-materials", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT *, updated_at FROM raw_materials ORDER BY material_id DESC",
+      `SELECT r.*, 
+        (SELECT old_qty_value FROM raw_materials_ledger l 
+         WHERE l.material_id = r.material_id 
+         ORDER BY recorded_at DESC LIMIT 1) as prev_qty
+       FROM raw_materials r ORDER BY r.material_id DESC`,
     );
     const mappedData = result.rows.map((m) => ({
       id: m.material_id,
@@ -630,6 +666,8 @@ app.get("/api/raw-materials", async (req, res) => {
       measurementUnit: m.measurement_unit,
       packaging: m.packaging,
       quantity: parseFloat(m.quantity),
+      previousQuantity:
+        m.prev_qty !== null ? parseFloat(m.prev_qty) : parseFloat(m.quantity),
       minStock: parseFloat(m.min_stock),
       createdAt: m.created_at,
       updated_at: m.updated_at,
@@ -686,8 +724,8 @@ app.post("/api/raw-materials/bulk-add", async (req, res) => {
     for (const item of items) {
       const result = await pool.query(
         `INSERT INTO raw_materials 
-         (material_name, category, measurement_value, measurement_unit, packaging, quantity, min_stock) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+          (material_name, category, measurement_value, measurement_unit, packaging, quantity, min_stock) 
+          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
         [
           item.name,
           item.category,
@@ -720,23 +758,48 @@ app.post("/api/raw-materials/bulk-add", async (req, res) => {
 // --- ADDED BULK UPDATE ENDPOINT (For Edit Qty) ---
 app.patch("/api/raw-materials/bulk", async (req, res) => {
   const { items } = req.body;
+  const client = await pool.connect();
   try {
+    await client.query("BEGIN");
     for (const item of items) {
-      await pool.query(
-        "UPDATE raw_materials SET quantity = $1, updated_at = now() WHERE material_id = $2",
-        [item.quantity, item.id],
+      const currentRes = await client.query(
+        "SELECT quantity FROM raw_materials WHERE material_id = $1",
+        [item.id],
       );
-      await logActivity(
-        req,
-        "UPDATE",
-        "raw_materials",
-        item.id,
-        `Bulk quantity update for ID ${item.id} to ${item.quantity}`,
-      );
+
+      if (currentRes.rows.length > 0) {
+        const oldQty = currentRes.rows[0].quantity;
+        const newQty = item.quantity;
+
+        if (oldQty !== newQty) {
+          await client.query(
+            `INSERT INTO raw_materials_ledger (material_id, old_qty_value, new_qty_value, change_amount)
+             VALUES ($1, $2, $3, $4)`,
+            [item.id, oldQty, newQty, newQty - oldQty],
+          );
+
+          await client.query(
+            "UPDATE raw_materials SET quantity = $1, updated_at = now() WHERE material_id = $2",
+            [newQty, item.id],
+          );
+
+          await logActivity(
+            req,
+            "UPDATE",
+            "raw_materials",
+            item.id,
+            `Bulk quantity update for ID ${item.id} to ${newQty}`,
+          );
+        }
+      }
     }
+    await client.query("COMMIT");
     res.json({ message: "Bulk update successful" });
   } catch (err) {
+    await client.query("ROLLBACK");
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -752,6 +815,20 @@ app.put("/api/raw-materials/:id", async (req, res) => {
     minStock,
   } = req.body;
   try {
+    const currentRes = await pool.query(
+      "SELECT quantity FROM raw_materials WHERE material_id = $1",
+      [id],
+    );
+    const oldQty = currentRes.rows[0]?.quantity || 0;
+
+    if (oldQty !== quantity) {
+      await pool.query(
+        `INSERT INTO raw_materials_ledger (material_id, old_qty_value, new_qty_value, change_amount)
+         VALUES ($1, $2, $3, $4)`,
+        [id, oldQty, quantity, quantity - oldQty],
+      );
+    }
+
     await pool.query(
       `UPDATE raw_materials SET 
         material_name=$1, category=$2, measurement_value=$3, measurement_unit=$4, 

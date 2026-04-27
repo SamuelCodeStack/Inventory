@@ -1,3 +1,5 @@
+
+
 CREATE TABLE inventory (
     item_id SERIAL PRIMARY KEY,
     item_name VARCHAR(255) NOT NULL,
@@ -8,6 +10,16 @@ CREATE TABLE inventory (
     minimum_stock INTEGER DEFAULT 10,
 	created_at DATE NOT NULL,
 	updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE inventory_ledger (
+    printinv_id SERIAL PRIMARY KEY,
+    -- Fixed: item_id references inventory(item_id)
+    item_id INTEGER REFERENCES inventory(item_id) ON DELETE CASCADE,
+    old_quantity DECIMAL(10, 2),
+    new_quantity DECIMAL(10, 2),
+    change_amount DECIMAL(10, 2), -- The difference (e.g., +10 or -5)
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE purchase_order(
@@ -50,6 +62,15 @@ CREATE TABLE raw_materials (
     min_stock_target VARCHAR(10) DEFAULT 'base', 
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE raw_materials_ledger (
+    ledger_id SERIAL PRIMARY KEY,
+    material_id INTEGER REFERENCES raw_materials(material_id) ON DELETE CASCADE,
+    old_qty_value NUMERIC(12, 2),
+    new_qty_value NUMERIC(12, 2),
+    change_amount NUMERIC(12, 2),
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE activity_logs (

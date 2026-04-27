@@ -82,7 +82,7 @@ export default function PrintRawMaterialModal({
     if (printAll) return true;
 
     // Check Date (Uses updatedAt if it exists, otherwise createdAt)
-    const dateToCompare = item.updatedAt || item.createdAt;
+    const dateToCompare = item.updated_at || item.createdAt;
     if (!dateToCompare) return false;
 
     const itemDate = new Date(dateToCompare);
@@ -286,45 +286,111 @@ export default function PrintRawMaterialModal({
             >
               <TableHead>
                 <TableRow sx={{ bgcolor: "#f5f5f5" }}>
-                  <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>
-                    Material Name
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                    Measurement
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                    Quantity
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>
-                    Last Updated
-                  </TableCell>
+                  {printAll ? (
+                    <>
+                      <TableCell sx={{ fontWeight: "bold" }}>
+                        Material Name
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: "bold" }}>
+                        Category
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                        Measurement
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                        Quantity
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: "bold" }}>Status</TableCell>
+                    </>
+                  ) : (
+                    <>
+                      <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
+                      <TableCell sx={{ fontWeight: "bold" }}>
+                        Material Name
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                        Measurement
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                        Prev. Qty
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                        Adjustment
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                        Current Qty
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: "bold" }}>
+                        Last Updated
+                      </TableCell>
+                    </>
+                  )}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredData.length > 0 ? (
-                  filteredData.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>#{row.id}</TableCell>
-                      <TableCell sx={{ fontWeight: "bold" }}>
-                        {row.name}
-                      </TableCell>
-                      <TableCell align="right">
-                        {row.baseValue} {row.baseUnit}
-                      </TableCell>
-                      <TableCell align="right">
-                        {row.qtyValue} {row.qtyUnit}
-                      </TableCell>
-                      <TableCell>
-                        {new Date(
-                          row.updatedAt || row.createdAt,
-                        ).toLocaleDateString()}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  filteredData.map((row) => {
+                    const diff =
+                      (row.quantity || 0) - (row.previousQuantity || 0);
+                    return (
+                      <TableRow key={row.id}>
+                        {printAll ? (
+                          <>
+                            <TableCell sx={{ fontWeight: "bold" }}>
+                              {row.name}
+                            </TableCell>
+                            <TableCell>{row.category}</TableCell>
+                            <TableCell align="right">
+                              {row.measurementValue} {row.measurementUnit}
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{ fontWeight: "bold" }}
+                            >
+                              {row.quantity}
+                            </TableCell>
+                            <TableCell>
+                              {row.quantity <= 0
+                                ? "Out of Stock"
+                                : row.status || "In Stock"}
+                            </TableCell>
+                          </>
+                        ) : (
+                          <>
+                            <TableCell>#{row.id}</TableCell>
+                            <TableCell sx={{ fontWeight: "bold" }}>
+                              {row.name}
+                            </TableCell>
+                            <TableCell align="right">
+                              {row.measurementValue} {row.measurementUnit}
+                            </TableCell>
+                            <TableCell align="right">
+                              {row.previousQuantity}
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{ fontWeight: "bold" }}
+                            >
+                              {diff > 0 ? `+${diff}` : diff}
+                            </TableCell>
+                            <TableCell align="right">{row.quantity}</TableCell>
+                            <TableCell>
+                              {new Date(
+                                row.updated_at || row.createdAt,
+                              ).toLocaleDateString()}
+                            </TableCell>
+                          </>
+                        )}
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 10 }}>
+                    <TableCell
+                      colSpan={printAll ? 5 : 7}
+                      align="center"
+                      sx={{ py: 10 }}
+                    >
                       No records found for the selected filters.
                     </TableCell>
                   </TableRow>

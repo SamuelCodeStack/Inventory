@@ -69,8 +69,10 @@ export default function Inventory({ mode }) {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/inventory`);
       // const response = await fetch("http://localhost:3000/api/inventory");
       const data = await response.json();
-      setInventoryData(data);
-      setOriginalData(JSON.parse(JSON.stringify(data)));
+      // Initialize movement value as empty string for each item
+      const initializedData = data.map((item) => ({ ...item, movement: "" }));
+      setInventoryData(initializedData);
+      setOriginalData(JSON.parse(JSON.stringify(initializedData)));
     } catch (error) {
       showMessage("Network Error: Could not connect to server", "error");
     }
@@ -132,6 +134,41 @@ export default function Inventory({ mode }) {
                 ? "Low Stock"
                 : "In Stock";
           return { ...item, quantity: qty, status: newStatus };
+        }
+        return item;
+      }),
+    );
+  };
+
+  // Logic for the Stock In/Out Input
+  const handleMovementChange = (id, value) => {
+    // Allow only numbers and the minus sign
+    if (/[^-0-9]/.test(value) && value !== "") return;
+
+    setInventoryData((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          const movementVal = value === "-" ? "-" : parseInt(value) || 0;
+          const originalItem = originalData.find((o) => o.id === id);
+          const baseQty = originalItem ? originalItem.quantity : item.quantity;
+
+          const finalMovement = value === "-" ? 0 : movementVal;
+          const newQty = baseQty + finalMovement;
+
+          const threshold = item.minStock || 10;
+          let newStatus =
+            newQty === 0
+              ? "Out of Stock"
+              : newQty <= threshold
+                ? "Low Stock"
+                : "In Stock";
+
+          return {
+            ...item,
+            movement: value,
+            quantity: newQty >= 0 ? newQty : 0,
+            status: newStatus,
+          };
         }
         return item;
       }),
@@ -417,6 +454,11 @@ export default function Inventory({ mode }) {
                 <TableCell align="right" sx={{ fontWeight: "bold" }}>
                   Quantity
                 </TableCell>
+                {isEditingQty && (
+                  <TableCell align="center" sx={{ fontWeight: "bold" }}>
+                    Adjustment
+                  </TableCell>
+                )}
                 <TableCell align="center" sx={{ fontWeight: "bold" }}>
                   Status
                 </TableCell>
@@ -471,27 +513,108 @@ export default function Inventory({ mode }) {
                       }}
                     />
                   </TableCell>
+
+                  {/* Adjustment Input (Stock In/Out Functionality) */}
+                  {isEditingQty && (
+                    <TableCell align="center">
+                      <TextField
+                        placeholder="+/-"
+                        label={
+                          parseFloat(row.movement) > 0
+                            ? "Stock In"
+                            : parseFloat(row.movement) < 0
+                              ? "Stock Out"
+                              : "Adjustment"
+                        }
+                        size="small"
+                        value={row.movement || ""}
+                        onChange={(e) =>
+                          handleMovementChange(row.id, e.target.value)
+                        }
+                        sx={{
+                          "& .MuiOutlinedInput-root": {
+                            "& fieldset": {
+                              borderColor:
+                                parseFloat(row.movement) > 0
+                                  ? "#2ecc71"
+                                  : parseFloat(row.movement) < 0
+                                    ? "#e74c3c"
+                                    : "rgba(255, 255, 255, 0.23)",
+                            },
+                            "&:hover fieldset": {
+                              borderColor:
+                                parseFloat(row.movement) > 0
+                                  ? "#2ecc71"
+                                  : parseFloat(row.movement) < 0
+                                    ? "#e74c3c"
+                                    : "rgba(255, 255, 255, 0.5)",
+                            },
+                            "&.Mui-focused fieldset": {
+                              borderColor:
+                                parseFloat(row.movement) > 0
+                                  ? "#2ecc71"
+                                  : parseFloat(row.movement) < 0
+                                    ? "#e74c3c"
+                                    : "#f39c12",
+                            },
+                          },
+                          "& .MuiInputLabel-root": {
+                            color:
+                              parseFloat(row.movement) > 0
+                                ? "#2ecc71"
+                                : parseFloat(row.movement) < 0
+                                  ? "#e74c3c"
+                                  : "text.secondary",
+                          },
+                          "& .MuiInputLabel-root.Mui-focused": {
+                            color:
+                              parseFloat(row.movement) > 0
+                                ? "#2ecc71"
+                                : parseFloat(row.movement) < 0
+                                  ? "#e74c3c"
+                                  : "#f39c12",
+                          },
+                        }}
+                        InputProps={{
+                          sx: {
+                            fontSize: "0.9rem",
+                            width: "120px",
+                            fontWeight: "bold",
+                            color: "text.primary",
+                          },
+                        }}
+                      />
+                    </TableCell>
+                  )}
+
                   <TableCell align="center">
                     <Box
                       sx={{
                         display: "inline-block",
-                        px: 1.5,
-                        py: 0.5,
-                        borderRadius: 1,
-                        fontSize: "0.75rem",
+                        px: 2.5,
+                        py: 0.8,
+                        borderRadius: 2,
+                        fontSize: "0.85rem",
                         fontWeight: "bold",
                         bgcolor:
                           row.status === "In Stock"
-                            ? "rgba(46, 204, 113, 0.15)"
+                            ? "rgba(46, 204, 113, 0.2)"
                             : row.status === "Low Stock"
-                              ? "rgba(241, 145, 73, 0.15)"
-                              : "rgba(231, 76, 60, 0.15)",
+                              ? "rgba(241, 145, 73, 0.2)"
+                              : "rgba(231, 76, 60, 0.2)",
                         color:
                           row.status === "In Stock"
-                            ? "#27ae60"
+                            ? "#2ecc71"
                             : row.status === "Low Stock"
                               ? "#e67e22"
-                              : "#c0392b",
+                              : "#e74c3c",
+                        border: `1px solid ${
+                          row.status === "In Stock"
+                            ? "rgba(46, 204, 113, 0.3)"
+                            : row.status === "Low Stock"
+                              ? "rgba(241, 145, 73, 0.3)"
+                              : "rgba(231, 76, 60, 0.3)"
+                        }`,
                       }}
                     >
                       {row.status}
@@ -529,7 +652,11 @@ export default function Inventory({ mode }) {
               ))}
               {paginatedData.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
+                  <TableCell
+                    colSpan={isEditingQty ? 9 : 8}
+                    align="center"
+                    sx={{ py: 3 }}
+                  >
                     No items match your filters.
                   </TableCell>
                 </TableRow>

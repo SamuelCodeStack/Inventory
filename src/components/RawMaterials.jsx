@@ -75,8 +75,10 @@ export default function RawMaterials({ mode }) {
         `${import.meta.env.VITE_API_URL}/raw-materials`,
       );
       const data = await response.json();
-      setMaterials(data);
-      setOriginalData(JSON.parse(JSON.stringify(data))); // Keep a deep copy
+      // Initialize items with an adjustment field
+      const initializedData = data.map((item) => ({ ...item, adjustment: "" }));
+      setMaterials(initializedData);
+      setOriginalData(JSON.parse(JSON.stringify(initializedData))); // Keep a deep copy
     } catch (error) {
       showSnackbar("Failed to load raw materials", "error");
     } finally {
@@ -95,6 +97,28 @@ export default function RawMaterials({ mode }) {
       prev.map((item) => {
         if (item.id === id) {
           return { ...item, quantity: qty };
+        }
+        return item;
+      }),
+    );
+  };
+
+  // --- ADJUSTMENT LOGIC ---
+  const handleAdjustmentChange = (id, value) => {
+    // Only allow numbers and the minus sign
+    if (value !== "" && value !== "-" && !/^-?\d+$/.test(value)) return;
+
+    setMaterials((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          const original = originalData.find((o) => o.id === id);
+          const adjValue = parseInt(value) || 0;
+          // Automatically update the quantity based on original + adjustment
+          return {
+            ...item,
+            adjustment: value,
+            quantity: original.quantity + adjValue,
+          };
         }
         return item;
       }),
@@ -426,9 +450,12 @@ export default function RawMaterials({ mode }) {
                     <TableCell sx={{ fontWeight: "bold" }}>
                       Measurement
                     </TableCell>
-                    <TableCell sx={{ fontWeight: "bold" }}>
-                      Stock Quantity
-                    </TableCell>
+                    <TableCell sx={{ fontWeight: "bold" }}>Quantity</TableCell>
+                    {isEditingQty && (
+                      <TableCell sx={{ fontWeight: "bold" }}>
+                        Adjustment
+                      </TableCell>
+                    )}
                     <TableCell align="center" sx={{ fontWeight: "bold" }}>
                       Status
                     </TableCell>
@@ -440,13 +467,24 @@ export default function RawMaterials({ mode }) {
                 <TableBody>
                   {paginatedMaterials.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 5 }}>
+                      <TableCell
+                        colSpan={isEditingQty ? 8 : 7}
+                        align="center"
+                        sx={{ py: 5 }}
+                      >
                         No raw materials match your filters.
                       </TableCell>
                     </TableRow>
                   ) : (
                     paginatedMaterials.map((row) => {
                       const status = getStatus(row);
+                      // Dynamic label for adjustment
+                      let adjustmentLabel = "Adjustment";
+                      if (parseInt(row.adjustment) > 0)
+                        adjustmentLabel = "Stock In";
+                      if (parseInt(row.adjustment) < 0)
+                        adjustmentLabel = "Stock Out";
+
                       return (
                         <TableRow key={row.id} hover>
                           <TableCell>#{row.id}</TableCell>
@@ -491,6 +529,27 @@ export default function RawMaterials({ mode }) {
                               }}
                             />
                           </TableCell>
+                          {isEditingQty && (
+                            <TableCell>
+                              <TextField
+                                size="small"
+                                label={adjustmentLabel}
+                                placeholder="+/-"
+                                value={row.adjustment || ""}
+                                onChange={(e) =>
+                                  handleAdjustmentChange(row.id, e.target.value)
+                                }
+                                color={
+                                  parseInt(row.adjustment) > 0
+                                    ? "success"
+                                    : parseInt(row.adjustment) < 0
+                                      ? "error"
+                                      : "primary"
+                                }
+                                sx={{ width: "120px" }}
+                              />
+                            </TableCell>
+                          )}
                           <TableCell align="center">
                             <Box
                               sx={{

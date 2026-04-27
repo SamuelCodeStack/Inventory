@@ -38,11 +38,20 @@ export default function PrintInventoryModal({
     new Date().toLocaleDateString("en-CA"),
   );
   const [printAll, setPrintAll] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [showPrice, setShowPrice] = useState(true);
   const componentRef = useRef();
+
+  // Get unique categories for the dropdown
+  const categories = [
+    "All",
+    ...new Set(inventoryData.map((item) => item.category || "Uncategorized")),
+  ];
 
   // Helper to get range text for the report header
   const getRangeLabel = () => {
-    if (printAll) return "Full Inventory";
+    if (printAll)
+      return `Full Inventory${selectedCategory !== "All" ? ` - ${selectedCategory}` : ""}`;
     const date = new Date(selectedDate);
 
     if (filterType === "day") {
@@ -69,49 +78,54 @@ export default function PrintInventoryModal({
     return "";
   };
 
-  // Filter logic - Uses lastUpdated if available, otherwise fallback to original date
-  const filteredData = printAll
-    ? inventoryData
-    : inventoryData.filter((item) => {
-        const dateToCompare = item.lastUpdated || item.date;
-        if (!dateToCompare) return false;
+  // Filter logic - Modified to handle Category and Print All requirements
+  const filteredData = inventoryData.filter((item) => {
+    // Apply Category Filter first
+    if (selectedCategory !== "All" && item.category !== selectedCategory)
+      return false;
 
-        const itemDate = new Date(dateToCompare);
-        const targetDate = new Date(selectedDate);
+    if (printAll) return true;
 
-        // Daily
-        if (filterType === "day") {
-          return itemDate.toLocaleDateString("en-CA") === selectedDate;
-        }
+    // Date filtering logic
+    const dateToCompare = item.lastUpdated || item.date;
+    if (!dateToCompare) return false;
 
-        // Monthly
-        if (filterType === "month") {
-          return (
-            itemDate.getMonth() === targetDate.getMonth() &&
-            itemDate.getFullYear() === targetDate.getFullYear()
-          );
-        }
+    const itemDate = new Date(dateToCompare);
+    const targetDate = new Date(selectedDate);
 
-        // Yearly
-        if (filterType === "year") {
-          return itemDate.getFullYear() === targetDate.getFullYear();
-        }
+    // Daily
+    if (filterType === "day") {
+      return itemDate.toLocaleDateString("en-CA") === selectedDate;
+    }
 
-        // Weekly
-        if (filterType === "week") {
-          const startOfWeek = new Date(targetDate);
-          startOfWeek.setDate(targetDate.getDate() - targetDate.getDay());
-          startOfWeek.setHours(0, 0, 0, 0);
+    // Monthly
+    if (filterType === "month") {
+      return (
+        itemDate.getMonth() === targetDate.getMonth() &&
+        itemDate.getFullYear() === targetDate.getFullYear()
+      );
+    }
 
-          const endOfWeek = new Date(startOfWeek);
-          endOfWeek.setDate(startOfWeek.getDate() + 6);
-          endOfWeek.setHours(23, 59, 59, 999);
+    // Yearly
+    if (filterType === "year") {
+      return itemDate.getFullYear() === targetDate.getFullYear();
+    }
 
-          return itemDate >= startOfWeek && itemDate <= endOfWeek;
-        }
+    // Weekly
+    if (filterType === "week") {
+      const startOfWeek = new Date(targetDate);
+      startOfWeek.setDate(targetDate.getDate() - targetDate.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
 
-        return false;
-      });
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+
+      return itemDate >= startOfWeek && itemDate <= endOfWeek;
+    }
+
+    return false;
+  });
 
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
@@ -171,6 +185,31 @@ export default function PrintInventoryModal({
               }
               label="Print All Records"
             />
+
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={showPrice}
+                  onChange={(e) => setShowPrice(e.target.checked)}
+                />
+              }
+              label="Include Price"
+            />
+
+            <TextField
+              select
+              label="Category"
+              size="small"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              sx={{ width: 160 }}
+            >
+              {categories.map((cat) => (
+                <MenuItem key={cat} value={cat}>
+                  {cat}
+                </MenuItem>
+              ))}
+            </TextField>
 
             {!printAll && (
               <>
@@ -274,42 +313,108 @@ export default function PrintInventoryModal({
             >
               <TableHead>
                 <TableRow sx={{ bgcolor: "#f0f0f0" }}>
-                  <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
                   <TableCell sx={{ fontWeight: "bold" }}>Item Name</TableCell>
                   <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                    Quantity
-                  </TableCell>
                   <TableCell sx={{ fontWeight: "bold" }}>Unit</TableCell>
-                  {/* NEW COLUMN */}
-                  <TableCell sx={{ fontWeight: "bold" }}>
-                    Date Updated
-                  </TableCell>
+                  {showPrice && (
+                    <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                      Price
+                    </TableCell>
+                  )}
+                  {printAll ? (
+                    <>
+                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                        Quantity
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: "bold" }}>Status</TableCell>
+                    </>
+                  ) : (
+                    <>
+                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                        Prev Qty
+                      </TableCell>
+                      <TableCell align="center" sx={{ fontWeight: "bold" }}>
+                        Adjustment
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                        Current Qty
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: "bold" }}>
+                        Last Updated
+                      </TableCell>
+                    </>
+                  )}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filteredData.length > 0 ? (
-                  filteredData.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell>{String(row.id).split(":")[0]}</TableCell>
-                      <TableCell sx={{ fontWeight: "bold" }}>
-                        {row.name}
-                      </TableCell>
-                      <TableCell>{row.category}</TableCell>
-                      <TableCell align="right">{row.quantity}</TableCell>
-                      <TableCell>{row.uom}</TableCell>
-                      {/* DISPLAY DATE UPDATED OR CREATED DATE AS FALLBACK */}
-                      <TableCell>
-                        {new Date(
-                          row.lastUpdated || row.date,
-                        ).toLocaleDateString()}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  filteredData.map((row) => {
+                    const diff =
+                      Math.round(row.quantity || 0) -
+                      Math.round(row.previousQuantity || 0);
+                    return (
+                      <TableRow key={row.id}>
+                        <TableCell sx={{ fontWeight: "bold" }}>
+                          {row.name}
+                        </TableCell>
+                        <TableCell>{row.category || "---"}</TableCell>
+                        <TableCell>{row.uom}</TableCell>
+                        {showPrice && (
+                          <TableCell align="right">
+                            {row.price
+                              ? `₱${Number(row.price).toLocaleString()}`
+                              : "---"}
+                          </TableCell>
+                        )}
+                        {printAll ? (
+                          <>
+                            <TableCell
+                              align="right"
+                              sx={{ fontWeight: "bold" }}
+                            >
+                              {Math.round(row.quantity || 0)}
+                            </TableCell>
+                            <TableCell>{row.status || "Active"}</TableCell>
+                          </>
+                        ) : (
+                          <>
+                            <TableCell align="right">
+                              {row.previousQuantity != null
+                                ? Math.round(row.previousQuantity)
+                                : "---"}
+                            </TableCell>
+                            <TableCell
+                              align="center"
+                              sx={{ fontWeight: "bold" }}
+                            >
+                              {diff > 0 ? `+${diff}` : diff}
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{ fontWeight: "bold" }}
+                            >
+                              {Math.round(row.quantity || 0)}
+                            </TableCell>
+                            <TableCell>
+                              {new Date(
+                                row.lastUpdated || row.date,
+                              ).toLocaleDateString()}
+                            </TableCell>
+                          </>
+                        )}
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 10 }}>
-                      No inventory records found for the selected range.
+                    <TableCell
+                      colSpan={
+                        printAll ? (showPrice ? 6 : 5) : showPrice ? 8 : 7
+                      }
+                      align="center"
+                      sx={{ py: 10 }}
+                    >
+                      No inventory records found for the selected criteria.
                     </TableCell>
                   </TableRow>
                 )}
