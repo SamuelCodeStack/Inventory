@@ -67,7 +67,13 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
   }
 
   // Helper for Role-Based Access Control
-  const isAdmin = user.user_level === "admin" || user.role === "admin";
+  // Admin is user_level 0
+  const isAdmin = user.user_level === 0 || user.user_level === "0";
+
+  // Logic for Action Buttons visibility: Admin and Production can edit.
+  // Admin = 0, Office = 1, Production = 2, Viewer = 3
+  const canEditInventory =
+    isAdmin || user.user_level === 2 || user.user_level === "2";
 
   return (
     <Box
@@ -100,7 +106,9 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
             <Route path="/" element={<Dashboard mode={mode} user={user} />} />
             <Route
               path="/inventory"
-              element={<Inventory mode={mode} user={user} />}
+              element={
+                <Inventory mode={mode} user={user} canEdit={canEditInventory} />
+              }
             />
             <Route
               path="/purchase-order"
@@ -108,7 +116,7 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
             />
             <Route
               path="/raw-materials"
-              element={<RawMaterials mode={mode} user={user} />}
+              element={<RawMaterials mode={mode} userLevel={user.user_level} />}
             />
 
             {/* Protected Routes based on user_level */}
@@ -173,6 +181,8 @@ function App() {
         const data = await response.json();
         if (data.loggedIn) {
           setUser(data.user);
+          // Sync user level to localStorage for child components if needed
+          localStorage.setItem("userLevel", data.user.user_level);
         } else {
           setUser(null);
         }

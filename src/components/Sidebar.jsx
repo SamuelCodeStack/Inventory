@@ -26,17 +26,25 @@ export default function Sidebar({
   mode,
   mobileOpen,
   handleDrawerToggle,
+  user, // Added user prop to access user_level
 }) {
   const location = useLocation();
   const drawerWidth = 240;
 
+  // Helper for Admin check
+  const isAdmin = user?.user_level === 0 || user?.user_level === "0";
+
   const menuItems = [
-    {
-      text: "Dashboard",
-      icon: <Dashboard />, // Import Dashboard from @mui/icons-material
-      section: "Main Menu",
-      path: "/",
-    },
+    // Dashboard is now restricted to Admin only
+    ...(isAdmin
+      ? [
+          {
+            text: "Dashboard",
+            icon: <Dashboard />,
+            path: "/",
+          },
+        ]
+      : []),
     {
       text: "Inventory",
       icon: <Inventory />,
@@ -62,12 +70,17 @@ export default function Sidebar({
     //   path: "/backup",
     // },
 
-    {
-      text: "User Management",
-      icon: <ManageAccounts />,
-      section: "Administration", // New Section Header
-      path: "/user-management",
-    },
+    // User Management is now restricted to Admin only
+    ...(isAdmin
+      ? [
+          {
+            text: "User Management",
+            icon: <ManageAccounts />,
+            section: "Administration", // New Section Header
+            path: "/user-management",
+          },
+        ]
+      : []),
   ];
 
   // Reusable content for both types of drawers

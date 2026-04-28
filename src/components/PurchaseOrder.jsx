@@ -46,7 +46,7 @@ import PrintPOReportModal from "./PrintPOReportModal";
 // Define consistent status options for the filter
 const statusFilterOptions = ["Job Order", "Pending", "Delivered", "Backload"];
 
-export default function PurchaseOrder({ mode, user }) {
+export default function PurchaseOrder({ mode }) {
   const [poData, setPoData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openCreateModal, setOpenCreateModal] = useState(false);
@@ -56,11 +56,10 @@ export default function PurchaseOrder({ mode, user }) {
   const [openPrintModal, setOpenPrintModal] = useState(false);
   const [selectedPO, setSelectedPO] = useState(null);
 
-  // --- USER PERMISSIONS ---
-  // Admin = 0, Office = 1, Production = 2, Viewer = 3
-  const userLevel = user?.user_level ?? 3;
-  const canViewTable = userLevel !== 2; // Production (2) cannot view PO table
-  const canEdit = userLevel === 0 || userLevel === 1; // Only Admin (0) and Office (1) can add/edit/delete POs
+  // --- USER ROLE LOGIC ---
+  const userLevel = parseInt(localStorage.getItem("userLevel")); // 0: Admin, 1: Office, 2: Production, 3: Viewer
+  const canManagePO = userLevel === 0 || userLevel === 1; // Admin and Office can Create/Print/Update
+  const canSeeActions = userLevel === 0 || userLevel === 1; // Only Admin and Office see the action column buttons
 
   // --- FILTER STATES ---
   const [searchQuery, setSearchQuery] = useState("");
@@ -96,16 +95,14 @@ export default function PurchaseOrder({ mode, user }) {
   };
 
   useEffect(() => {
-    if (canViewTable) {
-      fetchPurchaseOrders();
-    }
+    fetchPurchaseOrders();
 
     // --- CLEANUP EFFECT TO FIX DISABLED SCROLLBAR ---
     return () => {
       document.body.style.overflow = "auto";
       document.body.style.paddingRight = "0px";
     };
-  }, [canViewTable]);
+  }, []);
 
   // --- HELPERS ---
   const showSnackbar = (message, severity = "success") => {
@@ -208,17 +205,6 @@ export default function PurchaseOrder({ mode, user }) {
     page * rowsPerPage + rowsPerPage,
   );
 
-  // If user is Production, do not show the content
-  if (!canViewTable) {
-    return (
-      <Box sx={{ p: 4, mt: 8, textAlign: "center" }}>
-        <Typography variant="h6" color="text.secondary">
-          Access Denied: You do not have permission to view Purchase Orders.
-        </Typography>
-      </Box>
-    );
-  }
-
   return (
     <Box
       sx={{
@@ -246,21 +232,23 @@ export default function PurchaseOrder({ mode, user }) {
             Order Workflow Management
           </Typography>
         </Box>
-        <Stack
-          direction="row"
-          spacing={2}
-          sx={{ width: { xs: "100%", md: "auto" } }}
-        >
-          <Button
-            variant="outlined"
-            startIcon={<Print />}
-            onClick={() => setOpenPrintModal(true)}
-            fullWidth={false}
-            sx={{ flex: { xs: 1, md: "none" } }}
+
+        {/* ACTION BUTTONS: Visible only to Admin (0) and Office (1) */}
+        {canManagePO && (
+          <Stack
+            direction="row"
+            spacing={2}
+            sx={{ width: { xs: "100%", md: "auto" } }}
           >
-            Print
-          </Button>
-          {canEdit && (
+            <Button
+              variant="outlined"
+              startIcon={<Print />}
+              onClick={() => setOpenPrintModal(true)}
+              fullWidth={false}
+              sx={{ flex: { xs: 1, md: "none" } }}
+            >
+              Print
+            </Button>
             <Button
               variant="contained"
               color="primary"
@@ -274,8 +262,8 @@ export default function PurchaseOrder({ mode, user }) {
             >
               Create PO
             </Button>
-          )}
-        </Stack>
+          </Stack>
+        )}
       </Box>
 
       {/* Main Table Container */}
@@ -426,7 +414,8 @@ export default function PurchaseOrder({ mode, user }) {
                         justifyContent="flex-end"
                         member="true"
                       >
-                        {canEdit && isActionAvailable && (
+                        {/* UPDATE STATUS: Only Admin and Office */}
+                        {canSeeActions && isActionAvailable && (
                           <Tooltip title="Update Status">
                             <IconButton
                               size="small"
@@ -441,6 +430,8 @@ export default function PurchaseOrder({ mode, user }) {
                             </IconButton>
                           </Tooltip>
                         )}
+
+                        {/* VIEW: Always visible to all roles */}
                         <IconButton
                           size="small"
                           onClick={() => {
@@ -454,33 +445,37 @@ export default function PurchaseOrder({ mode, user }) {
                         >
                           <Visibility fontSize="inherit" />
                         </IconButton>
-                        {canEdit && (
-                          <>
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                setSelectedPO(row);
-                                setOpenUpdateModal(true);
-                              }}
-                              disabled={isOngoing || isFinal}
-                              sx={{
-                                color: "#3498db",
-                                bgcolor: "rgba(52, 152, 219, 0.1)",
-                              }}
-                            >
-                              <Edit fontSize="inherit" />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleDelete(row.id)}
-                              sx={{
-                                color: "#e74c3c",
-                                bgcolor: "rgba(231, 76, 60, 0.1)",
-                              }}
-                            >
-                              <Delete fontSize="inherit" />
-                            </IconButton>
-                          </>
+
+                        {/* EDIT: Only Admin and Office */}
+                        {canSeeActions && (
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setSelectedPO(row);
+                              setOpenUpdateModal(true);
+                            }}
+                            disabled={isOngoing || isFinal}
+                            sx={{
+                              color: "#3498db",
+                              bgcolor: "rgba(52, 152, 219, 0.1)",
+                            }}
+                          >
+                            <Edit fontSize="inherit" />
+                          </IconButton>
+                        )}
+
+                        {/* DELETE: Only Admin and Office */}
+                        {canSeeActions && (
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDelete(row.id)}
+                            sx={{
+                              color: "#e74c3c",
+                              bgcolor: "rgba(231, 76, 60, 0.1)",
+                            }}
+                          >
+                            <Delete fontSize="inherit" />
+                          </IconButton>
                         )}
                       </Stack>
                     </TableCell>

@@ -62,9 +62,18 @@ export default function Inventory({ mode, user }) {
   const isDark = mode === "dark";
 
   // --- ROLE CONSTANTS ---
-  const canModify = user?.role === "Admin" || user?.role === "Production";
+  // Updated roles: ADMIN (0) and PRODUCTION (2) can do everything. OFFICE (1) and VIEW (3) only see.
+  const canModify =
+    user?.user_level === 0 ||
+    user?.user_level === "0" ||
+    user?.user_level === 2 ||
+    user?.user_level === "2";
+
   const canViewActionColumn =
-    user?.role === "Admin" || user?.role === "Production";
+    user?.user_level === 0 ||
+    user?.user_level === "0" ||
+    user?.user_level === 2 ||
+    user?.user_level === "2";
 
   const showMessage = (msg, sev = "success") =>
     setSnackbar({ open: true, message: msg, severity: sev });

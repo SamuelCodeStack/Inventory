@@ -46,8 +46,20 @@ export default function RawMaterials({ mode, userLevel }) {
   const [isEditingQty, setIsEditingQty] = useState(false); // Toggle for bulk edit mode
 
   // --- PERMISSION CHECKS ---
-  const canPrint = userLevel === 0 || userLevel === 1 || userLevel === 3;
-  const canAction = userLevel === 0 || userLevel === 2;
+  const canPrint =
+    userLevel === 0 ||
+    userLevel === "0" ||
+    userLevel === 1 ||
+    userLevel === "1" ||
+    userLevel === 2 ||
+    userLevel === "2" ||
+    userLevel === 3 ||
+    userLevel === "3";
+  const canAction =
+    userLevel === 0 ||
+    userLevel === "0" ||
+    userLevel === 2 ||
+    userLevel === "2";
 
   // --- FILTER STATES ---
   const [searchQuery, setSearchQuery] = useState("");

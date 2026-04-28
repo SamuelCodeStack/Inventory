@@ -29,7 +29,13 @@ import {
 import UserActivityModal from "./UserActivityModal"; // Ensure you create this file
 
 const THEME_ORANGE = "#f2994a";
-const roles = ["Admin", "Office", "Production", "Viewer"];
+// UPDATED: roles mapped to their numeric levels
+const roles = [
+  { label: "Admin", value: 0 },
+  { label: "Office", value: 1 },
+  { label: "Production", value: 2 },
+  { label: "Viewer", value: 3 },
+];
 
 export default function UserManagement({ mode }) {
   const [users, setUsers] = useState([]);
@@ -70,17 +76,22 @@ export default function UserManagement({ mode }) {
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role: newRole }),
+          // FIX: Changed key from 'role' to 'user_level' to match your backend
+          body: JSON.stringify({ user_level: newRole }),
         },
       );
 
       if (response.ok) {
         setUsers((prev) =>
-          prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u)),
+          prev.map((u) =>
+            u.id === userId ? { ...u, user_level: newRole } : u,
+          ),
         );
+        const roleLabel =
+          roles.find((r) => r.value === newRole)?.label || newRole;
         setNotification({
           open: true,
-          message: `Role updated to ${newRole} successfully!`,
+          message: `Role updated to ${roleLabel} successfully!`,
           severity: "success",
         });
       }
@@ -226,9 +237,12 @@ export default function UserManagement({ mode }) {
                 <TableCell align="center">
                   <TextField
                     select
-                    value={user.role}
+                    // Value priority: use user_level directly
+                    value={user.user_level ?? 3}
                     size="small"
-                    onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                    onChange={(e) =>
+                      handleRoleChange(user.id, parseInt(e.target.value))
+                    }
                     sx={{
                       width: 130,
                       "& .MuiSelect-select": {
@@ -239,15 +253,14 @@ export default function UserManagement({ mode }) {
                     }}
                   >
                     {roles.map((option) => (
-                      <MenuItem key={option} value={option}>
-                        {option}
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
                       </MenuItem>
                     ))}
                   </TextField>
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    {/* ADDED VIEW LOG BUTTON */}
                     <Tooltip title="View Activity Logs">
                       <IconButton
                         size="small"
@@ -279,7 +292,6 @@ export default function UserManagement({ mode }) {
         </Table>
       </TableContainer>
 
-      {/* ACTIVITY LOG MODAL COMPONENT */}
       <UserActivityModal
         open={openLogModal}
         handleClose={() => {

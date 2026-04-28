@@ -126,6 +126,9 @@ export default function Header({ mode, user, onMenuClick }) {
     3: "Viewer",
   };
 
+  // Helper to check if user is Admin
+  const isAdmin = user?.user_level === 0 || user?.user_level === "0";
+
   return (
     <AppBar
       position="fixed"
@@ -158,23 +161,25 @@ export default function Header({ mode, user, onMenuClick }) {
         <Box sx={{ flexGrow: 1, display: { xs: "none", sm: "block" } }} />
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-          {/* UPDATED: Clears badge using LocalStorage and navigates */}
-          <IconButton
-            onClick={() => {
-              const cleanId = String(user?.id).split(":")[0];
-              // Save the current time to LocalStorage so these logs are now "read"
-              localStorage.setItem(
-                `lastReadLogs_${cleanId}`,
-                new Date().toISOString(),
-              );
-              setUnreadLogs(0);
-              navigate("/activity-logs");
-            }}
-          >
-            <Badge badgeContent={unreadLogs} color="error" max={99}>
-              <NotificationsNone sx={{ color: "text.primary" }} />
-            </Badge>
-          </IconButton>
+          {/* UPDATED: Clears badge using LocalStorage and navigates - ONLY VISIBLE TO ADMIN */}
+          {isAdmin && (
+            <IconButton
+              onClick={() => {
+                const cleanId = String(user?.id).split(":")[0];
+                // Save the current time to LocalStorage so these logs are now "read"
+                localStorage.setItem(
+                  `lastReadLogs_${cleanId}`,
+                  new Date().toISOString(),
+                );
+                setUnreadLogs(0);
+                navigate("/activity-logs");
+              }}
+            >
+              <Badge badgeContent={unreadLogs} color="error" max={99}>
+                <NotificationsNone sx={{ color: "text.primary" }} />
+              </Badge>
+            </IconButton>
+          )}
 
           {/* Profile Section */}
           <Box
