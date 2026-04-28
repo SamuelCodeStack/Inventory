@@ -29,7 +29,7 @@ import {
 import UserActivityModal from "./UserActivityModal"; // Ensure you create this file
 
 const THEME_ORANGE = "#f2994a";
-const roles = ["Admin", "Manager", "Staff"];
+const roles = ["Admin", "Office", "Production", "Viewer"];
 
 export default function UserManagement({ mode }) {
   const [users, setUsers] = useState([]);

@@ -37,7 +37,7 @@ import AddInventoryModal from "./AddInventoryModal";
 import EditInventoryModal from "./EditInventoryModal";
 import PrintInventoryModal from "./PrintInventoryModal";
 
-export default function Inventory({ mode }) {
+export default function Inventory({ mode, user }) {
   const [inventoryData, setInventoryData] = useState([]);
   const [originalData, setOriginalData] = useState([]);
   const [isEditingQty, setIsEditingQty] = useState(false);
@@ -60,6 +60,11 @@ export default function Inventory({ mode }) {
     severity: "success",
   });
   const isDark = mode === "dark";
+
+  // --- ROLE CONSTANTS ---
+  const canModify = user?.role === "Admin" || user?.role === "Production";
+  const canViewActionColumn =
+    user?.role === "Admin" || user?.role === "Production";
 
   const showMessage = (msg, sev = "success") =>
     setSnackbar({ open: true, message: msg, severity: sev });
@@ -319,37 +324,43 @@ export default function Inventory({ mode }) {
           >
             Print
           </Button>
-          <Button
-            variant={isEditingQty ? "contained" : "outlined"}
-            color={isEditingQty ? "warning" : "primary"}
-            startIcon={<EditNote />}
-            onClick={() => setIsEditingQty(!isEditingQty)}
-            size="small"
-            sx={{
-              borderRadius: 2,
-              fontWeight: "bold",
-              textTransform: "none",
-              px: 3,
-              flexShrink: 0,
-            }}
-          >
-            {isEditingQty ? "Lock" : "Edit Qty"}
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => setOpenAddModal(true)}
-            size="small"
-            sx={{
-              borderRadius: 2,
-              fontWeight: "bold",
-              textTransform: "none",
-              px: 3,
-              flexShrink: 0,
-            }}
-          >
-            Add Item
-          </Button>
+
+          {/* EDIT QTY AND ADD ITEM RESTRICTED TO ADMIN/PRODUCTION */}
+          {canModify && (
+            <>
+              <Button
+                variant={isEditingQty ? "contained" : "outlined"}
+                color={isEditingQty ? "warning" : "primary"}
+                startIcon={<EditNote />}
+                onClick={() => setIsEditingQty(!isEditingQty)}
+                size="small"
+                sx={{
+                  borderRadius: 2,
+                  fontWeight: "bold",
+                  textTransform: "none",
+                  px: 3,
+                  flexShrink: 0,
+                }}
+              >
+                {isEditingQty ? "Lock" : "Edit Qty"}
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => setOpenAddModal(true)}
+                size="small"
+                sx={{
+                  borderRadius: 2,
+                  fontWeight: "bold",
+                  textTransform: "none",
+                  px: 3,
+                  flexShrink: 0,
+                }}
+              >
+                Add Item
+              </Button>
+            </>
+          )}
         </Stack>
       </Box>
 
@@ -462,9 +473,12 @@ export default function Inventory({ mode }) {
                 <TableCell align="center" sx={{ fontWeight: "bold" }}>
                   Status
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                  Action
-                </TableCell>
+                {/* ACTION COLUMN VISIBLE ONLY TO ADMIN/PRODUCTION */}
+                {canViewActionColumn && (
+                  <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                    Action
+                  </TableCell>
+                )}
               </TableRow>
             </TableHead>
             <TableBody>
@@ -620,34 +634,38 @@ export default function Inventory({ mode }) {
                       {row.status}
                     </Box>
                   </TableCell>
-                  <TableCell align="right">
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      justifyContent="flex-end"
-                    >
-                      <IconButton
-                        size="small"
-                        color="info"
-                        onClick={() => {
-                          setSelectedItem({
-                            ...row,
-                            id: String(row.id).split(":")[0],
-                          });
-                          setOpenEditModal(true);
-                        }}
+
+                  {/* ACTION BUTTONS RESTRICTED TO ADMIN/PRODUCTION */}
+                  {canViewActionColumn && (
+                    <TableCell align="right">
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        justifyContent="flex-end"
                       >
-                        <Edit fontSize="inherit" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleDelete(row.id)}
-                      >
-                        <Delete fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
+                        <IconButton
+                          size="small"
+                          color="info"
+                          onClick={() => {
+                            setSelectedItem({
+                              ...row,
+                              id: String(row.id).split(":")[0],
+                            });
+                            setOpenEditModal(true);
+                          }}
+                        >
+                          <Edit fontSize="inherit" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleDelete(row.id)}
+                        >
+                          <Delete fontSize="inherit" />
+                        </IconButton>
+                      </Stack>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
               {paginatedData.length === 0 && (

@@ -118,6 +118,14 @@ export default function Header({ mode, user, onMenuClick }) {
     }
   }, [user]);
 
+  // Map user level numbers to readable strings
+  const roleLabels = {
+    0: "Admin",
+    1: "Office",
+    2: "Production",
+    3: "Viewer",
+  };
+
   return (
     <AppBar
       position="fixed"
@@ -199,14 +207,15 @@ export default function Header({ mode, user, onMenuClick }) {
               <Typography variant="body2" fontWeight="bold">
                 {user?.name || "User"}
               </Typography>
-              {/* DISPLAY CLEANED USER ID HERE */}
+              {/* DISPLAY CLEANED USER ID AND ROLE/LEVEL HERE */}
               <Typography
                 variant="caption"
                 color="text.secondary"
                 display="block"
-                sx={{ lineHeight: 1 }}
+                sx={{ lineHeight: 1, textTransform: "capitalize" }}
               >
-                ID: #{user?.id ? String(user.id).split(":")[0] : "N/A"}
+                ID: #{user?.id ? String(user.id).split(":")[0] : "N/A"} •{" "}
+                {roleLabels[user?.user_level] || user?.role || "No Role"}
               </Typography>
             </Box>
             <KeyboardArrowDown

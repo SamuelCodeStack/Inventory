@@ -39,11 +39,15 @@ import AddRawMaterialModal from "./AddRawMaterialModal";
 import EditRawMaterialModal from "./EditRawMaterialModal";
 import PrintRawMaterialModal from "./PrintRawMaterialModal";
 
-export default function RawMaterials({ mode }) {
+export default function RawMaterials({ mode, userLevel }) {
   const [materials, setMaterials] = useState([]);
   const [originalData, setOriginalData] = useState([]); // Added to track changes
   const [loading, setLoading] = useState(true);
   const [isEditingQty, setIsEditingQty] = useState(false); // Toggle for bulk edit mode
+
+  // --- PERMISSION CHECKS ---
+  const canPrint = userLevel === 0 || userLevel === 1 || userLevel === 3;
+  const canAction = userLevel === 0 || userLevel === 2;
 
   // --- FILTER STATES ---
   const [searchQuery, setSearchQuery] = useState("");
@@ -296,48 +300,54 @@ export default function RawMaterials({ mode }) {
               </Button>
             </>
           )}
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<Print />}
-            onClick={() => setOpenPrintModal(true)}
-            sx={{
-              borderRadius: 2,
-              fontWeight: "bold",
-              textTransform: "none",
-              px: 3,
-            }}
-          >
-            Print
-          </Button>
-          <Button
-            variant={isEditingQty ? "contained" : "outlined"}
-            color={isEditingQty ? "warning" : "primary"}
-            startIcon={<EditNote />}
-            onClick={() => setIsEditingQty(!isEditingQty)}
-            sx={{
-              borderRadius: 2,
-              fontWeight: "bold",
-              textTransform: "none",
-              px: 3,
-            }}
-          >
-            {isEditingQty ? "Lock" : "Edit Qty"}
-          </Button>
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<Add />}
-            onClick={() => setOpenAddModal(true)}
-            sx={{
-              borderRadius: 2,
-              fontWeight: "bold",
-              textTransform: "none",
-              px: 3,
-            }}
-          >
-            Add Material
-          </Button>
+          {canPrint && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Print />}
+              onClick={() => setOpenPrintModal(true)}
+              sx={{
+                borderRadius: 2,
+                fontWeight: "bold",
+                textTransform: "none",
+                px: 3,
+              }}
+            >
+              Print
+            </Button>
+          )}
+          {canAction && (
+            <Button
+              variant={isEditingQty ? "contained" : "outlined"}
+              color={isEditingQty ? "warning" : "primary"}
+              startIcon={<EditNote />}
+              onClick={() => setIsEditingQty(!isEditingQty)}
+              sx={{
+                borderRadius: 2,
+                fontWeight: "bold",
+                textTransform: "none",
+                px: 3,
+              }}
+            >
+              {isEditingQty ? "Lock" : "Edit Qty"}
+            </Button>
+          )}
+          {canAction && (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<Add />}
+              onClick={() => setOpenAddModal(true)}
+              sx={{
+                borderRadius: 2,
+                fontWeight: "bold",
+                textTransform: "none",
+                px: 3,
+              }}
+            >
+              Add Material
+            </Button>
+          )}
         </Stack>
       </Box>
 
@@ -459,9 +469,11 @@ export default function RawMaterials({ mode }) {
                     <TableCell align="center" sx={{ fontWeight: "bold" }}>
                       Status
                     </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                      Actions
-                    </TableCell>
+                    {canAction && (
+                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                        Actions
+                      </TableCell>
+                    )}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -576,31 +588,33 @@ export default function RawMaterials({ mode }) {
                               {status.label}
                             </Box>
                           </TableCell>
-                          <TableCell align="right">
-                            <Stack
-                              direction="row"
-                              spacing={0.5}
-                              justifyContent="flex-end"
-                            >
-                              <IconButton
-                                size="small"
-                                color="info"
-                                onClick={() => {
-                                  setSelectedItem(row);
-                                  setOpenEditModal(true);
-                                }}
+                          {canAction && (
+                            <TableCell align="right">
+                              <Stack
+                                direction="row"
+                                spacing={0.5}
+                                justifyContent="flex-end"
                               >
-                                <Edit fontSize="inherit" />
-                              </IconButton>
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleDelete(row.id)}
-                              >
-                                <Delete fontSize="inherit" />
-                              </IconButton>
-                            </Stack>
-                          </TableCell>
+                                <IconButton
+                                  size="small"
+                                  color="info"
+                                  onClick={() => {
+                                    setSelectedItem(row);
+                                    setOpenEditModal(true);
+                                  }}
+                                >
+                                  <Edit fontSize="inherit" />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => handleDelete(row.id)}
+                                >
+                                  <Delete fontSize="inherit" />
+                                </IconButton>
+                              </Stack>
+                            </TableCell>
+                          )}
                         </TableRow>
                       );
                     })

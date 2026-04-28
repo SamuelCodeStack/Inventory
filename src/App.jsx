@@ -66,6 +66,9 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
     return <Navigate to="/" replace />;
   }
 
+  // Helper for Role-Based Access Control
+  const isAdmin = user.user_level === "admin" || user.role === "admin";
+
   return (
     <Box
       sx={{
@@ -94,25 +97,52 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
 
         <Box sx={{ p: 0 }}>
           <Routes>
-            <Route path="/" element={<Dashboard mode={mode} />} />
-            <Route path="/inventory" element={<Inventory mode={mode} />} />
+            <Route path="/" element={<Dashboard mode={mode} user={user} />} />
+            <Route
+              path="/inventory"
+              element={<Inventory mode={mode} user={user} />}
+            />
             <Route
               path="/purchase-order"
-              element={<PurchaseOrder mode={mode} />}
+              element={<PurchaseOrder mode={mode} user={user} />}
             />
             <Route
               path="/raw-materials"
-              element={<RawMaterials mode={mode} />}
+              element={<RawMaterials mode={mode} user={user} />}
             />
+
+            {/* Protected Routes based on user_level */}
             <Route
               path="/user-management"
-              element={<UserManagement mode={mode} />}
+              element={
+                isAdmin ? (
+                  <UserManagement mode={mode} user={user} />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              }
             />
             <Route
               path="/activity-logs"
-              element={<AllActivityLogs mode={mode} />}
+              element={
+                isAdmin ? (
+                  <AllActivityLogs mode={mode} user={user} />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              }
             />
-            <Route path="/backup" element={<Backup mode={mode} />} />
+            <Route
+              path="/backup"
+              element={
+                isAdmin ? (
+                  <Backup mode={mode} user={user} />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              }
+            />
+
             <Route
               path="/profile"
               element={<Profile mode={mode} userData={user} />}

@@ -139,7 +139,7 @@ app.post("/api/auth/login", async (req, res) => {
         id: user.user_id,
         name: user.full_name,
         email: user.email, // ADDED: Mapping email from database to session
-        role: user.role,
+        user_level: user.user_level,
       };
       res.json({ message: "Logged in successfully", user: req.session.user });
     } else {
@@ -893,14 +893,14 @@ app.delete("/api/raw-materials/:id", async (req, res) => {
 app.get("/api/users", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT user_id, full_name, email, role FROM users ORDER BY user_id ASC",
+      "SELECT user_id, full_name, email, user_level FROM users ORDER BY user_id ASC",
     );
     res.json(
       result.rows.map((user) => ({
         id: user.user_id,
         name: user.full_name,
         email: user.email,
-        role: user.role,
+        user_level: user.user_level,
       })),
     );
   } catch (err) {
@@ -910,10 +910,10 @@ app.get("/api/users", async (req, res) => {
 
 app.patch("/api/users/:id/role", async (req, res) => {
   const id = req.params.id;
-  const { role } = req.body;
+  const { user_level } = req.body;
   try {
-    await pool.query("UPDATE users SET role = $1 WHERE user_id = $2", [
-      role,
+    await pool.query("UPDATE users SET user_level = $1 WHERE user_id = $2", [
+      user_level,
       id,
     ]);
     await logActivity(
@@ -921,11 +921,11 @@ app.patch("/api/users/:id/role", async (req, res) => {
       "UPDATE",
       "users",
       id,
-      `Changed user role to ${role}`,
+      `Changed user level to ${user_level}`,
     );
-    res.json({ message: "Role updated successfully" });
+    res.json({ message: "Level updated successfully" });
   } catch (err) {
-    res.status(500).json({ error: "Failed to update role" });
+    res.status(500).json({ error: "Failed to update level" });
   }
 });
 
@@ -1024,7 +1024,7 @@ app.patch("/api/auth/profile", async (req, res) => {
   try {
     // 1. Get current user data for verification and logging
     const userRes = await pool.query(
-      "SELECT full_name, email, password_hash FROM users WHERE user_id = $1",
+      "SELECT full_name, email, password_hash, user_level FROM users WHERE user_id = $1",
       [userId],
     );
 
@@ -1066,14 +1066,14 @@ app.patch("/api/auth/profile", async (req, res) => {
         UPDATE users 
         SET full_name = $1, email = $2, password_hash = $3 
         WHERE user_id = $4 
-        RETURNING user_id, full_name, email, role`;
+        RETURNING user_id, full_name, email, user_level`;
       params = [fullName, email, hashedPassword, userId];
     } else {
       query = `
         UPDATE users 
         SET full_name = $1, email = $2 
         WHERE user_id = $3 
-        RETURNING user_id, full_name, email, role`;
+        RETURNING user_id, full_name, email, user_level`;
       params = [fullName, email, userId];
     }
 
@@ -1085,7 +1085,7 @@ app.patch("/api/auth/profile", async (req, res) => {
       id: updatedUser.user_id,
       name: updatedUser.full_name,
       email: updatedUser.email,
-      role: updatedUser.role,
+      user_level: updatedUser.user_level,
     };
 
     // Log the activity
