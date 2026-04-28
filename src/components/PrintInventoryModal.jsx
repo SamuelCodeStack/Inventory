@@ -21,8 +21,9 @@ import {
   useTheme,
   MenuItem,
 } from "@mui/material";
-import { Close, Print } from "@mui/icons-material";
+import { Close, Print, Download } from "@mui/icons-material";
 import { useReactToPrint } from "react-to-print";
+import * as XLSX from "xlsx";
 
 export default function PrintInventoryModal({
   open,
@@ -132,6 +133,45 @@ export default function PrintInventoryModal({
     documentTitle: `Inventory_Report_${getRangeLabel().replace(/ /g, "_")}`,
     onAfterPrint: handleClose,
   });
+
+  const exportToExcel = () => {
+    const dataToExport = filteredData.map((item) => {
+      const diff =
+        Math.round(item.quantity || 0) - Math.round(item.previousQuantity || 0);
+      const baseData = {
+        "Item Name": item.name,
+        Category: item.category || "---",
+        Unit: item.uom,
+      };
+
+      if (showPrice) {
+        baseData["Price"] = item.price ? Number(item.price) : 0;
+      }
+
+      if (printAll) {
+        baseData["Quantity"] = Math.round(item.quantity || 0);
+        baseData["Status"] = item.status || "Active";
+      } else {
+        baseData["Prev Qty"] =
+          item.previousQuantity != null ? Math.round(item.previousQuantity) : 0;
+        baseData["Adjustment"] = diff > 0 ? `+${diff}` : diff;
+        baseData["Current Qty"] = Math.round(item.quantity || 0);
+        baseData["Last Updated"] = new Date(
+          item.lastUpdated || item.date,
+        ).toLocaleDateString();
+      }
+
+      return baseData;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Inventory Report");
+    XLSX.writeFile(
+      workbook,
+      `Inventory_Report_${new Date().toLocaleDateString()}.xlsx`,
+    );
+  };
 
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="md">
@@ -452,6 +492,15 @@ export default function PrintInventoryModal({
       >
         <Button onClick={handleClose} color="inherit">
           Cancel
+        </Button>
+        <Button
+          onClick={exportToExcel}
+          variant="outlined"
+          color="success"
+          startIcon={<Download />}
+          disabled={filteredData.length === 0}
+        >
+          Export Excel
         </Button>
         <Button
           onClick={handlePrint}

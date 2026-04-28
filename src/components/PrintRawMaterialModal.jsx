@@ -21,8 +21,9 @@ import {
   Checkbox,
   useTheme,
 } from "@mui/material";
-import { Close, Print } from "@mui/icons-material";
+import { Close, Print, FileDownload } from "@mui/icons-material";
 import { useReactToPrint } from "react-to-print";
+import * as XLSX from "xlsx";
 
 export default function PrintRawMaterialModal({
   open,
@@ -117,6 +118,32 @@ export default function PrintRawMaterialModal({
     documentTitle: `Raw_Materials_Report_${new Date().toLocaleDateString()}`,
     onAfterPrint: handleClose,
   });
+
+  // Export to Excel Function
+  const handleExportExcel = () => {
+    const excelData = filteredData.map((row) => ({
+      ID: row.id,
+      "Material Name": row.name,
+      Category: row.category,
+      Measurement: `${row.measurementValue} ${row.measurementUnit}`,
+      "Previous Quantity": row.previousQuantity || 0,
+      "Current Quantity": row.quantity || 0,
+      Adjustment: (row.quantity || 0) - (row.previousQuantity || 0),
+      Status: row.status,
+      "Last Updated": new Date(
+        row.updated_at || row.createdAt,
+      ).toLocaleDateString(),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Raw Materials");
+
+    XLSX.writeFile(
+      workbook,
+      `Raw_Materials_Report_${new Date().toLocaleDateString("en-CA")}.xlsx`,
+    );
+  };
 
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="md">
@@ -349,11 +376,7 @@ export default function PrintRawMaterialModal({
                             >
                               {row.quantity}
                             </TableCell>
-                            <TableCell>
-                              {row.quantity <= 0
-                                ? "Out of Stock"
-                                : row.status || "In Stock"}
-                            </TableCell>
+                            <TableCell>{row.status}</TableCell>
                           </>
                         ) : (
                           <>
@@ -428,6 +451,22 @@ export default function PrintRawMaterialModal({
       >
         <Button onClick={handleClose} color="inherit">
           Cancel
+        </Button>
+        <Button
+          onClick={handleExportExcel}
+          variant="outlined"
+          size="large"
+          startIcon={<FileDownload />}
+          disabled={filteredData.length === 0}
+          sx={{
+            fontWeight: "bold",
+            px: 3,
+            color: "#1d6f42",
+            borderColor: "#1d6f42",
+            "&:hover": { bgcolor: "#f0fdf4", borderColor: "#1d6f42" },
+          }}
+        >
+          Export Excel
         </Button>
         <Button
           onClick={handlePrint}

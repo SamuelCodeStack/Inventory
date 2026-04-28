@@ -21,8 +21,9 @@ import {
   useTheme,
   MenuItem,
 } from "@mui/material";
-import { Close, Print } from "@mui/icons-material";
+import { Close, Print, FileDownload } from "@mui/icons-material";
 import { useReactToPrint } from "react-to-print";
+import * as XLSX from "xlsx";
 
 export default function PrintPOReportModal({ open, handleClose, poData }) {
   const theme = useTheme();
@@ -93,6 +94,24 @@ export default function PrintPOReportModal({ open, handleClose, poData }) {
     documentTitle: `PO_Report_${getRangeLabel().replace(/ /g, "_")}`,
     onAfterPrint: handleClose,
   });
+
+  const handleExportExcel = () => {
+    const excelData = filteredData.map((row) => ({
+      "PO No.": row.poNo,
+      Customer: row.customer,
+      Status: row.status,
+      "Total Amount": row.totalPrice,
+      Date: new Date(row.createdAt || row.date).toLocaleDateString(),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "PO Summary");
+    XLSX.writeFile(
+      workbook,
+      `PO_Report_${new Date().toLocaleDateString("en-CA")}.xlsx`,
+    );
+  };
 
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="md">
@@ -286,6 +305,16 @@ export default function PrintPOReportModal({ open, handleClose, poData }) {
       <DialogActions sx={{ p: 2, bgcolor: "background.paper" }}>
         <Button onClick={handleClose} color="inherit">
           Cancel
+        </Button>
+        <Button
+          onClick={handleExportExcel}
+          variant="outlined"
+          color="success"
+          startIcon={<FileDownload />}
+          disabled={filteredData.length === 0}
+          sx={{ fontWeight: "bold" }}
+        >
+          Export Excel
         </Button>
         <Button
           onClick={handlePrint}
