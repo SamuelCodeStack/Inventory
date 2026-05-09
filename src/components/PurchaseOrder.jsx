@@ -238,26 +238,37 @@ export default function PurchaseOrder({ mode }) {
           <Stack
             direction="row"
             spacing={2}
+            alignItems="center"
             sx={{ width: { xs: "100%", md: "auto" } }}
           >
             <Button
               variant="outlined"
+              size="small"
               startIcon={<Print />}
               onClick={() => setOpenPrintModal(true)}
               fullWidth={false}
-              sx={{ flex: { xs: 1, md: "none" } }}
+              sx={{
+                flex: { xs: 1, md: "none" },
+                height: 32,
+                px: 2,
+                fontSize: "0.8125rem",
+              }}
             >
               Print
             </Button>
             <Button
               variant="contained"
               color="primary"
+              size="small"
               startIcon={<Add />}
               onClick={() => setOpenCreateModal(true)}
               sx={{
                 fontWeight: "bold",
                 color: "#000000",
                 flex: { xs: 1, md: "none" },
+                height: 32,
+                px: 2,
+                fontSize: "0.8125rem",
               }}
             >
               Create PO

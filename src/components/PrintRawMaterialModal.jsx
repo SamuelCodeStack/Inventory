@@ -21,8 +21,9 @@ import {
   Checkbox,
   useTheme,
 } from "@mui/material";
-import { Close, Print } from "@mui/icons-material";
+import { Close, Print, Download } from "@mui/icons-material";
 import { useReactToPrint } from "react-to-print";
+import * as XLSX from "xlsx";
 
 export default function PrintRawMaterialModal({
   open,
@@ -117,6 +118,41 @@ export default function PrintRawMaterialModal({
     documentTitle: `Raw_Materials_Report_${new Date().toLocaleDateString()}`,
     onAfterPrint: handleClose,
   });
+
+  const handleExportExcel = () => {
+    const worksheetData = filteredData.map((row) => {
+      const diff = (row.quantity || 0) - (row.previousQuantity || 0);
+      if (printAll) {
+        return {
+          "Material Name": row.name,
+          Category: row.category,
+          Measurement: `${row.measurementValue} ${row.measurementUnit}`,
+          Quantity: row.quantity,
+          Status: row.quantity <= 0 ? "Out of Stock" : row.status || "In Stock",
+        };
+      } else {
+        return {
+          ID: row.id,
+          "Material Name": row.name,
+          Measurement: `${row.measurementValue} ${row.measurementUnit}`,
+          "Prev. Qty": row.previousQuantity,
+          Adjustment: diff > 0 ? `+${diff}` : diff,
+          "Current Qty": row.quantity,
+          "Last Updated": new Date(
+            row.updated_at || row.createdAt,
+          ).toLocaleDateString(),
+        };
+      }
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Raw Materials Report");
+    XLSX.writeFile(
+      workbook,
+      `Raw_Materials_Report_${new Date().toLocaleDateString()}.xlsx`,
+    );
+  };
 
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="md">
@@ -253,7 +289,7 @@ export default function PrintRawMaterialModal({
               variant="h4"
               fontWeight="bold"
               align="center"
-              sx={{ color: "#f2994a !important" }}
+              sx={{ color: "#1a237e !important" }}
             >
               KIMWIN CORPORATION
             </Typography>
@@ -428,6 +464,22 @@ export default function PrintRawMaterialModal({
       >
         <Button onClick={handleClose} color="inherit">
           Cancel
+        </Button>
+        <Button
+          onClick={handleExportExcel}
+          variant="outlined"
+          size="large"
+          startIcon={<Download />}
+          disabled={filteredData.length === 0}
+          sx={{
+            fontWeight: "bold",
+            px: 4,
+            borderColor: "#f2994a",
+            color: "#f2994a",
+            "&:hover": { borderColor: "#d8853a", color: "#d8853a" },
+          }}
+        >
+          Export Excel
         </Button>
         <Button
           onClick={handlePrint}

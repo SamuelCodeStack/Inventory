@@ -49,6 +49,14 @@ export default function AllActivityLogs({ mode }) {
         return "error";
       case "FINALIZE":
         return "secondary";
+      case "STOCK IN":
+        return "success";
+      case "STOCK OUT":
+        return "error";
+      case "ADJUSTMENT":
+        return "warning";
+      case "QUANTITY EDIT":
+        return "primary";
       default:
         return "default";
     }
@@ -144,6 +152,30 @@ export default function AllActivityLogs({ mode }) {
                 {groupedLogs[dateGroup].map((log) => {
                   // --- LOGIC TO CUSTOMIZE ACTION LABELS ---
                   let displayAction = log.action_type;
+                  let colorKey = log.action_type;
+
+                  // Inventory specific logic
+                  if (
+                    log.table_name === "inventory" ||
+                    log.table_name === "raw_materials"
+                  ) {
+                    const desc = log.description.toLowerCase();
+
+                    if (desc.includes("stock in")) {
+                      displayAction = "STOCK IN";
+                      colorKey = "STOCK IN";
+                    } else if (desc.includes("stock out")) {
+                      displayAction = "STOCK OUT";
+                      colorKey = "STOCK OUT";
+                    } else if (desc.includes("quantity updated")) {
+                      displayAction = "UPDATE";
+                      colorKey = "UPDATE";
+                    } else if (desc.includes("adjusted")) {
+                      displayAction = "ADJUSTMENT";
+                      colorKey = "ADJUSTMENT";
+                    }
+                  }
+
                   if (
                     log.table_name === "users" &&
                     log.action_type === "UPDATE"
@@ -186,7 +218,7 @@ export default function AllActivityLogs({ mode }) {
                         <Chip
                           label={displayAction}
                           size="small"
-                          color={getActionColor(log.action_type)}
+                          color={getActionColor(colorKey)}
                           variant="outlined"
                           sx={{ fontWeight: "bold", fontSize: "0.7rem" }}
                         />

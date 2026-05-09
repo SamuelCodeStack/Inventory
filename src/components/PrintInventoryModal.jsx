@@ -21,8 +21,9 @@ import {
   useTheme,
   MenuItem,
 } from "@mui/material";
-import { Close, Print } from "@mui/icons-material";
+import { Close, Print, Download } from "@mui/icons-material";
 import { useReactToPrint } from "react-to-print";
+import * as XLSX from "xlsx";
 
 export default function PrintInventoryModal({
   open,
@@ -132,6 +133,45 @@ export default function PrintInventoryModal({
     documentTitle: `Inventory_Report_${getRangeLabel().replace(/ /g, "_")}`,
     onAfterPrint: handleClose,
   });
+
+  const handleExportExcel = () => {
+    const worksheetData = filteredData.map((row) => {
+      const diff =
+        Math.round(row.quantity || 0) - Math.round(row.previousQuantity || 0);
+
+      let rowData = {
+        "Item Name": row.name,
+        Category: row.category || "---",
+        Unit: row.uom,
+      };
+
+      if (showPrice) {
+        rowData["Price"] = row.price ? Number(row.price) : 0;
+      }
+
+      if (printAll) {
+        rowData["Quantity"] = Math.round(row.quantity || 0);
+        rowData["Status"] = row.status || "Active";
+      } else {
+        rowData["Prev Qty"] =
+          row.previousQuantity != null ? Math.round(row.previousQuantity) : 0;
+        rowData["Adjustment"] = diff;
+        rowData["Current Qty"] = Math.round(row.quantity || 0);
+        rowData["Last Updated"] = new Date(
+          row.lastUpdated || row.date,
+        ).toLocaleDateString();
+      }
+      return rowData;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Inventory Report");
+    XLSX.writeFile(
+      workbook,
+      `Inventory_Report_${getRangeLabel().replace(/ /g, "_")}.xlsx`,
+    );
+  };
 
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="md">
@@ -452,6 +492,16 @@ export default function PrintInventoryModal({
       >
         <Button onClick={handleClose} color="inherit">
           Cancel
+        </Button>
+        <Button
+          onClick={handleExportExcel}
+          variant="outlined"
+          size="large"
+          startIcon={<Download />}
+          disabled={filteredData.length === 0}
+          sx={{ fontWeight: "bold", px: 4 }}
+        >
+          Export Excel
         </Button>
         <Button
           onClick={handlePrint}

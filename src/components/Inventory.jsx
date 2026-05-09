@@ -202,10 +202,16 @@ export default function Inventory({ mode, user }) {
           const original = originalData.find((o) => o.id === item.id);
           return original && item.quantity !== original.quantity;
         })
-        .map((item) => ({
-          id: String(item.id).split(":")[0],
-          quantity: item.quantity,
-        })),
+        .map((item) => {
+          const isAdjustment = item.movement !== "" && item.movement !== "-";
+          return {
+            id: String(item.id).split(":")[0],
+            quantity: item.quantity,
+            // type 1 for direct edit, 2 for adjustment (stock in/out)
+            update_type: isAdjustment ? 2 : 1,
+            movement_value: isAdjustment ? item.movement : null,
+          };
+        }),
     };
     try {
       const response = await fetch(
@@ -518,7 +524,10 @@ export default function Inventory({ mode, user }) {
                       type="number"
                       variant={isEditingQty ? "outlined" : "standard"}
                       size="small"
-                      disabled={!isEditingQty}
+                      disabled={
+                        !isEditingQty ||
+                        (row.movement !== "" && row.movement !== null)
+                      }
                       value={row.quantity}
                       onChange={(e) =>
                         handleQuantityChangeLocal(row.id, e.target.value)
@@ -550,6 +559,16 @@ export default function Inventory({ mode, user }) {
                               : "Adjustment"
                         }
                         size="small"
+                        disabled={(() => {
+                          const original = originalData.find(
+                            (o) => o.id === row.id,
+                          );
+                          return (
+                            original &&
+                            row.quantity !== original.quantity &&
+                            (row.movement === "" || row.movement === null)
+                          );
+                        })()}
                         value={row.movement || ""}
                         onChange={(e) =>
                           handleMovementChange(row.id, e.target.value)

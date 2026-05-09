@@ -303,6 +303,7 @@ app.patch("/api/inventory/bulk", async (req, res) => {
     for (const item of items) {
       const id = cleanId(item.id);
       const newQty = item.quantity;
+      const movementValue = item.movement_value; // Track if it came from the adjustment input
 
       // 1. Fetch current details to get the Name and Old Quantity
       const currentRes = await client.query(
@@ -316,11 +317,25 @@ app.patch("/api/inventory/bulk", async (req, res) => {
 
         // 2. Only update and log if the quantity actually changed
         if (oldQty !== newQty) {
+          const diff = newQty - oldQty;
+
+          // Determine the specific action label based on which input was used
+          let actionLabel = "";
+          if (
+            movementValue !== null &&
+            movementValue !== undefined &&
+            movementValue !== ""
+          ) {
+            actionLabel = diff > 0 ? "Stock In" : "Stock Out";
+          } else {
+            actionLabel = "Quantity Correction";
+          }
+
           // RECORD TO LEDGER
           await client.query(
             `INSERT INTO inventory_ledger (item_id, old_quantity, new_quantity, change_amount)
              VALUES ($1, $2, $3, $4)`,
-            [id, oldQty, newQty, newQty - oldQty],
+            [id, oldQty, newQty, diff],
           );
 
           await client.query(
@@ -331,13 +346,13 @@ app.patch("/api/inventory/bulk", async (req, res) => {
             [newQty, id],
           );
 
-          // 3. Log using the format: [Item Name]: [Old Qty] to [New Qty]
+          // 3. Log using the specific action label
           await logActivity(
             req,
             "UPDATE",
             "inventory",
             id,
-            `${itemName} update quantity : ${oldQty} to ${newQty}`,
+            `${itemName} ${actionLabel}: ${oldQty} to ${newQty}`,
           );
         }
       }
@@ -375,9 +390,9 @@ app.patch("/api/inventory/:id", async (req, res) => {
 
     await pool.query(
       `UPDATE inventory SET 
-       item_name=$1, category=$2, unit=$3, quantity=$4, price=$5, minimum_stock=$6, 
-       updated_at = CASE WHEN quantity != $4 THEN now() ELSE updated_at END
-       WHERE item_id=$7`,
+        item_name=$1, category=$2, unit=$3, quantity=$4, price=$5, minimum_stock=$6, 
+        updated_at = CASE WHEN quantity != $4 THEN now() ELSE updated_at END
+        WHERE item_id=$7`,
       [name, category, uom, quantity, price, minStock, id],
     );
     await logActivity(
@@ -385,7 +400,7 @@ app.patch("/api/inventory/:id", async (req, res) => {
       "UPDATE",
       "inventory",
       id,
-      `Updated item details for: ${name}`,
+      `${name} quantity updated: ${oldQty} to ${quantity}`,
     );
     res.json({ message: "Item updated" });
   } catch (err) {
