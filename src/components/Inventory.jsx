@@ -136,7 +136,8 @@ export default function Inventory({ mode, user }) {
   });
 
   const handleQuantityChangeLocal = (id, newQuantity) => {
-    const qty = parseInt(newQuantity) || 0;
+    // Math.max(0, ...) ensures result is never negative, parseInt ensures whole number
+    const qty = Math.max(0, parseInt(newQuantity) || 0);
     setInventoryData((prev) =>
       prev.map((item) => {
         if (item.id === id) {
@@ -170,17 +171,20 @@ export default function Inventory({ mode, user }) {
           const newQty = baseQty + finalMovement;
 
           const threshold = item.minStock || 10;
+          // Ensure newQty result doesn't go below 0
+          const clampedQty = newQty >= 0 ? newQty : 0;
+
           let newStatus =
-            newQty === 0
+            clampedQty === 0
               ? "Out of Stock"
-              : newQty <= threshold
+              : clampedQty <= threshold
                 ? "Low Stock"
                 : "In Stock";
 
           return {
             ...item,
             movement: value,
-            quantity: newQty >= 0 ? newQty : 0,
+            quantity: clampedQty,
             status: newStatus,
           };
         }
@@ -209,6 +213,8 @@ export default function Inventory({ mode, user }) {
             quantity: item.quantity,
             // type 1 for direct edit, 2 for adjustment (stock in/out)
             update_type: isAdjustment ? 2 : 1,
+            // Changed key to 'adjustment' to match common backend expectations for logging
+            adjustment: isAdjustment ? item.movement : null,
             movement_value: isAdjustment ? item.movement : null,
           };
         }),
@@ -529,6 +535,9 @@ export default function Inventory({ mode, user }) {
                         (row.movement !== "" && row.movement !== null)
                       }
                       value={row.quantity}
+                      onKeyDown={(e) => {
+                        if (e.key === "." || e.key === "e") e.preventDefault();
+                      }}
                       onChange={(e) =>
                         handleQuantityChangeLocal(row.id, e.target.value)
                       }
@@ -570,6 +579,10 @@ export default function Inventory({ mode, user }) {
                           );
                         })()}
                         value={row.movement || ""}
+                        onKeyDown={(e) => {
+                          if (e.key === "." || e.key === "e")
+                            e.preventDefault();
+                        }}
                         onChange={(e) =>
                           handleMovementChange(row.id, e.target.value)
                         }

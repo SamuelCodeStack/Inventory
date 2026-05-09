@@ -154,10 +154,10 @@ export default function AllActivityLogs({ mode }) {
                   let displayAction = log.action_type;
                   let colorKey = log.action_type;
 
-                  // Inventory specific logic
+                  // Updated Inventory/Raw Materials logic to match your images
                   if (
-                    log.table_name === "inventory" ||
-                    log.table_name === "raw_materials"
+                    log.table_name.toLowerCase() === "inventory" ||
+                    log.table_name.toLowerCase() === "raw_materials"
                   ) {
                     const desc = log.description.toLowerCase();
 
@@ -167,7 +167,10 @@ export default function AllActivityLogs({ mode }) {
                     } else if (desc.includes("stock out")) {
                       displayAction = "STOCK OUT";
                       colorKey = "STOCK OUT";
-                    } else if (desc.includes("quantity updated")) {
+                    } else if (
+                      desc.includes("update quantity") ||
+                      desc.includes("quantity updated")
+                    ) {
                       displayAction = "UPDATE";
                       colorKey = "UPDATE";
                     } else if (desc.includes("adjusted")) {

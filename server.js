@@ -302,10 +302,9 @@ app.patch("/api/inventory/bulk", async (req, res) => {
 
     for (const item of items) {
       const id = cleanId(item.id);
-      const newQty = item.quantity;
-      const movementValue = item.movement_value; // Track if it came from the adjustment input
+      const newQty = Math.floor(item.quantity);
+      const adjustment = item.adjustment;
 
-      // 1. Fetch current details to get the Name and Old Quantity
       const currentRes = await client.query(
         "SELECT item_name, quantity FROM inventory WHERE item_id = $1",
         [id],
@@ -313,29 +312,13 @@ app.patch("/api/inventory/bulk", async (req, res) => {
 
       if (currentRes.rows.length > 0) {
         const itemName = currentRes.rows[0].item_name;
-        const oldQty = currentRes.rows[0].quantity;
+        const oldQty = Math.floor(currentRes.rows[0].quantity);
 
-        // 2. Only update and log if the quantity actually changed
         if (oldQty !== newQty) {
-          const diff = newQty - oldQty;
-
-          // Determine the specific action label based on which input was used
-          let actionLabel = "";
-          if (
-            movementValue !== null &&
-            movementValue !== undefined &&
-            movementValue !== ""
-          ) {
-            actionLabel = diff > 0 ? "Stock In" : "Stock Out";
-          } else {
-            actionLabel = "Quantity Correction";
-          }
-
-          // RECORD TO LEDGER
           await client.query(
             `INSERT INTO inventory_ledger (item_id, old_quantity, new_quantity, change_amount)
              VALUES ($1, $2, $3, $4)`,
-            [id, oldQty, newQty, diff],
+            [id, oldQty, newQty, newQty - oldQty],
           );
 
           await client.query(
@@ -346,14 +329,19 @@ app.patch("/api/inventory/bulk", async (req, res) => {
             [newQty, id],
           );
 
-          // 3. Log using the specific action label
-          await logActivity(
-            req,
-            "UPDATE",
-            "inventory",
-            id,
-            `${itemName} ${actionLabel}: ${oldQty} to ${newQty}`,
-          );
+          // MATCHING RAW MATS LOG STYLE
+          let logMessage = `Update Quantity ${itemName} ${oldQty} to ${newQty}`;
+
+          if (adjustment && adjustment !== "") {
+            const adjValue = parseInt(adjustment);
+            if (adjValue > 0) {
+              logMessage = `Stock In: ${itemName} ${oldQty} + ${adjValue} = ${newQty}`;
+            } else if (adjValue < 0) {
+              logMessage = `Stock Out: ${itemName} ${oldQty} - ${Math.abs(adjValue)} = ${newQty}`;
+            }
+          }
+
+          await logActivity(req, "UPDATE", "inventory", id, logMessage);
         }
       }
     }
@@ -400,7 +388,7 @@ app.patch("/api/inventory/:id", async (req, res) => {
       "UPDATE",
       "inventory",
       id,
-      `${name} quantity updated: ${oldQty} to ${quantity}`,
+      `Updated item details for: ${name}`,
     );
     res.json({ message: "Item updated" });
   } catch (err) {
@@ -731,7 +719,7 @@ app.post("/api/raw-materials", async (req, res) => {
   }
 });
 
-// --- ADDED BULK ADD ENDPOINT ---
+// --- BULK ADD ENDPOINT ---
 app.post("/api/raw-materials/bulk-add", async (req, res) => {
   const { items } = req.body;
   try {
@@ -770,7 +758,7 @@ app.post("/api/raw-materials/bulk-add", async (req, res) => {
   }
 });
 
-// --- ADDED BULK UPDATE ENDPOINT (For Edit Qty) ---
+// --- UPDATED BULK UPDATE ENDPOINT (With Selective Logging) ---
 app.patch("/api/raw-materials/bulk", async (req, res) => {
   const { items } = req.body;
   const client = await pool.connect();
@@ -778,15 +766,26 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
     await client.query("BEGIN");
     for (const item of items) {
       const currentRes = await client.query(
-        "SELECT quantity FROM raw_materials WHERE material_id = $1",
+        "SELECT material_name, quantity FROM raw_materials WHERE material_id = $1",
         [item.id],
       );
 
       if (currentRes.rows.length > 0) {
-        const oldQty = currentRes.rows[0].quantity;
-        const newQty = item.quantity;
+        const materialName = currentRes.rows[0].material_name;
+        const oldQty = Math.floor(currentRes.rows[0].quantity);
+        const newQty = Math.floor(item.quantity);
 
         if (oldQty !== newQty) {
+          // KEY FIX: Determine if this was a manual Update or a Stock Adjustment
+          let actionType = "UPDATE";
+          let description = `Update Quantity ${materialName} ${oldQty} to ${newQty}`;
+
+          if (item.adjustment && parseInt(item.adjustment) !== 0) {
+            const adj = parseInt(item.adjustment);
+            actionType = adj > 0 ? "STOCK IN" : "STOCK OUT";
+            description = `${adj > 0 ? "Stock In" : "Stock Out"}: ${materialName} ${oldQty} ${adj > 0 ? "+" : "-"} ${Math.abs(adj)} = ${newQty}`;
+          }
+
           await client.query(
             `INSERT INTO raw_materials_ledger (material_id, old_qty_value, new_qty_value, change_amount)
              VALUES ($1, $2, $3, $4)`,
@@ -800,10 +799,10 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
 
           await logActivity(
             req,
-            "UPDATE",
+            actionType,
             "raw_materials",
             item.id,
-            `Bulk quantity update for ID ${item.id} to ${newQty}`,
+            description,
           );
         }
       }

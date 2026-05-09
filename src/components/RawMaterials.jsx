@@ -51,7 +51,7 @@ export default function RawMaterials({ mode, userLevel }) {
     userLevel === "0" ||
     userLevel === 1 ||
     userLevel === "1" ||
-    userLevel === 2 ||
+    userLevel === "2" ||
     userLevel === "2" ||
     userLevel === 3 ||
     userLevel === "3";
@@ -108,11 +108,13 @@ export default function RawMaterials({ mode, userLevel }) {
 
   // --- BULK EDIT LOGIC ---
   const handleQuantityChangeLocal = (id, newQuantity) => {
-    const qty = parseInt(newQuantity) || 0;
+    // Force to whole number and ensure it's not negative
+    const qty = Math.max(0, parseInt(newQuantity) || 0);
     setMaterials((prev) =>
       prev.map((item) => {
         if (item.id === id) {
-          return { ...item, quantity: qty };
+          // KEY FIX: Manually updating quantity clears the adjustment field to indicate an "UPDATE"
+          return { ...item, quantity: qty, adjustment: "" };
         }
         return item;
       }),
@@ -129,11 +131,15 @@ export default function RawMaterials({ mode, userLevel }) {
         if (item.id === id) {
           const original = originalData.find((o) => o.id === id);
           const adjValue = parseInt(value) || 0;
+
           // Automatically update the quantity based on original + adjustment
+          // Use Math.max(0, ...) to ensure the result is never negative
+          const calculatedQty = Math.max(0, original.quantity + adjValue);
+
           return {
             ...item,
             adjustment: value,
-            quantity: original.quantity + adjValue,
+            quantity: calculatedQty,
           };
         }
         return item;
@@ -161,6 +167,7 @@ export default function RawMaterials({ mode, userLevel }) {
       .map((item) => ({
         id: item.id,
         quantity: item.quantity,
+        adjustment: item.adjustment, // KEY FIX: Send adjustment to backend to distinguish log type
       }));
 
     try {
@@ -533,7 +540,11 @@ export default function RawMaterials({ mode, userLevel }) {
                               type="number"
                               size="small"
                               variant={isEditingQty ? "outlined" : "standard"}
-                              disabled={!isEditingQty}
+                              disabled={
+                                !isEditingQty ||
+                                (row.adjustment !== "" &&
+                                  row.adjustment !== null)
+                              }
                               value={row.quantity}
                               onChange={(e) =>
                                 handleQuantityChangeLocal(
@@ -541,6 +552,9 @@ export default function RawMaterials({ mode, userLevel }) {
                                   e.target.value,
                                 )
                               }
+                              inputProps={{
+                                step: 1, // Suggests whole numbers in UI
+                              }}
                               InputProps={{
                                 disableUnderline: true,
                                 sx: {
@@ -559,6 +573,11 @@ export default function RawMaterials({ mode, userLevel }) {
                                 size="small"
                                 label={adjustmentLabel}
                                 placeholder="+/-"
+                                disabled={
+                                  row.adjustment === "" &&
+                                  originalData.find((o) => o.id === row.id)
+                                    .quantity !== row.quantity
+                                }
                                 value={row.adjustment || ""}
                                 onChange={(e) =>
                                   handleAdjustmentChange(row.id, e.target.value)
