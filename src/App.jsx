@@ -12,7 +12,10 @@ import {
   Box,
   CssBaseline,
   CircularProgress,
+  Snackbar,
+  Alert,
 } from "@mui/material";
+import { CleaningServices } from "@mui/icons-material";
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
 import Inventory from "./components/Inventory.jsx";
@@ -28,6 +31,44 @@ import Profile from "./components/UserProfile.jsx"; // ADDED: Profile Import
 function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // --- ADDED: GLOBAL CLEANUP STATE ---
+  const [prevLogCount, setPrevLogCount] = useState(null);
+  const [cleanupNotify, setCleanupNotify] = useState({ open: false, count: 0 });
+
+  // --- ADDED: BACKGROUND MONITOR FOR CRON CLEANUP ---
+  useEffect(() => {
+    if (!user || user.user_level !== 0) return;
+
+    const monitorCleanup = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/logs`, {
+          credentials: "include",
+        });
+        const data = await res.json();
+
+        if (prevLogCount !== null && data.length < prevLogCount) {
+          setCleanupNotify({ open: true, count: prevLogCount - data.length });
+        }
+        setPrevLogCount(data.length);
+      } catch (err) {
+        console.error("Cleanup monitor failed", err);
+      }
+    };
+
+    // Check for cleanup every minute, synced with the cron cycle roughly
+    const interval = setInterval(() => {
+      const seconds = new Date().getSeconds();
+      if (seconds === 0) {
+        monitorCleanup();
+      }
+    }, 1000);
+
+    // Initial check on mount
+    monitorCleanup();
+
+    return () => clearInterval(interval);
+  }, [user, prevLogCount]);
 
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
 
@@ -159,6 +200,25 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
           </Routes>
         </Box>
       </Box>
+
+      {/* --- ADDED: GLOBAL CLEANUP DIALOG NOTIFICATION --- */}
+      <Snackbar
+        open={cleanupNotify.open}
+        autoHideDuration={8000}
+        onClose={() => setCleanupNotify({ ...cleanupNotify, open: false })}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          onClose={() => setCleanupNotify({ ...cleanupNotify, open: false })}
+          severity="info"
+          variant="filled"
+          icon={<CleaningServices fontSize="inherit" />}
+          sx={{ fontWeight: "bold", borderRadius: 2 }}
+        >
+          Last Minute Cleanup: {cleanupNotify.count} logs (older than 1 min)
+          auto-deleted.
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
