@@ -31,10 +31,10 @@ import UserActivityModal from "./UserActivityModal"; // Ensure you create this f
 const THEME_ORANGE = "#f2994a";
 // UPDATED: roles mapped to their numeric levels
 const roles = [
-  { label: "Admin", value: 0 },
-  { label: "Office", value: 1 },
-  { label: "Production", value: 2 },
-  { label: "Viewer", value: 3 },
+  { label: "Admin", value: 1 },
+  { label: "Office", value: 2 },
+  { label: "Production", value: 3 },
+  { label: "Viewer", value: 4 },
 ];
 
 export default function UserManagement({ mode }) {
@@ -49,6 +49,10 @@ export default function UserManagement({ mode }) {
   // Modal States for Activity Log
   const [openLogModal, setOpenLogModal] = useState(false);
   const [selectedUserForLog, setSelectedUserForLog] = useState(null);
+
+  // --- USER ROLE LOGIC ---
+  const currentUserLevel = parseInt(localStorage.getItem("userLevel")); // 0: Superadmin, 1: Admin
+  const isSuperAdmin = currentUserLevel === 0;
 
   const isDark = mode === "dark";
 
@@ -72,11 +76,13 @@ export default function UserManagement({ mode }) {
   const handleRoleChange = async (userId, newRole) => {
     try {
       const response = await fetch(
-        `http://localhost:3000/api/users/${userId}/role`,
+        // `http://localhost:3000/api/users/${userId}/role`,
+        `${import.meta.env.VITE_API_URL}/users/${userId}/role`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           // FIX: Changed key from 'role' to 'user_level' to match your backend
+          credentials: "include",
           body: JSON.stringify({ user_level: newRole }),
         },
       );
@@ -137,8 +143,9 @@ export default function UserManagement({ mode }) {
 
   const filteredUsers = users.filter(
     (u) =>
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase()),
+      u.user_level !== 0 && // Hide Superadmins (level 0) from the table
+      (u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.email.toLowerCase().includes(searchQuery.toLowerCase())),
   );
 
   return (
@@ -238,11 +245,18 @@ export default function UserManagement({ mode }) {
                   <TextField
                     select
                     // Value priority: use user_level directly
-                    value={user.user_level ?? 3}
+                    value={user.user_level ?? 4}
                     size="small"
+                    // Disable if current user is Admin and the target user is also an Admin
+                    disabled={!isSuperAdmin && user.user_level === 1}
                     onChange={(e) =>
                       handleRoleChange(user.id, parseInt(e.target.value))
                     }
+                    // Select display logic: Use SelectProps to force display of label even if item is filtered
+                    SelectProps={{
+                      renderValue: (selected) =>
+                        roles.find((r) => r.value === selected)?.label,
+                    }}
                     sx={{
                       width: 130,
                       "& .MuiSelect-select": {
@@ -252,15 +266,20 @@ export default function UserManagement({ mode }) {
                       },
                     }}
                   >
-                    {roles.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>
-                        {option.label}
-                      </MenuItem>
-                    ))}
+                    {roles
+                      // Hide "Admin" option if current user is not a Superadmin
+                      .filter((option) => isSuperAdmin || option.value !== 1)
+                      .map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
                   </TextField>
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={1} justifyContent="flex-end">
+                    <History fontSize="inherit" sx={{ display: "none" }} />{" "}
+                    {/* Icon reference */}
                     <Tooltip title="View Activity Logs">
                       <IconButton
                         size="small"
@@ -274,16 +293,18 @@ export default function UserManagement({ mode }) {
                         <History fontSize="inherit" />
                       </IconButton>
                     </Tooltip>
-
-                    <Tooltip title="Delete User">
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleDeleteUser(user.id)}
-                      >
-                        <Delete fontSize="inherit" />
-                      </IconButton>
-                    </Tooltip>
+                    {/* Only show delete button if current user is Superadmin (level 0) */}
+                    {isSuperAdmin && (
+                      <Tooltip title="Delete User">
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleDeleteUser(user.id)}
+                        >
+                          <Delete fontSize="inherit" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </Stack>
                 </TableCell>
               </TableRow>

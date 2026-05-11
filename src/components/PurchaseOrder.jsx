@@ -44,7 +44,13 @@ import DeliveryActionModal from "./DeliveryActionModal";
 import PrintPOReportModal from "./PrintPOReportModal";
 
 // Define consistent status options for the filter
-const statusFilterOptions = ["Job Order", "Pending", "Delivered", "Backload"];
+const statusFilterOptions = [
+  "Job Order",
+  "Pending",
+  "Partial",
+  "Delivered",
+  "Backload",
+];
 
 export default function PurchaseOrder({ mode }) {
   const [poData, setPoData] = useState([]);
@@ -57,9 +63,9 @@ export default function PurchaseOrder({ mode }) {
   const [selectedPO, setSelectedPO] = useState(null);
 
   // --- USER ROLE LOGIC ---
-  const userLevel = parseInt(localStorage.getItem("userLevel")); // 0: Admin, 1: Office, 2: Production, 3: Viewer
-  const canManagePO = userLevel === 0 || userLevel === 1; // Admin and Office can Create/Print/Update
-  const canSeeActions = userLevel === 0 || userLevel === 1; // Only Admin and Office see the action column buttons
+  const userLevel = parseInt(localStorage.getItem("userLevel")); // 0: Superadmin, 1: Admin, 2: Office, 3: Production, 4: Viewer
+  const canManagePO = userLevel === 0 || userLevel === 1 || userLevel === 2; // Superadmin and Admin can Create/Print/Update
+  const canSeeActions = userLevel === 0 || userLevel === 1 || userLevel === 2; // Only Superadmin and Admin see the action column buttons
 
   // --- FILTER STATES ---
   const [searchQuery, setSearchQuery] = useState("");
@@ -116,6 +122,8 @@ export default function PurchaseOrder({ mode }) {
         return { color: "#3498db", bg: "rgba(52, 152, 219, 0.1)" };
       case "Pending":
         return { color: "#f19149", bg: "rgba(241, 145, 73, 0.1)" };
+      case "Partial":
+        return { color: "#f39c12", bg: "rgba(243, 156, 18, 0.1)" };
       case "DeliverOnGoing":
         return { color: "#9b59b2", bg: "rgba(155, 89, 182, 0.1)" };
       case "Delivered":
@@ -194,9 +202,9 @@ export default function PurchaseOrder({ mode }) {
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
-      const priority = { "Job Order": 1, Pending: 2 };
-      const aPriority = priority[a.status] || 3;
-      const bPriority = priority[b.status] || 3;
+      const priority = { "Job Order": 1, Pending: 2, Partial: 3 };
+      const aPriority = priority[a.status] || 4;
+      const bPriority = priority[b.status] || 4;
       return aPriority - bPriority;
     });
 
@@ -370,7 +378,10 @@ export default function PurchaseOrder({ mode }) {
                 const isOngoing = clean === "DeliverOnGoing";
                 const isFinal = clean === "Delivered" || clean === "Backload";
                 const isActionAvailable =
-                  clean === "JobOrder" || clean === "Pending" || isOngoing;
+                  clean === "JobOrder" ||
+                  clean === "Pending" ||
+                  clean === "Partial" ||
+                  isOngoing;
 
                 return (
                   <TableRow key={row.id} hover>

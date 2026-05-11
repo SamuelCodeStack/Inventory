@@ -967,16 +967,28 @@ app.patch("/api/users/:id/role", async (req, res) => {
   const id = req.params.id;
   const { user_level } = req.body;
   try {
+    // Fetch the name of the user being updated
+    const userRes = await pool.query(
+      "SELECT full_name FROM users WHERE user_id = $1",
+      [id],
+    );
+    const targetName = userRes.rows[0]?.full_name || "Unknown User";
+
+    // Map level to Role Name
+    const roles = { 1: "Admin", 2: "Office", 3: "Production", 4: "Viewer" };
+    const roleName = roles[user_level] || user_level;
+
     await pool.query("UPDATE users SET user_level = $1 WHERE user_id = $2", [
       user_level,
       id,
     ]);
+
     await logActivity(
       req,
       "UPDATE",
       "users",
       id,
-      `Changed user level to ${user_level}`,
+      `Changed ${targetName}'s user level to ${roleName}`,
     );
     res.json({ message: "Level updated successfully" });
   } catch (err) {

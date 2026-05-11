@@ -38,6 +38,7 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
 
   // --- ADDED: BACKGROUND MONITOR FOR CRON CLEANUP ---
   useEffect(() => {
+    // Only Superadmin (0) monitors cleanup based on your requirement
     if (!user || user.user_level !== 0) return;
 
     const monitorCleanup = async () => {
@@ -108,13 +109,17 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
   }
 
   // Helper for Role-Based Access Control
-  // Admin is user_level 0
-  const isAdmin = user.user_level === 0 || user.user_level === "0";
+  // Superadmin = 0, Admin = 1 (Both have same access)
+  const isAdmin =
+    user.user_level === 0 ||
+    user.user_level === "0" ||
+    user.user_level === 1 ||
+    user.user_level === "1";
 
   // Logic for Action Buttons visibility: Admin and Production can edit.
-  // Admin = 0, Office = 1, Production = 2, Viewer = 3
+  // Superadmin = 0, Admin = 1, Office = 2, Production = 3, Viewer = 4
   const canEditInventory =
-    isAdmin || user.user_level === 2 || user.user_level === "2";
+    isAdmin || user.user_level === 3 || user.user_level === "3";
 
   return (
     <Box

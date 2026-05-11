@@ -31,8 +31,12 @@ export default function Sidebar({
   const location = useLocation();
   const drawerWidth = 240;
 
-  // Helper for Admin check
-  const isAdmin = user?.user_level === 0 || user?.user_level === "0";
+  // Helper for Admin check - Updated to include Superadmin (0) and Admin (1)
+  const isAdmin =
+    user?.user_level === 0 ||
+    user?.user_level === "0" ||
+    user?.user_level === 1 ||
+    user?.user_level === "1";
 
   const menuItems = [
     // Dashboard is now restricted to Admin only

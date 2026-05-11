@@ -33,7 +33,7 @@ import {
   Event,
 } from "@mui/icons-material";
 
-const statusOptions = ["Job Order", "Pending"];
+const statusOptions = ["Job Order", "Pending", "Partial"];
 
 export default function CreatePOModal({
   open,
@@ -415,17 +415,29 @@ export default function CreatePOModal({
                                   fontWeight: "bold",
                                   borderRadius: "6px",
                                   bgcolor:
-                                    item.status === "In Stock"
-                                      ? "#2e4a3f"
-                                      : item.status === "Low Stock"
-                                        ? "#4a3e2e"
-                                        : "#4a2e2e",
+                                    mode === "light"
+                                      ? item.status === "In Stock"
+                                        ? "#e8f5e9"
+                                        : item.status === "Low Stock"
+                                          ? "#fff3e0"
+                                          : "#ffebee"
+                                      : item.status === "In Stock"
+                                        ? "#2e4a3f"
+                                        : item.status === "Low Stock"
+                                          ? "#4a3e2e"
+                                          : "#4a2e2e",
                                   color:
-                                    item.status === "In Stock"
-                                      ? "#26d672"
-                                      : item.status === "Low Stock"
-                                        ? "#ffa726"
-                                        : "#ff5252",
+                                    mode === "light"
+                                      ? item.status === "In Stock"
+                                        ? "#2e7d32"
+                                        : item.status === "Low Stock"
+                                          ? "#ef6c00"
+                                          : "#c62828"
+                                      : item.status === "In Stock"
+                                        ? "#26d672"
+                                        : item.status === "Low Stock"
+                                          ? "#ffa726"
+                                          : "#ff5252",
                                 }}
                               />
                             </TableCell>

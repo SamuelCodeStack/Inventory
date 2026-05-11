@@ -66,14 +66,18 @@ export default function Inventory({ mode, user }) {
   const canModify =
     user?.user_level === 0 ||
     user?.user_level === "0" ||
-    user?.user_level === 2 ||
-    user?.user_level === "2";
+    user?.user_level === 1 ||
+    user?.user_level === "1" ||
+    user?.user_level === 3 ||
+    user?.user_level === "3";
 
   const canViewActionColumn =
     user?.user_level === 0 ||
     user?.user_level === "0" ||
-    user?.user_level === 2 ||
-    user?.user_level === "2";
+    user?.user_level === 1 ||
+    user?.user_level === "1" ||
+    user?.user_level === 3 ||
+    user?.user_level === "3";
 
   const showMessage = (msg, sev = "success") =>
     setSnackbar({ open: true, message: msg, severity: sev });
@@ -646,30 +650,23 @@ export default function Inventory({ mode, user }) {
                     <Box
                       sx={{
                         display: "inline-block",
-                        px: 2.5,
-                        py: 0.8,
-                        borderRadius: 2,
-                        fontSize: "0.85rem",
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: 1.5,
+                        fontSize: "0.75rem",
                         fontWeight: "bold",
                         bgcolor:
                           row.status === "In Stock"
-                            ? "rgba(46, 204, 113, 0.2)"
+                            ? "rgba(46, 204, 113, 0.15)"
                             : row.status === "Low Stock"
-                              ? "rgba(241, 145, 73, 0.2)"
-                              : "rgba(231, 76, 60, 0.2)",
+                              ? "rgba(241, 145, 73, 0.15)"
+                              : "rgba(231, 76, 60, 0.15)",
                         color:
                           row.status === "In Stock"
                             ? "#2ecc71"
                             : row.status === "Low Stock"
                               ? "#e67e22"
                               : "#e74c3c",
-                        border: `1px solid ${
-                          row.status === "In Stock"
-                            ? "rgba(46, 204, 113, 0.3)"
-                            : row.status === "Low Stock"
-                              ? "rgba(241, 145, 73, 0.3)"
-                              : "rgba(231, 76, 60, 0.3)"
-                        }`,
                       }}
                     >
                       {row.status}

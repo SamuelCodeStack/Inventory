@@ -36,6 +36,18 @@ export default function UserProfile({ mode, userData, onSave }) {
   const paperBg = isDark ? "#1b1b1b" : theme.palette.background.paper;
   const borderColor = isDark ? alpha("#fff", 0.1) : theme.palette.divider;
 
+  // Helper to map numeric level to label
+  const getRoleLabel = (level) => {
+    const roles = {
+      0: "Superadmin",
+      1: "Admin",
+      2: "Office",
+      3: "Production",
+      4: "Viewer",
+    };
+    return roles[level] || "User";
+  };
+
   // Track initial state to detect changes
   const [initialProfile, setInitialProfile] = useState({
     fullName: userData?.name || "",
@@ -45,7 +57,7 @@ export default function UserProfile({ mode, userData, onSave }) {
   const [profile, setProfile] = useState({
     fullName: userData?.name || "",
     email: userData?.email || "",
-    role: userData?.role || "User",
+    role: getRoleLabel(userData?.user_level),
   });
 
   // --- PASSWORD LOGIC STATE ---
@@ -65,7 +77,7 @@ export default function UserProfile({ mode, userData, onSave }) {
     const data = {
       fullName: userData?.name || "",
       email: userData?.email || "",
-      role: userData?.role || "User",
+      role: getRoleLabel(userData?.user_level),
     };
     setProfile(data);
     setInitialProfile({ fullName: data.fullName, email: data.email });

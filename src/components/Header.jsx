@@ -120,14 +120,19 @@ export default function Header({ mode, user, onMenuClick }) {
 
   // Map user level numbers to readable strings
   const roleLabels = {
-    0: "Admin",
-    1: "Office",
-    2: "Production",
-    3: "Viewer",
+    0: "Superadmin",
+    1: "Admin",
+    2: "Office",
+    3: "Production",
+    4: "Viewer",
   };
 
   // Helper to check if user is Admin
-  const isAdmin = user?.user_level === 0 || user?.user_level === "0";
+  const isAdmin =
+    user?.user_level === 0 ||
+    user?.user_level === "0" ||
+    user?.user_level === 1 ||
+    user?.user_level === "1";
 
   return (
     <AppBar
