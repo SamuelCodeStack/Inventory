@@ -648,6 +648,47 @@ app.patch("/api/purchase-orders/:id/status", async (req, res) => {
   }
 });
 
+app.delete("/api/purchase-orders/:id", async (req, res) => {
+  const id = cleanId(req.params.id);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Get PO Number for activity log before deletion
+    const poRes = await client.query(
+      "SELECT po_number FROM purchase_order WHERE po_id = $1",
+      [id],
+    );
+    if (poRes.rows.length === 0) {
+      return res.status(404).json({ error: "Purchase Order not found" });
+    }
+    const po_number = poRes.rows[0].po_number;
+
+    // Delete related items first due to foreign key constraints
+    await client.query("DELETE FROM item_order WHERE po_id = $1", [id]);
+
+    // Delete the PO
+    await client.query("DELETE FROM purchase_order WHERE po_id = $1", [id]);
+
+    await logActivity(
+      req,
+      "DELETE",
+      "purchase_order",
+      id,
+      `Deleted PO #${po_number}`,
+    );
+
+    await client.query("COMMIT");
+    res.json({ message: "Purchase Order deleted successfully" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Delete PO Error:", err);
+    res.status(500).json({ error: "Failed to delete order" });
+  } finally {
+    client.release();
+  }
+});
+
 // ==========================================
 // 3. RAW MATERIALS ENDPOINTS
 // ==========================================
@@ -999,28 +1040,29 @@ app.get("/api/logs", async (req, res) => {
 // AUTOMATIC LOG CLEANUP
 // Runs every minute for testing purposes
 // ==========================================
-cron.schedule("* * * * *", async () => {
-  console.log("--- Starting Scheduled Log Cleanup ---");
-  try {
-    // Changed interval to 1 minute to match the frontend "Last Minute" trigger
-    const result = await pool.query(
-      "DELETE FROM activity_logs WHERE created_at < NOW() - INTERVAL '1 minute'",
-    );
 
-    // --- DIALOG LOGGING ---
-    const timestamp = new Date().toLocaleTimeString();
-    console.log("-----------------------------------------");
-    console.log(`[${timestamp}] ✨ Cleanup Status: SUCCESS`);
-    console.log(`🗑️  Logs Deleted: ${result.rowCount}`);
-    console.log("-----------------------------------------");
+// cron.schedule("* * * * *", async () => {
+//   console.log("--- Starting Scheduled Log Cleanup ---");
+//   try {
+//     // Changed interval to 1 minute to match the frontend "Last Minute" trigger
+//     const result = await pool.query(
+//       "DELETE FROM activity_logs WHERE created_at < NOW() - INTERVAL '1 minute'",
+//     );
 
-    console.log(
-      `Cleanup complete: Deleted ${result.rowCount} logs older than 1 minute.`,
-    );
-  } catch (err) {
-    console.error("Scheduled cleanup failed:", err);
-  }
-});
+//     // --- DIALOG LOGGING ---
+//     const timestamp = new Date().toLocaleTimeString();
+//     console.log("-----------------------------------------");
+//     console.log(`[${timestamp}] ✨ Cleanup Status: SUCCESS`);
+//     console.log(`🗑️  Logs Deleted: ${result.rowCount}`);
+//     console.log("-----------------------------------------");
+
+//     console.log(
+//       `Cleanup complete: Deleted ${result.rowCount} logs older than 1 minute.`,
+//     );
+//   } catch (err) {
+//     console.error("Scheduled cleanup failed:", err);
+//   }
+// });
 
 // ==========================================
 // CATCH-ALL ERROR HANDLER
