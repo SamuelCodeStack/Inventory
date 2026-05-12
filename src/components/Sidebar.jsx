@@ -45,7 +45,7 @@ export default function Sidebar({
           {
             text: "Dashboard",
             icon: <Dashboard />,
-            path: "/",
+            path: "/Dashboard",
           },
         ]
       : []),
@@ -62,11 +62,16 @@ export default function Sidebar({
       path: "/raw-materials",
     },
 
-    {
-      text: "Purchase Order",
-      icon: <ShoppingCart />,
-      path: "/purchase-order",
-    },
+    // Purchase Order restricted for user level 3 and 4
+    ...(![3, "3", 4, "4"].includes(user?.user_level)
+      ? [
+          {
+            text: "Purchase Order",
+            icon: <ShoppingCart />,
+            path: "/purchase-order",
+          },
+        ]
+      : []),
 
     // {
     //   text: "Backup",

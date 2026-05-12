@@ -20,13 +20,14 @@ export default function AddInventoryModal({
   open,
   handleClose,
   onSaveSuccess,
+  userLevel, // Added userLevel prop
 }) {
   const emptyRow = {
     name: "",
     category: "",
     uom: "",
     quantity: "",
-    price: "",
+    price: String(userLevel) === "3" ? "0.00" : "", // Default to 0.00 if Production
     minStock: "",
   };
   const [items, setItems] = useState([emptyRow]);
@@ -183,26 +184,28 @@ export default function AddInventoryModal({
                 </Grid>
 
                 {/* PRICE */}
-                <Grid item xs={6} md={1.5}>
-                  <Typography
-                    variant="caption"
-                    fontWeight="bold"
-                    sx={{ mb: 1, display: "block", color: "text.secondary" }}
-                  >
-                    PRICE *
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    type="number"
-                    size="small"
-                    placeholder="0.00"
-                    value={item.price}
-                    error={item.price === ""}
-                    onChange={(e) =>
-                      handleChange(index, "price", e.target.value)
-                    }
-                  />
-                </Grid>
+                {String(userLevel) !== "3" && (
+                  <Grid item xs={6} md={1.5}>
+                    <Typography
+                      variant="caption"
+                      fontWeight="bold"
+                      sx={{ mb: 1, display: "block", color: "text.secondary" }}
+                    >
+                      PRICE *
+                    </Typography>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      size="small"
+                      placeholder="0.00"
+                      value={item.price}
+                      error={item.price === ""}
+                      onChange={(e) =>
+                        handleChange(index, "price", e.target.value)
+                      }
+                    />
+                  </Grid>
+                )}
 
                 {/* QTY */}
                 <Grid item xs={6} md={1.5}>

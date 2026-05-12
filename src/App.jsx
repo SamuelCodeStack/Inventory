@@ -149,7 +149,17 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
 
         <Box sx={{ p: 0 }}>
           <Routes>
-            <Route path="/" element={<Dashboard mode={mode} user={user} />} />
+            {/* Root path: Redirect user level 3 and 4 to inventory, others to dashboard */}
+            <Route
+              path="/"
+              element={
+                [3, "3", 4, "4"].includes(user.user_level) ? (
+                  <Navigate to="/inventory" replace />
+                ) : (
+                  <Dashboard mode={mode} user={user} />
+                )
+              }
+            />
             <Route
               path="/inventory"
               element={

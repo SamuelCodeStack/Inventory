@@ -68,6 +68,8 @@ export default function Inventory({ mode, user }) {
     user?.user_level === "0" ||
     user?.user_level === 1 ||
     user?.user_level === "1" ||
+    user?.user_level === 2 ||
+    user?.user_level === "2" ||
     user?.user_level === 3 ||
     user?.user_level === "3";
 
@@ -76,8 +78,17 @@ export default function Inventory({ mode, user }) {
     user?.user_level === "0" ||
     user?.user_level === 1 ||
     user?.user_level === "1" ||
+    user?.user_level === 2 ||
+    user?.user_level === "2" ||
     user?.user_level === 3 ||
     user?.user_level === "3";
+
+  // Logic to hide price for user level 3 (Production) and level 4
+  const canViewPrice =
+    user?.user_level !== 3 &&
+    user?.user_level !== "3" &&
+    user?.user_level !== 4 &&
+    user?.user_level !== "4";
 
   const showMessage = (msg, sev = "success") =>
     setSnackbar({ open: true, message: msg, severity: sev });
@@ -484,9 +495,11 @@ export default function Inventory({ mode, user }) {
                 <TableCell sx={{ fontWeight: "bold" }}>Item Name</TableCell>
                 <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
                 <TableCell sx={{ fontWeight: "bold" }}>Unit</TableCell>
-                <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                  Price
-                </TableCell>
+                {canViewPrice && (
+                  <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                    Price
+                  </TableCell>
+                )}
                 <TableCell align="right" sx={{ fontWeight: "bold" }}>
                   Quantity
                 </TableCell>
@@ -523,12 +536,14 @@ export default function Inventory({ mode, user }) {
                     />
                   </TableCell>
                   <TableCell>{row.uom}</TableCell>
-                  <TableCell align="right">
-                    ₱
-                    {Number(row.price).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                    })}
-                  </TableCell>
+                  {canViewPrice && (
+                    <TableCell align="right">
+                      ₱
+                      {Number(row.price).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}
+                    </TableCell>
+                  )}
                   <TableCell align="right">
                     <TextField
                       type="number"
@@ -734,6 +749,7 @@ export default function Inventory({ mode, user }) {
 
       <AddInventoryModal
         open={openAddModal}
+        userLevel={user?.user_level} // Use user_level from the user object
         handleClose={() => setOpenAddModal(false)}
         onSaveSuccess={() => {
           fetchInventory();
@@ -751,6 +767,7 @@ export default function Inventory({ mode, user }) {
       />
       <PrintInventoryModal
         open={openPrintModal}
+        userLevel={user?.user_level}
         handleClose={() => setOpenPrintModal(false)}
         inventoryData={inventoryData}
       />

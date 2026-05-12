@@ -62,6 +62,8 @@ export default function RawMaterials({ mode, userLevel }) {
     userLevel === "0" ||
     userLevel === 1 ||
     userLevel === "1" ||
+    userLevel === 2 ||
+    userLevel === "2" ||
     userLevel === 3 ||
     userLevel === "3";
 

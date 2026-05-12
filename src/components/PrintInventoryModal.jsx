@@ -29,6 +29,7 @@ export default function PrintInventoryModal({
   open,
   handleClose,
   inventoryData,
+  userLevel, // Added userLevel prop
 }) {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
@@ -145,7 +146,13 @@ export default function PrintInventoryModal({
         Unit: row.uom,
       };
 
-      if (showPrice) {
+      if (
+        showPrice &&
+        userLevel !== 3 &&
+        userLevel !== "3" &&
+        userLevel !== 4 &&
+        userLevel !== "4"
+      ) {
         rowData["Price"] = row.price ? Number(row.price) : 0;
       }
 
@@ -226,15 +233,20 @@ export default function PrintInventoryModal({
               label="Print All Records"
             />
 
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={showPrice}
-                  onChange={(e) => setShowPrice(e.target.checked)}
+            {userLevel !== 3 &&
+              userLevel !== "3" &&
+              userLevel !== 4 &&
+              userLevel !== "4" && (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={showPrice}
+                      onChange={(e) => setShowPrice(e.target.checked)}
+                    />
+                  }
+                  label="Include Price"
                 />
-              }
-              label="Include Price"
-            />
+              )}
 
             <TextField
               select
@@ -356,11 +368,15 @@ export default function PrintInventoryModal({
                   <TableCell sx={{ fontWeight: "bold" }}>Item Name</TableCell>
                   <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
                   <TableCell sx={{ fontWeight: "bold" }}>Unit</TableCell>
-                  {showPrice && (
-                    <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                      Price
-                    </TableCell>
-                  )}
+                  {showPrice &&
+                    userLevel !== 3 &&
+                    userLevel !== "3" &&
+                    userLevel !== 4 &&
+                    userLevel !== "4" && (
+                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                        Price
+                      </TableCell>
+                    )}
                   {printAll ? (
                     <>
                       <TableCell align="right" sx={{ fontWeight: "bold" }}>
@@ -399,13 +415,17 @@ export default function PrintInventoryModal({
                         </TableCell>
                         <TableCell>{row.category || "---"}</TableCell>
                         <TableCell>{row.uom}</TableCell>
-                        {showPrice && (
-                          <TableCell align="right">
-                            {row.price
-                              ? `₱${Number(row.price).toLocaleString()}`
-                              : "---"}
-                          </TableCell>
-                        )}
+                        {showPrice &&
+                          userLevel !== 3 &&
+                          userLevel !== "3" &&
+                          userLevel !== 4 &&
+                          userLevel !== "4" && (
+                            <TableCell align="right">
+                              {row.price
+                                ? `₱${Number(row.price).toLocaleString()}`
+                                : "---"}
+                            </TableCell>
+                          )}
                         {printAll ? (
                           <>
                             <TableCell
@@ -449,7 +469,21 @@ export default function PrintInventoryModal({
                   <TableRow>
                     <TableCell
                       colSpan={
-                        printAll ? (showPrice ? 6 : 5) : showPrice ? 8 : 7
+                        printAll
+                          ? showPrice &&
+                            userLevel !== 3 &&
+                            userLevel !== "3" &&
+                            userLevel !== 4 &&
+                            userLevel !== "4"
+                            ? 6
+                            : 5
+                          : showPrice &&
+                              userLevel !== 3 &&
+                              userLevel !== "3" &&
+                              userLevel !== 4 &&
+                              userLevel !== "4"
+                            ? 8
+                            : 7
                       }
                       align="center"
                       sx={{ py: 10 }}
