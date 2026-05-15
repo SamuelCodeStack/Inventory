@@ -16,7 +16,6 @@ import {
   TableHead,
   TableRow,
   Typography,
-  Chip,
   Paper,
   CircularProgress,
   Divider,
@@ -28,24 +27,30 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
   const [loading, setLoading] = useState(false);
   const componentRef = useRef();
 
-  // Print Handler
+  // Print Configuration
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
     documentTitle: `PO_${poData?.poNo || "Export"}`,
   });
 
+  // Fetch Items from item_order table
   useEffect(() => {
     if (open && poData?.id) {
       const fetchOrderItems = async () => {
         setLoading(true);
+        // Ensure ID is clean (handles "16:1" cases)
+        const cleanId = String(poData.id).split(":")[0];
         try {
           const response = await fetch(
-            `http://localhost:3000/api/purchase-orders/${poData.id}/items`,
+            // `http://localhost:3000/api/purchase-orders/${cleanId}/items`,
+            `${import.meta.env.VITE_API_URL}/purchase-orders/${cleanId}/items`,
           );
+          if (!response.ok) throw new Error("Failed to fetch");
           const data = await response.json();
-          setItems(data);
+          setItems(Array.isArray(data) ? data : []);
         } catch (error) {
           console.error("Error fetching PO items:", error);
+          setItems([]);
         } finally {
           setLoading(false);
         }
@@ -56,6 +61,20 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
 
   if (!poData) return null;
 
+  // Finalized check for Printing
+  const isFinalized =
+    poData.status === "Delivered" || poData.status === "Backload";
+  const isPrintDisabled = loading || !isFinalized;
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
   return (
     <Dialog
       open={open}
@@ -64,7 +83,6 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
       maxWidth="md"
       PaperProps={{ sx: { borderRadius: 3 } }}
     >
-      {/* MODAL HEADER (Visible in Dashboard) */}
       <DialogTitle
         sx={{
           fontWeight: "bold",
@@ -90,35 +108,23 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
           bgcolor: mode === "light" ? "#f8f9fa" : "rgba(255,255,255,0.05)",
         }}
       >
-        {/* --- PRINTABLE AREA START --- */}
+        {/* PRINTABLE AREA START */}
         <Box
           ref={componentRef}
           sx={{
             p: 4,
             bgcolor: "white",
             color: "black",
-            // DARK MODE FIX: Force all nested children to black text/gray borders
             "& *": {
               color: "black !important",
-              borderColor: "rgba(0, 0, 0, 0.15) !important",
+              borderColor: "rgba(0, 0, 0, 0.2) !important",
             },
-            // Print engine specific overrides
-            "@media print": {
-              p: 0,
-              bgcolor: "white !important",
-              WebkitPrintColorAdjust: "exact",
-            },
+            "@media print": { p: 0, bgcolor: "white !important" },
           }}
         >
-          <style>{`
-            @media print {
-              body { -webkit-print-color-adjust: exact; background: white !important; }
-              @page { size: auto; margin: 15mm; }
-              * { color: black !important; }
-            }
-          `}</style>
+          <style>{` @media print { body { background: white !important; } @page { size: auto; margin: 15mm; } } `}</style>
 
-          {/* DYNAMIC COMPANY HEADER */}
+          {/* HEADER: Company Info & PO Status */}
           <Box
             sx={{
               display: "flex",
@@ -131,57 +137,40 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
               <Typography
                 variant="h4"
                 fontWeight="900"
-                sx={{
-                  color: "#1a237e !important",
-                  textTransform: "uppercase",
-                  letterSpacing: 1,
-                  lineHeight: 1.1,
-                }}
+                sx={{ color: "#1a237e !important", textTransform: "uppercase" }}
               >
-                {poData.company || poData.customer}
+                {poData.company || "KIMWIN CORPORATION"}
               </Typography>
-              <Typography
-                variant="body2"
-                sx={{ mt: 1.5, color: "#444 !important", fontWeight: 500 }}
-              >
-                {poData.address}
+              <Typography variant="body2" sx={{ mt: 1, fontWeight: 500 }}>
+                {poData.address || "Company Address Not Provided"}
+              </Typography>
+              <Typography variant="body2">
+                <b>Customer:</b> {poData.customer}
+              </Typography>
+              <Typography variant="body2">
+                <b>Contact:</b> {poData.contact} | {poData.email}
               </Typography>
             </Box>
 
             <Box sx={{ textAlign: "right" }}>
-              <Typography
-                variant="h5"
-                fontWeight="bold"
-                sx={{ mb: 1, letterSpacing: 1 }}
-              >
+              <Typography variant="h5" fontWeight="bold" sx={{ mb: 1 }}>
                 PURCHASE ORDER
               </Typography>
-              <Table size="small" sx={{ "& td": { border: 0, p: 0.2 } }}>
-                <TableBody>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: "bold", textAlign: "right" }}>
-                      PO NO:
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        pl: 2,
-                        color: "#d32f2f !important",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {poData.poNo}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: "bold", textAlign: "right" }}>
-                      DATE:
-                    </TableCell>
-                    <TableCell sx={{ pl: 2 }}>
-                      {new Date(poData.date).toLocaleDateString()}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+              <Typography variant="body1">
+                <b>PO NO:</b>{" "}
+                <span style={{ color: "#d32f2f", fontWeight: "bold" }}>
+                  {poData.poNo}
+                </span>
+              </Typography>
+              <Typography variant="body1">
+                <b>ORDER DATE:</b> {formatDate(poData.date)}
+              </Typography>
+              {isFinalized && (
+                <Typography variant="body1">
+                  <b>{poData.status.toUpperCase()} DATE:</b>{" "}
+                  {formatDate(poData.statusDate || poData.date)}
+                </Typography>
+              )}
             </Box>
           </Box>
 
@@ -193,80 +182,75 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
             }}
           />
 
-          {/* VENDOR & SHIP TO SECTION */}
-          <Grid container spacing={4} sx={{ mb: 4 }}>
+          {/* SHIPPING & STATUS DETAILS */}
+          <Grid container spacing={2} sx={{ mb: 4 }}>
             <Grid item xs={6}>
               <Typography
                 variant="caption"
                 fontWeight="bold"
+                display="block"
+                sx={{ color: "#666 !important", textTransform: "uppercase" }}
+              >
+                Current Status
+              </Typography>
+              <Typography
+                variant="body1"
                 sx={{
-                  color: "#666 !important",
-                  textTransform: "uppercase",
-                  display: "block",
-                  mb: 1,
+                  fontWeight: "bold",
+                  color:
+                    poData.status === "Delivered"
+                      ? "green !important"
+                      : "orange !important",
                 }}
               >
-                Customer Information
+                {poData.status}
               </Typography>
-              <Typography variant="body1" fontWeight="bold">
-                {poData.customer}
-              </Typography>
-              <Typography variant="body2">{poData.email}</Typography>
-              <Typography variant="body2">{poData.contact}</Typography>
             </Grid>
             <Grid item xs={6}>
               <Typography
                 variant="caption"
                 fontWeight="bold"
-                sx={{
-                  color: "#666 !important",
-                  textTransform: "uppercase",
-                  display: "block",
-                  mb: 1,
-                }}
+                display="block"
+                sx={{ color: "#666 !important", textTransform: "uppercase" }}
               >
-                Shipping Details
+                Remarks / Instructions
               </Typography>
-
-              <Typography variant="body2">
-                Deliver to: <b>{poData.address || "Office Address"}</b>
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 1 }}>
-                Current Status: <b>{poData.status}</b>
+              <Typography variant="body2" sx={{ fontStyle: "italic" }}>
+                {poData.remarks || "No additional remarks."}
               </Typography>
             </Grid>
           </Grid>
 
           {/* ITEMS TABLE */}
           <TableContainer component={Box} sx={{ mb: 4 }}>
-            <Table size="small" sx={{ border: "1px solid #ddd" }}>
+            <Table size="small" sx={{ border: "1px solid #000" }}>
               <TableHead>
-                <TableRow sx={{ bgcolor: "#f5f5f5 !important" }}>
+                <TableRow sx={{ bgcolor: "#eeeeee !important" }}>
                   <TableCell
-                    sx={{ fontWeight: "bold", border: "1px solid #ddd" }}
+                    sx={{ fontWeight: "bold", border: "1px solid #000" }}
                   >
-                    Description
+                    Description (Item Name)
                   </TableCell>
                   <TableCell
-                    sx={{ fontWeight: "bold", border: "1px solid #ddd" }}
+                    sx={{ fontWeight: "bold", border: "1px solid #000" }}
                   >
                     Category
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ fontWeight: "bold", border: "1px solid #ddd" }}
+                    sx={{ fontWeight: "bold", border: "1px solid #000" }}
                   >
                     Qty
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ fontWeight: "bold", border: "1px solid #ddd" }}
+                    sx={{ fontWeight: "bold", border: "1px solid #000" }}
                   >
                     Unit Cost
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ fontWeight: "bold", border: "1px solid #ddd" }}
+                    sx={{ fontWeight: "bold", border: "1px solid #000" }}
                   >
                     Total
                   </TableCell>
@@ -279,54 +263,65 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
                       <CircularProgress size={20} />
                     </TableCell>
                   </TableRow>
-                ) : (
+                ) : items.length > 0 ? (
                   items.map((item, index) => (
                     <TableRow key={index}>
-                      <TableCell sx={{ border: "1px solid #ddd" }}>
+                      <TableCell sx={{ border: "1px solid #000" }}>
                         {item.name}
                       </TableCell>
-                      <TableCell sx={{ border: "1px solid #ddd" }}>
+                      <TableCell sx={{ border: "1px solid #000" }}>
                         {item.category}
                       </TableCell>
                       <TableCell
                         align="right"
-                        sx={{ border: "1px solid #ddd" }}
+                        sx={{ border: "1px solid #000" }}
                       >
                         {item.quantity} {item.unit}
                       </TableCell>
                       <TableCell
                         align="right"
-                        sx={{ border: "1px solid #ddd" }}
+                        sx={{ border: "1px solid #000" }}
                       >
                         ₱{Number(item.price).toLocaleString()}
                       </TableCell>
                       <TableCell
                         align="right"
-                        sx={{ fontWeight: "bold", border: "1px solid #ddd" }}
+                        sx={{ fontWeight: "bold", border: "1px solid #000" }}
                       >
-                        ₱{(item.quantity * item.price).toLocaleString()}
+                        ₱
+                        {(
+                          Number(item.quantity) * Number(item.price)
+                        ).toLocaleString()}
                       </TableCell>
                     </TableRow>
                   ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      No items found for this order.
+                    </TableCell>
+                  </TableRow>
                 )}
+
+                {/* SUMMARY ROW */}
                 <TableRow>
                   <TableCell colSpan={3} sx={{ border: "none" }} />
                   <TableCell
                     align="right"
                     sx={{
                       fontWeight: "bold",
-                      bgcolor: "#fafafa !important",
-                      border: "1px solid #ddd",
+                      border: "1px solid #000",
+                      bgcolor: "#f9f9f9 !important",
                     }}
                   >
-                    Total Amount:
+                    TOTAL AMOUNT :
                   </TableCell>
                   <TableCell
                     align="right"
                     sx={{
                       fontWeight: "bold",
-                      bgcolor: "#fafafa !important",
-                      border: "1px solid #ddd",
+                      border: "1px solid #000",
+                      bgcolor: "#f9f9f9 !important",
                       borderBottom: "3px double black !important",
                     }}
                   >
@@ -340,7 +335,7 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
           {/* SIGNATURE SECTION */}
           <Box
             sx={{
-              mt: 8,
+              mt: 10,
               display: "flex",
               justifyContent: "space-between",
               px: 2,
@@ -355,11 +350,9 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
               }}
             >
               <Typography variant="body2" fontWeight="bold">
-                Created By
+                Prepared By
               </Typography>
-              <Typography variant="caption" sx={{ color: "#777 !important" }}>
-                Authorized Personnel
-              </Typography>
+              <Typography variant="caption">Warehouse Staff</Typography>
             </Box>
             <Box
               sx={{
@@ -370,34 +363,30 @@ export default function ViewPOModal({ open, handleClose, mode, poData }) {
               }}
             >
               <Typography variant="body2" fontWeight="bold">
-                Approved By
+                Received By
               </Typography>
-              <Typography variant="caption" sx={{ color: "#777 !important" }}>
-                Management Signature
-              </Typography>
+              <Typography variant="caption">Authorized Signature</Typography>
             </Box>
           </Box>
         </Box>
-        {/* --- PRINTABLE AREA END --- */}
+        {/* PRINTABLE AREA END */}
       </DialogContent>
 
       <DialogActions sx={{ p: 2.5, gap: 1 }}>
-        <Button
-          onClick={handleClose}
-          variant="outlined"
-          color="inherit"
-          sx={{ borderRadius: 2 }}
-        >
-          Close
+        <Button onClick={handleClose} variant="outlined" color="inherit">
+          Close Review
         </Button>
         <Button
           fullWidth
           variant="contained"
           startIcon={<Print />}
           onClick={handlePrint}
-          sx={{ borderRadius: 2, py: 1.2, fontWeight: "bold", boxShadow: 3 }}
+          disabled={isPrintDisabled}
+          sx={{ fontWeight: "bold", py: 1.2 }}
         >
-          Print Purchase Order (PDF)
+          {isFinalized
+            ? `Download ${poData.status} Report (PDF)`
+            : `Pending Finalization (${poData.status})`}
         </Button>
       </DialogActions>
     </Dialog>

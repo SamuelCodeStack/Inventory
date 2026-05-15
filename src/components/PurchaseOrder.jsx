@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useReactToPrint } from "react-to-print";
 import {
+  AppBar,
+  Toolbar,
   Box,
   Typography,
   Button,
@@ -11,25 +12,45 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Chip,
   IconButton,
   Stack,
   TextField,
   InputAdornment,
+  Snackbar,
+  Alert,
+  Tooltip,
+  Chip,
   Divider,
+  TablePagination,
+  MenuItem,
+  Grid, // Added for responsiveness
 } from "@mui/material";
 import {
-  FileUpload,
   Add,
   Visibility,
   Edit,
   Delete,
   Search,
-  Print, // Added Print Icon
+  Print,
+  LocalShipping,
+  CheckCircleOutline,
+  FilterListOff,
 } from "@mui/icons-material";
+
 import CreatePOModal from "./CreatePOModal";
 import UpdatePOModal from "./UpdatePOModal";
 import ViewPOModal from "./ViewPOModal";
+import DeliveryActionModal from "./DeliveryActionModal";
+import PrintPOReportModal from "./PrintPOReportModal";
+
+// Define consistent status options for the filter
+const statusFilterOptions = [
+  "Job Order",
+  "Pending",
+  "Partial",
+  "Delivered",
+  "Backload",
+];
 
 export default function PurchaseOrder({ mode }) {
   const [poData, setPoData] = useState([]);
@@ -37,25 +58,43 @@ export default function PurchaseOrder({ mode }) {
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [openUpdateModal, setOpenUpdateModal] = useState(false);
   const [openViewModal, setOpenViewModal] = useState(false);
+  const [openDeliveryModal, setOpenDeliveryModal] = useState(false);
+  const [openPrintModal, setOpenPrintModal] = useState(false);
   const [selectedPO, setSelectedPO] = useState(null);
+
+  // --- USER ROLE LOGIC ---
+  const userLevel = parseInt(localStorage.getItem("userLevel")); // 0: Superadmin, 1: Admin, 2: Office, 3: Production, 4: Viewer
+  const canManagePO = userLevel === 0 || userLevel === 1 || userLevel === 2; // Superadmin and Admin can Create/Print/Update
+  const canSeeActions = userLevel === 0 || userLevel === 1 || userLevel === 2; // Only Superadmin and Admin see the action column buttons
+
+  // --- FILTER STATES ---
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
 
-  const componentRef = useRef(); // Ref for printing
+  // --- PAGINATION STATE ---
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
 
-  // Print Logic
-  const handlePrint = useReactToPrint({
-    contentRef: componentRef,
-    documentTitle: "Kimwin_Corporation_PO_Report",
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
   });
 
+  const isDark = mode === "dark";
+
+  // --- API CALLS ---
   const fetchPurchaseOrders = async () => {
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:3000/api/purchase-orders");
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/purchase-orders`,
+      );
+      // const response = await fetch("http://localhost:3000/api/purchase-orders");
       const data = await response.json();
       setPoData(data);
     } catch (error) {
-      console.error("Error fetching POs:", error);
+      showSnackbar("Failed to load data", "error");
     } finally {
       setLoading(false);
     }
@@ -63,334 +102,447 @@ export default function PurchaseOrder({ mode }) {
 
   useEffect(() => {
     fetchPurchaseOrders();
+
+    // --- CLEANUP EFFECT TO FIX DISABLED SCROLLBAR ---
+    return () => {
+      document.body.style.overflow = "auto";
+      document.body.style.paddingRight = "0px";
+    };
   }, []);
 
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+  // --- HELPERS ---
+  const showSnackbar = (message, severity = "success") => {
+    setSnackbar({ open: true, message, severity });
   };
 
   const getStatusStyle = (status) => {
-    switch (status) {
-      case "Job Order":
-        return { color: "info", variant: "filled" };
-      case "Done":
-        return { color: "success", variant: "filled" };
+    const clean = status?.replace(/\s/g, "") || "";
+    switch (clean) {
+      case "JobOrder":
+        return { color: "#3498db", bg: "rgba(52, 152, 219, 0.1)" };
       case "Pending":
-        return { color: "warning", variant: "filled" };
+        return { color: "#f19149", bg: "rgba(241, 145, 73, 0.1)" };
+      case "Partial":
+        return { color: "#f39c12", bg: "rgba(243, 156, 18, 0.1)" };
+      case "DeliverOnGoing":
+        return { color: "#9b59b2", bg: "rgba(155, 89, 182, 0.1)" };
+      case "Delivered":
+        return { color: "#2ecc71", bg: "rgba(46, 204, 113, 0.1)" };
+      case "Backload":
+        return { color: "#e74c3c", bg: "rgba(231, 76, 60, 0.15)" };
       default:
-        return { color: "default", variant: "outlined" };
+        return { color: "text.primary", bg: "transparent" };
     }
   };
 
-  const handleSaveSuccess = () => {
-    setOpenCreateModal(false);
-    setOpenUpdateModal(false);
-    fetchPurchaseOrders();
-  };
-
-  const handleEditClick = (po) => {
-    setSelectedPO(po);
-    setOpenUpdateModal(true);
-  };
-
-  const handleViewClick = (po) => {
-    setSelectedPO(po);
-    setOpenViewModal(true);
+  // --- HANDLERS ---
+  const handleStatusUpdate = async (id, newStatus, remarks = "") => {
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/purchase-orders/${id}/status`,
+        // `http://localhost:3000/api/purchase-orders/${id}/status`,
+        {
+          method: "PATCH",
+          credentials: "include", // FIXED: Added to ensure the user session is sent for logging
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: newStatus, remarks: remarks }),
+        },
+      );
+      if (response.ok) {
+        fetchPurchaseOrders();
+        showSnackbar(`Order status updated to ${newStatus}`, "success");
+      }
+    } catch (error) {
+      showSnackbar("Error connecting to server", "error");
+    }
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("Are you sure?")) {
-      try {
-        const response = await fetch(
-          `http://localhost:3000/api/purchase-orders/${id}`,
-          { method: "DELETE" },
-        );
-        if (response.ok) fetchPurchaseOrders();
-      } catch (error) {
-        alert("Error deleting");
+    if (!window.confirm("Are you sure you want to delete this PO?")) return;
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/purchase-orders/${id}`,
+        // `http://localhost:3000/api/purchase-orders/${id}`,
+        {
+          method: "DELETE",
+          credentials: "include", // Required to send session cookies for activity logs
+        },
+      );
+      if (response.ok) {
+        fetchPurchaseOrders();
+        showSnackbar("Purchase Order deleted", "error");
       }
+    } catch (error) {
+      showSnackbar("Error deleting PO", "error");
     }
   };
 
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("All");
+    setPage(0);
+  };
+
+  const handleChangePage = (event, newPage) => setPage(newPage);
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  // --- FILTER & SORT LOGIC ---
+  const filteredAndSortedData = poData
+    .filter((row) => {
+      const matchesSearch =
+        row.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        row.poNo.includes(searchQuery);
+
+      const matchesStatus =
+        statusFilter === "All" || row.status === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      const priority = { "Job Order": 1, Pending: 2, Partial: 3 };
+      const aPriority = priority[a.status] || 4;
+      const bPriority = priority[b.status] || 4;
+      return aPriority - bPriority;
+    });
+
+  const paginatedData = filteredAndSortedData.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
+
   return (
     <Box
-      sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
+      sx={{
+        p: { xs: 2, sm: 4 },
+        mt: 8,
+        bgcolor: "background.default",
+        minHeight: "100vh",
+      }}
     >
       {/* Header Section */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", md: "row" },
+          justifyContent: "space-between",
+          mb: 4,
+          gap: 2,
+        }}
+      >
         <Box>
           <Typography variant="h5" fontWeight="bold">
-            Purchase Order
+            Purchase Orders
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Dashboard / Purchase Order
+            Order Workflow Management
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2}>
-          <Button
-            variant="outlined"
-            startIcon={<Print />}
-            onClick={() => handlePrint()}
+
+        {/* ACTION BUTTONS: Visible only to Admin (0) and Office (1) */}
+        {canManagePO && (
+          <Stack
+            direction="row"
+            spacing={2}
+            alignItems="center"
+            sx={{ width: { xs: "100%", md: "auto" } }}
           >
-            Print All
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => setOpenCreateModal(true)}
-          >
-            Create PO
-          </Button>
-        </Stack>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Print />}
+              onClick={() => setOpenPrintModal(true)}
+              fullWidth={false}
+              sx={{
+                flex: { xs: 1, md: "none" },
+                height: 32,
+                px: 2,
+                fontSize: "0.8125rem",
+              }}
+            >
+              Print
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              size="small"
+              startIcon={<Add />}
+              onClick={() => setOpenCreateModal(true)}
+              sx={{
+                fontWeight: "bold",
+                color: "#000000",
+                flex: { xs: 1, md: "none" },
+                height: 32,
+                px: 2,
+                fontSize: "0.8125rem",
+              }}
+            >
+              Create PO
+            </Button>
+          </Stack>
+        )}
       </Box>
 
-      {/* Visible Dashboard Table */}
+      {/* Main Table Container */}
       <TableContainer
         component={Paper}
-        sx={{ borderRadius: 3, p: 2, backgroundImage: "none" }}
+        sx={{ borderRadius: 3, p: { xs: 1, sm: 3 }, backgroundImage: "none" }}
       >
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            mb: 3,
-            alignItems: "center",
-          }}
-        >
-          <Typography variant="subtitle1" fontWeight="bold">
-            Purchase Order List
-          </Typography>
-          <TextField
-            size="small"
-            placeholder="Search orders..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
-          />
-        </Box>
+        {/* --- FILTER BAR --- */}
+        <Grid container spacing={2} sx={{ mb: 3, alignItems: "center" }}>
+          <Grid item xs={12} md={6}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search customer or PO#..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(0);
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
 
-        <Table>
-          <TableHead
-            sx={{
-              bgcolor:
-                mode === "light" ? "action.hover" : "rgba(255,255,255,0.02)",
-            }}
-          >
-            <TableRow>
-              <TableCell sx={{ fontWeight: "bold" }}>PO ID</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Customer Name</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>PO No.</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Date Created</TableCell>
-              <TableCell align="center" sx={{ fontWeight: "bold" }}>
-                Status
-              </TableCell>
-              <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                Action
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {poData
-              .filter(
-                (row) =>
-                  row.customer
-                    .toLowerCase()
-                    .includes(searchQuery.toLowerCase()) ||
-                  row.poNo.toLowerCase().includes(searchQuery.toLowerCase()),
-              )
-              .map((row) => (
-                <TableRow key={row.id} hover>
-                  <TableCell>{row.id}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight="bold">
-                      {row.customer}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{row.poNo}</TableCell>
-                  <TableCell>{formatDate(row.date)}</TableCell>
-                  <TableCell align="center">
-                    <Chip
-                      label={row.status}
-                      size="small"
-                      {...getStatusStyle(row.status)}
-                      sx={{ fontWeight: 600 }}
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      justifyContent="flex-end"
-                    >
-                      <IconButton
-                        size="small"
-                        onClick={() => handleViewClick(row)}
-                        sx={{
-                          color: "#2ecc71",
-                          bgcolor: "rgba(46, 204, 113, 0.1)",
-                        }}
-                      >
-                        <Visibility fontSize="inherit" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleEditClick(row)}
-                        sx={{
-                          color: "#3498db",
-                          bgcolor: "rgba(52, 152, 219, 0.1)",
-                        }}
-                      >
-                        <Edit fontSize="inherit" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDelete(row.id)}
-                        sx={{
-                          color: "#e74c3c",
-                          bgcolor: "rgba(231, 76, 60, 0.1)",
-                        }}
-                      >
-                        <Delete fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
+          <Grid item xs={12} sm={8} md={4}>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Status Filter"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(0);
+              }}
+              SelectProps={{
+                MenuProps: { disableScrollLock: true }, // Prevents scroll lock on select
+              }}
+            >
+              <MenuItem value="All">All Status</MenuItem>
+              {statusFilterOptions.map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
               ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TextField>
+          </Grid>
 
-      {/* --- HIDDEN PRINT TEMPLATE --- */}
-      <Box sx={{ display: "none" }}>
-        <Box
-          ref={componentRef}
-          sx={{ p: "10mm", bgcolor: "white", color: "black", width: "210mm" }}
-        >
-          <style>{`
-            @media print {
-              @page { size: A4; margin: 0; }
-              body { margin: 0; -webkit-print-color-adjust: exact; }
-              * { color: black !important; border-color: #ddd !important; }
-            }
-          `}</style>
-
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              mb: 2,
-            }}
-          >
-            <Box>
-              <Typography
-                variant="h4"
-                fontWeight="bold"
-                sx={{ color: "#1a237e !important" }}
+          {(searchQuery || statusFilter !== "All") && (
+            <Grid item xs={12} sm={4} md={2}>
+              <Button
+                startIcon={<FilterListOff />}
+                onClick={handleResetFilters}
+                color="inherit"
+                size="small"
+                fullWidth
               >
-                KIMWIN CORPORATION
-              </Typography>
-              <Typography variant="h6">Purchase Order Master List</Typography>
-            </Box>
-            <Box sx={{ textAlign: "right" }}>
-              <Typography variant="body2">
-                Report Date: {new Date().toLocaleDateString()}
-              </Typography>
-              <Typography variant="body2">
-                Total Records: {poData.length}
-              </Typography>
-            </Box>
-          </Box>
+                Reset
+              </Button>
+            </Grid>
+          )}
+        </Grid>
 
-          <Divider
-            sx={{
-              mb: 3,
-              borderBottomWidth: 2,
-              borderColor: "black !important",
-            }}
-          />
-
-          <Table size="small">
-            <TableHead>
-              <TableRow
-                sx={{
-                  "& th": {
-                    fontWeight: "bold",
-                    borderBottom: "2px solid black !important",
-                    bgcolor: "#f5f5f5 !important",
-                  },
-                }}
-              >
-                <TableCell>ID</TableCell>
-                <TableCell>Customer</TableCell>
-                <TableCell>PO No.</TableCell>
-                <TableCell>Date Created</TableCell>
-                <TableCell align="center">Status</TableCell>
+        <Box sx={{ overflowX: "auto" }}>
+          <Table size="small" sx={{ minWidth: 800 }}>
+            <TableHead
+              sx={{
+                bgcolor: isDark ? "rgba(255,255,255,0.02)" : "action.hover",
+              }}
+            >
+              <TableRow>
+                <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>Customer</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>PO Number</TableCell>
+                <TableCell align="center" sx={{ fontWeight: "bold" }}>
+                  Status
+                </TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>Remarks</TableCell>
+                <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                  Actions
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {poData.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.id}</TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>
-                    {row.customer}
+              {paginatedData.map((row) => {
+                const style = getStatusStyle(row.status);
+                const clean = row.status?.replace(/\s/g, "") || "";
+                const isOngoing = clean === "DeliverOnGoing";
+                const isFinal = clean === "Delivered" || clean === "Backload";
+                const isActionAvailable =
+                  clean === "JobOrder" ||
+                  clean === "Pending" ||
+                  clean === "Partial" ||
+                  isOngoing;
+
+                return (
+                  <TableRow key={row.id} hover>
+                    <TableCell>#{row.id}</TableCell>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight="600">
+                        {row.customer}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{row.poNo}</TableCell>
+                    <TableCell align="center">
+                      <Chip
+                        icon={
+                          isOngoing ? (
+                            <LocalShipping
+                              style={{ fontSize: "1rem", color: style.color }}
+                            />
+                          ) : null
+                        }
+                        label={row.status}
+                        sx={{
+                          fontWeight: "bold",
+                          bgcolor: style.bg,
+                          color: style.color,
+                          border: "none",
+                          fontSize: "0.75rem",
+                          height: 28,
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 200 }}>
+                      <Tooltip title={row.remarks || ""}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{
+                            display: "-webkit-box",
+                            WebkitLineClamp: 1,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                            fontStyle: row.remarks ? "normal" : "italic",
+                          }}
+                        >
+                          {row.remarks || "No remarks"}
+                        </Typography>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Stack
+                        direction="row"
+                        spacing={0.5}
+                        justifyContent="flex-end"
+                        member="true"
+                      >
+                        {/* UPDATE STATUS: Only Admin and Office */}
+                        {canSeeActions && isActionAvailable && (
+                          <Tooltip title="Update Status">
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => {
+                                setSelectedPO(row);
+                                setOpenDeliveryModal(true);
+                              }}
+                              sx={{ bgcolor: "rgba(25, 118, 210, 0.1)" }}
+                            >
+                              <CheckCircleOutline fontSize="inherit" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+
+                        {/* VIEW: Always visible to all roles */}
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setSelectedPO(row);
+                            setOpenViewModal(true);
+                          }}
+                          sx={{
+                            color: "#2ecc71",
+                            bgcolor: "rgba(46, 204, 113, 0.1)",
+                          }}
+                        >
+                          <Visibility fontSize="inherit" />
+                        </IconButton>
+
+                        {/* EDIT: Only Admin and Office */}
+                        {canSeeActions && (
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setSelectedPO(row);
+                              setOpenUpdateModal(true);
+                            }}
+                            disabled={isOngoing || isFinal}
+                            sx={{
+                              color: "#3498db",
+                              bgcolor: "rgba(52, 152, 219, 0.1)",
+                            }}
+                          >
+                            <Edit fontSize="inherit" />
+                          </IconButton>
+                        )}
+
+                        {/* DELETE: Only Admin and Office */}
+                        {canSeeActions && (
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDelete(row.id)}
+                            sx={{
+                              color: "#e74c3c",
+                              bgcolor: "rgba(231, 76, 60, 0.1)",
+                            }}
+                          >
+                            <Delete fontSize="inherit" />
+                          </IconButton>
+                        )}
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {paginatedData.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                    No purchase orders match your filters.
                   </TableCell>
-                  <TableCell>{row.poNo}</TableCell>
-                  <TableCell>{formatDate(row.date)}</TableCell>
-                  <TableCell align="center">{row.status}</TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
-
-          <Box
-            sx={{
-              mt: 10,
-              display: "flex",
-              justifyContent: "space-between",
-              px: 4,
-            }}
-          >
-            <Box
-              sx={{
-                borderTop: "1px solid black !important",
-                width: 200,
-                textAlign: "center",
-                pt: 1,
-              }}
-            >
-              <Typography variant="body2">Prepared By</Typography>
-            </Box>
-            <Box
-              sx={{
-                borderTop: "1px solid black !important",
-                width: 200,
-                textAlign: "center",
-                pt: 1,
-              }}
-            >
-              <Typography variant="body2">Authorized By</Typography>
-            </Box>
-          </Box>
         </Box>
-      </Box>
 
-      {/* Modals */}
+        <TablePagination
+          rowsPerPageOptions={[10, 20, 50]}
+          component="div"
+          count={filteredAndSortedData.length}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          SelectProps={{
+            MenuProps: { disableScrollLock: true }, // Prevents scroll lock on rows per page select
+          }}
+        />
+      </TableContainer>
+
+      {/* Modals and other components remain unchanged */}
+      <DeliveryActionModal
+        open={openDeliveryModal}
+        handleClose={() => setOpenDeliveryModal(false)}
+        po={selectedPO}
+        onUpdate={handleStatusUpdate}
+      />
       <CreatePOModal
         open={openCreateModal}
         handleClose={() => setOpenCreateModal(false)}
-        onSaveSuccess={handleSaveSuccess}
+        onSaveSuccess={() => {
+          fetchPurchaseOrders();
+          showSnackbar("Purchase Order created successfully!", "success");
+        }}
         mode={mode}
       />
       {selectedPO && (
@@ -398,7 +550,10 @@ export default function PurchaseOrder({ mode }) {
           <UpdatePOModal
             open={openUpdateModal}
             handleClose={() => setOpenUpdateModal(false)}
-            onUpdateSuccess={handleSaveSuccess}
+            onUpdateSuccess={() => {
+              fetchPurchaseOrders();
+              showSnackbar("Purchase Order updated successfully!", "info");
+            }}
             mode={mode}
             poData={selectedPO}
           />
@@ -410,6 +565,27 @@ export default function PurchaseOrder({ mode }) {
           />
         </>
       )}
+      <PrintPOReportModal
+        open={openPrintModal}
+        handleClose={() => setOpenPrintModal(false)}
+        poData={poData}
+      />
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ borderRadius: 2 }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

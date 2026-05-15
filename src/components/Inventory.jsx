@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useReactToPrint } from "react-to-print";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -18,7 +17,9 @@ import {
   InputAdornment,
   Snackbar,
   Alert,
-  Divider,
+  TablePagination,
+  MenuItem,
+  Grid, // Added for responsiveness
 } from "@mui/material";
 import {
   Add,
@@ -28,35 +29,81 @@ import {
   Save,
   RestartAlt,
   EditNote,
-  Print, // Added Print Icon
+  Print,
+  FilterListOff,
+  Undo, // Added for Discard icon consistency
 } from "@mui/icons-material";
 import AddInventoryModal from "./AddInventoryModal";
 import EditInventoryModal from "./EditInventoryModal";
+import PrintInventoryModal from "./PrintInventoryModal";
 
-export default function Inventory({ mode }) {
+export default function Inventory({ mode, user }) {
   const [inventoryData, setInventoryData] = useState([]);
   const [originalData, setOriginalData] = useState([]);
   const [isEditingQty, setIsEditingQty] = useState(false);
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditModal, setOpenEditModal] = useState(false);
+  const [openPrintModal, setOpenPrintModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+
+  // --- FILTER STATES ---
   const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
+
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
+
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
     severity: "success",
   });
+  const isDark = mode === "dark";
 
-  const componentRef = useRef(); // Ref for printing
+  // --- ROLE CONSTANTS ---
+  // Updated roles: ADMIN (0) and PRODUCTION (2) can do everything. OFFICE (1) and VIEW (3) only see.
+  const canModify =
+    user?.user_level === 0 ||
+    user?.user_level === "0" ||
+    user?.user_level === 1 ||
+    user?.user_level === "1" ||
+    user?.user_level === 2 ||
+    user?.user_level === "2" ||
+    user?.user_level === 3 ||
+    user?.user_level === "3";
+
+  const canViewActionColumn =
+    user?.user_level === 0 ||
+    user?.user_level === "0" ||
+    user?.user_level === 1 ||
+    user?.user_level === "1" ||
+    user?.user_level === 2 ||
+    user?.user_level === "2" ||
+    user?.user_level === 3 ||
+    user?.user_level === "3";
+
+  // Logic to hide price for user level 3 (Production) and level 4
+  const canViewPrice =
+    user?.user_level !== 3 &&
+    user?.user_level !== "3" &&
+    user?.user_level !== 4 &&
+    user?.user_level !== "4";
+
+  const showMessage = (msg, sev = "success") =>
+    setSnackbar({ open: true, message: msg, severity: sev });
 
   const fetchInventory = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/inventory");
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/inventory`);
+      // const response = await fetch("http://localhost:3000/api/inventory");
       const data = await response.json();
-      setInventoryData(data);
-      setOriginalData(JSON.parse(JSON.stringify(data)));
+      // Initialize movement value as empty string for each item
+      const initializedData = data.map((item) => ({ ...item, movement: "" }));
+      setInventoryData(initializedData);
+      setOriginalData(JSON.parse(JSON.stringify(initializedData)));
     } catch (error) {
-      console.error("Fetch error:", error);
+      showMessage("Network Error: Could not connect to server", "error");
     }
   };
 
@@ -64,206 +111,452 @@ export default function Inventory({ mode }) {
     fetchInventory();
   }, []);
 
-  // Print Logic
-  const handlePrint = useReactToPrint({
-    contentRef: componentRef,
-    documentTitle: "Kimwin_Corporation_Inventory_Report",
+  // --- FILTER LOGIC ---
+  const filteredData = inventoryData.filter((item) => {
+    const matchesSearch =
+      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(item.id).includes(searchQuery);
+    const matchesCategory =
+      categoryFilter === "All" || item.category === categoryFilter;
+    const matchesStatus =
+      statusFilter === "All" || item.status === statusFilter;
+
+    return matchesSearch && matchesCategory && matchesStatus;
   });
 
+  const paginatedData = filteredData.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage,
+  );
+
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setCategoryFilter("All");
+    setStatusFilter("All");
+    setPage(0);
+  };
+
+  // Pagination Handlers
+  const handleChangePage = (event, newPage) => setPage(newPage);
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
   const hasChanges = inventoryData.some((item) => {
-    const originalItem = originalData.find((orig) => orig.id === item.id);
+    const originalItem = originalData.find(
+      (orig) => String(orig.id).split(":")[0] === String(item.id).split(":")[0],
+    );
     return originalItem && item.quantity !== originalItem.quantity;
   });
 
-  const handleCloseSnackbar = () => setSnackbar({ ...snackbar, open: false });
-
   const handleQuantityChangeLocal = (id, newQuantity) => {
-    const qty = parseInt(newQuantity) || 0;
-    const updatedData = inventoryData.map((item) => {
-      if (item.id === id) {
-        const threshold = item.minStock || 10;
-        let newStatus = "In Stock";
-        if (qty === 0) newStatus = "Out of Stock";
-        else if (qty <= threshold) newStatus = "Low Stock";
-        return { ...item, quantity: qty, status: newStatus };
-      }
-      return item;
-    });
-    setInventoryData(updatedData);
+    // Math.max(0, ...) ensures result is never negative, parseInt ensures whole number
+    const qty = Math.max(0, parseInt(newQuantity) || 0);
+    setInventoryData((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          const threshold = item.minStock || 10;
+          let newStatus =
+            qty === 0
+              ? "Out of Stock"
+              : qty <= threshold
+                ? "Low Stock"
+                : "In Stock";
+          return { ...item, quantity: qty, status: newStatus };
+        }
+        return item;
+      }),
+    );
+  };
+
+  // Logic for the Stock In/Out Input
+  const handleMovementChange = (id, value) => {
+    // Allow only numbers and the minus sign
+    if (/[^-0-9]/.test(value) && value !== "") return;
+
+    setInventoryData((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          const movementVal = value === "-" ? "-" : parseInt(value) || 0;
+          const originalItem = originalData.find((o) => o.id === id);
+          const baseQty = originalItem ? originalItem.quantity : item.quantity;
+
+          const finalMovement = value === "-" ? 0 : movementVal;
+          const newQty = baseQty + finalMovement;
+
+          const threshold = item.minStock || 10;
+          // Ensure newQty result doesn't go below 0
+          const clampedQty = newQty >= 0 ? newQty : 0;
+
+          let newStatus =
+            clampedQty === 0
+              ? "Out of Stock"
+              : clampedQty <= threshold
+                ? "Low Stock"
+                : "In Stock";
+
+          return {
+            ...item,
+            movement: value,
+            quantity: clampedQty,
+            status: newStatus,
+          };
+        }
+        return item;
+      }),
+    );
+  };
+
+  const handleDiscard = () => {
+    setInventoryData(JSON.parse(JSON.stringify(originalData)));
+    setIsEditingQty(false); // This locks the quantity fields
+    showMessage("Changes discarded", "info");
   };
 
   const handleBulkSave = async () => {
-    const modifiedItems = inventoryData.filter((item) => {
-      const original = originalData.find((o) => o.id === item.id);
-      return original && item.quantity !== original.quantity;
-    });
-
     const payload = {
-      items: modifiedItems.map((item) => ({
-        id: item.id,
-        quantity: item.quantity,
-      })),
+      items: inventoryData
+        .filter((item) => {
+          const original = originalData.find((o) => o.id === item.id);
+          return original && item.quantity !== original.quantity;
+        })
+        .map((item) => {
+          const isAdjustment = item.movement !== "" && item.movement !== "-";
+          return {
+            id: String(item.id).split(":")[0],
+            quantity: item.quantity,
+            // type 1 for direct edit, 2 for adjustment (stock in/out)
+            update_type: isAdjustment ? 2 : 1,
+            // Changed key to 'adjustment' to match common backend expectations for logging
+            adjustment: isAdjustment ? item.movement : null,
+            movement_value: isAdjustment ? item.movement : null,
+          };
+        }),
     };
-
     try {
-      const response = await fetch(`http://localhost:3000/api/inventory/bulk`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
+      const response = await fetch(
+        // `http://localhost:3000/api/inventory/bulk`,
+        `${import.meta.env.VITE_API_URL}/inventory/bulk`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
       if (response.ok) {
-        setOriginalData(JSON.parse(JSON.stringify(inventoryData)));
+        showMessage("Quantities updated!", "info");
         setIsEditingQty(false);
-        setSnackbar({
-          open: true,
-          message: "All quantities updated in database!",
-          severity: "success",
-        });
+        fetchInventory();
       }
     } catch (error) {
-      setSnackbar({ open: true, message: "Error saving", severity: "error" });
+      showMessage("Save failed", "error");
     }
-  };
-
-  const handleResetChanges = () => {
-    setInventoryData(JSON.parse(JSON.stringify(originalData)));
-    setIsEditingQty(false);
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure?")) return;
+    const cleanId = String(id).split(":")[0];
+    if (!window.confirm(`Delete item #${cleanId}?`)) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/inventory/${id}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        // `http://localhost:3000/api/inventory/${cleanId}`,
+        `${import.meta.env.VITE_API_URL}/inventory/${cleanId}`,
+        {
+          method: "DELETE",
+          credentials: "include", // Required to send session cookies for activity logs
+        },
+      );
       if (res.ok) {
-        setInventoryData(inventoryData.filter((item) => item.id !== id));
-        setSnackbar({ open: true, message: "Deleted", severity: "error" });
+        setInventoryData((prev) => prev.filter((item) => item.id !== id));
+        showMessage("Deleted successfully", "success");
       }
     } catch (e) {
-      console.error(e);
+      showMessage("Delete failed", "error");
     }
-  };
-
-  const getStatusColor = (status) => {
-    if (status === "In Stock") return "success";
-    if (status === "Low Stock") return "warning";
-    if (status === "Out of Stock") return "error";
-    return "default";
   };
 
   return (
     <Box
-      sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
+      sx={{
+        p: { xs: 2, sm: 4 }, // Reduced padding on mobile
+        mt: 8,
+        bgcolor: "background.default",
+        minHeight: "100vh",
+      }}
     >
-      {/* Header */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", md: "row" }, // Stack on mobile
+          justifyContent: "space-between",
+          mb: 3,
+          alignItems: { xs: "flex-start", md: "center" },
+          gap: 2,
+        }}
+      >
         <Box>
           <Typography variant="h5" fontWeight="bold">
-            Inventory
+            Inventory Management
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Dashboard / Inventory
+            Stock Control & Material Tracking
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2}>
+
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{
+            width: { xs: "100%", sm: "auto" },
+            overflowX: "auto", // Allow buttons to scroll if they overflow
+            pb: { xs: 1, sm: 0 },
+          }}
+        >
+          {hasChanges && (
+            <>
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<Undo />}
+                onClick={handleDiscard}
+                sx={{
+                  borderRadius: 2,
+                  fontWeight: "bold",
+                  textTransform: "none",
+                  px: 3,
+                }}
+              >
+                Discard
+              </Button>
+              <Button
+                variant="contained"
+                color="success"
+                startIcon={<Save />}
+                onClick={handleBulkSave}
+                sx={{
+                  borderRadius: 2,
+                  fontWeight: "bold",
+                  textTransform: "none",
+                  px: 3,
+                }}
+              >
+                Save Changes
+              </Button>
+            </>
+          )}
           <Button
             variant="outlined"
             startIcon={<Print />}
-            onClick={() => handlePrint()}
+            onClick={() => setOpenPrintModal(true)}
+            size="small"
+            sx={{
+              borderRadius: 2,
+              fontWeight: "bold",
+              textTransform: "none",
+              px: 3,
+              flexShrink: 0,
+            }}
           >
-            Print Report
+            Print
           </Button>
-          <Button
-            variant={isEditingQty ? "contained" : "outlined"}
-            color={isEditingQty ? "warning" : "primary"}
-            startIcon={<EditNote />}
-            onClick={() => setIsEditingQty(!isEditingQty)}
-          >
-            {isEditingQty ? "Lock Editing" : "Enable Qty Edit"}
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => setOpenAddModal(true)}
-          >
-            Add Inventory
-          </Button>
+
+          {/* EDIT QTY AND ADD ITEM RESTRICTED TO ADMIN/PRODUCTION */}
+          {canModify && (
+            <>
+              <Button
+                variant={isEditingQty ? "contained" : "outlined"}
+                color={isEditingQty ? "warning" : "primary"}
+                startIcon={<EditNote />}
+                onClick={() => setIsEditingQty(!isEditingQty)}
+                size="small"
+                sx={{
+                  borderRadius: 2,
+                  fontWeight: "bold",
+                  textTransform: "none",
+                  px: 3,
+                  flexShrink: 0,
+                }}
+              >
+                {isEditingQty ? "Lock" : "Edit Qty"}
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => setOpenAddModal(true)}
+                size="small"
+                sx={{
+                  borderRadius: 2,
+                  fontWeight: "bold",
+                  textTransform: "none",
+                  px: 3,
+                  flexShrink: 0,
+                }}
+              >
+                Add Item
+              </Button>
+            </>
+          )}
         </Stack>
       </Box>
 
-      {/* Main Table */}
       <TableContainer
         component={Paper}
-        sx={{ borderRadius: 3, p: 2, position: "relative" }}
+        sx={{ borderRadius: 3, p: { xs: 1, sm: 2 } }}
       >
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            mb: 3,
-            alignItems: "center",
-          }}
-        >
-          <Typography variant="subtitle1" fontWeight="bold">
-            Inventory List
-          </Typography>
-          <TextField
-            size="small"
-            placeholder="Search..."
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
-          />
-        </Box>
+        {/* --- FILTER BAR --- */}
+        <Grid container spacing={2} sx={{ mb: 3, px: { xs: 1, sm: 0 } }}>
+          <Grid item xs={12} md={6}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search Name or ID..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(0);
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
 
-        <Table>
-          <TableHead
-            sx={{
-              bgcolor:
-                mode === "light" ? "action.hover" : "rgba(255,255,255,0.02)",
-            }}
-          >
-            <TableRow>
-              <TableCell>No</TableCell>
-              <TableCell>Item Name</TableCell>
-              <TableCell>Category</TableCell>
-              <TableCell>Unit</TableCell>
-              <TableCell align="right">Quantity</TableCell>
-              <TableCell align="center">Status</TableCell>
-              <TableCell align="right">Action</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {inventoryData
-              .filter((item) =>
-                item.name.toLowerCase().includes(searchQuery.toLowerCase()),
-              )
-              .map((row) => (
+          <Grid item xs={6} md={2.5}>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Category"
+              value={categoryFilter}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setPage(0);
+              }}
+            >
+              <MenuItem value="All">All Categories</MenuItem>
+              <MenuItem value="Plastic">Plastic</MenuItem>
+              <MenuItem value="Injection">Injection</MenuItem>
+              <MenuItem value="Paper">Paper</MenuItem>
+              <MenuItem value="Trading">Trading</MenuItem>
+            </TextField>
+          </Grid>
+
+          <Grid item xs={6} md={2.5}>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Status"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(0);
+              }}
+            >
+              <MenuItem value="All">All Status</MenuItem>
+              <MenuItem value="In Stock">In Stock</MenuItem>
+              <MenuItem value="Low Stock">Low Stock</MenuItem>
+              <MenuItem value="Out of Stock">Out of Stock</MenuItem>
+            </TextField>
+          </Grid>
+
+          {(searchQuery ||
+            categoryFilter !== "All" ||
+            statusFilter !== "All") && (
+            <Grid item xs={12}>
+              <Button
+                startIcon={<FilterListOff />}
+                onClick={handleResetFilters}
+                color="inherit"
+                size="small"
+              >
+                Reset Filters
+              </Button>
+            </Grid>
+          )}
+        </Grid>
+
+        <Box sx={{ overflowX: "auto" }}>
+          {" "}
+          {/* Added horizontal scroll for table */}
+          <Table size="small" sx={{ minWidth: 650 }}>
+            <TableHead
+              sx={{
+                bgcolor: isDark ? "rgba(255,255,255,0.02)" : "action.hover",
+              }}
+            >
+              <TableRow>
+                <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>Item Name</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>Unit</TableCell>
+                {canViewPrice && (
+                  <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                    Price
+                  </TableCell>
+                )}
+                <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                  Quantity
+                </TableCell>
+                {isEditingQty && (
+                  <TableCell align="center" sx={{ fontWeight: "bold" }}>
+                    Adjustment
+                  </TableCell>
+                )}
+                <TableCell align="center" sx={{ fontWeight: "bold" }}>
+                  Status
+                </TableCell>
+                {/* ACTION COLUMN VISIBLE ONLY TO ADMIN/PRODUCTION */}
+                {canViewActionColumn && (
+                  <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                    Action
+                  </TableCell>
+                )}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {paginatedData.map((row) => (
                 <TableRow key={row.id} hover>
-                  <TableCell>{row.id}</TableCell>
+                  <TableCell>#{String(row.id).split(":")[0]}</TableCell>
                   <TableCell>
                     <Typography variant="body2" fontWeight="bold">
                       {row.name}
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Chip label={row.category} size="small" />
+                    <Chip
+                      label={row.category}
+                      size="small"
+                      variant="outlined"
+                    />
                   </TableCell>
-                  <TableCell color="text.secondary">{row.uom}</TableCell>
-                  <TableCell align="right" sx={{ width: "120px" }}>
+                  <TableCell>{row.uom}</TableCell>
+                  {canViewPrice && (
+                    <TableCell align="right">
+                      ₱
+                      {Number(row.price).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}
+                    </TableCell>
+                  )}
+                  <TableCell align="right">
                     <TextField
                       type="number"
                       variant={isEditingQty ? "outlined" : "standard"}
                       size="small"
-                      disabled={!isEditingQty}
+                      disabled={
+                        !isEditingQty ||
+                        (row.movement !== "" && row.movement !== null)
+                      }
                       value={row.quantity}
+                      onKeyDown={(e) => {
+                        if (e.key === "." || e.key === "e") e.preventDefault();
+                      }}
                       onChange={(e) =>
                         handleQuantityChangeLocal(row.id, e.target.value)
                       }
@@ -271,234 +564,221 @@ export default function Inventory({ mode }) {
                         disableUnderline: true,
                         sx: {
                           fontWeight: "bold",
-                          width: "100px",
-                          textAlign: "right",
-                          "& input": { textAlign: "right" },
+                          width: "80px",
+                          "& input": {
+                            textAlign: "right",
+                            paddingRight: "8px",
+                          },
                         },
                       }}
                     />
                   </TableCell>
-                  <TableCell align="center">
-                    <Chip
-                      label={row.status}
-                      size="small"
-                      color={getStatusColor(row.status)}
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      justifyContent="flex-end"
-                    >
-                      <IconButton
+
+                  {/* Adjustment Input (Stock In/Out Functionality) */}
+                  {isEditingQty && (
+                    <TableCell align="center">
+                      <TextField
+                        placeholder="+/-"
+                        label={
+                          parseFloat(row.movement) > 0
+                            ? "Stock In"
+                            : parseFloat(row.movement) < 0
+                              ? "Stock Out"
+                              : "Adjustment"
+                        }
                         size="small"
-                        color="primary"
-                        onClick={() => {
-                          setSelectedItem(row);
-                          setOpenEditModal(true);
+                        disabled={(() => {
+                          const original = originalData.find(
+                            (o) => o.id === row.id,
+                          );
+                          return (
+                            original &&
+                            row.quantity !== original.quantity &&
+                            (row.movement === "" || row.movement === null)
+                          );
+                        })()}
+                        value={row.movement || ""}
+                        onKeyDown={(e) => {
+                          if (e.key === "." || e.key === "e")
+                            e.preventDefault();
                         }}
+                        onChange={(e) =>
+                          handleMovementChange(row.id, e.target.value)
+                        }
+                        sx={{
+                          "& .MuiOutlinedInput-root": {
+                            "& fieldset": {
+                              borderColor:
+                                parseFloat(row.movement) > 0
+                                  ? "#2ecc71"
+                                  : parseFloat(row.movement) < 0
+                                    ? "#e74c3c"
+                                    : "rgba(255, 255, 255, 0.23)",
+                            },
+                            "&:hover fieldset": {
+                              borderColor:
+                                parseFloat(row.movement) > 0
+                                  ? "#2ecc71"
+                                  : parseFloat(row.movement) < 0
+                                    ? "#e74c3c"
+                                    : "rgba(255, 255, 255, 0.5)",
+                            },
+                            "&.Mui-focused fieldset": {
+                              borderColor:
+                                parseFloat(row.movement) > 0
+                                  ? "#2ecc71"
+                                  : parseFloat(row.movement) < 0
+                                    ? "#e74c3c"
+                                    : "#f39c12",
+                            },
+                          },
+                          "& .MuiInputLabel-root": {
+                            color:
+                              parseFloat(row.movement) > 0
+                                ? "#2ecc71"
+                                : parseFloat(row.movement) < 0
+                                  ? "#e74c3c"
+                                  : "text.secondary",
+                          },
+                          "& .MuiInputLabel-root.Mui-focused": {
+                            color:
+                              parseFloat(row.movement) > 0
+                                ? "#2ecc71"
+                                : parseFloat(row.movement) < 0
+                                  ? "#e74c3c"
+                                  : "#f39c12",
+                          },
+                        }}
+                        InputProps={{
+                          sx: {
+                            fontSize: "0.9rem",
+                            width: "120px",
+                            fontWeight: "bold",
+                            color: "text.primary",
+                          },
+                        }}
+                      />
+                    </TableCell>
+                  )}
+
+                  <TableCell align="center">
+                    <Box
+                      sx={{
+                        display: "inline-block",
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: 1.5,
+                        fontSize: "0.75rem",
+                        fontWeight: "bold",
+                        bgcolor:
+                          row.status === "In Stock"
+                            ? "rgba(46, 204, 113, 0.15)"
+                            : row.status === "Low Stock"
+                              ? "rgba(241, 145, 73, 0.15)"
+                              : "rgba(231, 76, 60, 0.15)",
+                        color:
+                          row.status === "In Stock"
+                            ? "#2ecc71"
+                            : row.status === "Low Stock"
+                              ? "#e67e22"
+                              : "#e74c3c",
+                      }}
+                    >
+                      {row.status}
+                    </Box>
+                  </TableCell>
+
+                  {/* ACTION BUTTONS RESTRICTED TO ADMIN/PRODUCTION */}
+                  {canViewActionColumn && (
+                    <TableCell align="right">
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        justifyContent="flex-end"
                       >
-                        <Edit fontSize="inherit" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleDelete(row.id)}
-                      >
-                        <Delete fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
+                        <IconButton
+                          size="small"
+                          color="info"
+                          onClick={() => {
+                            setSelectedItem({
+                              ...row,
+                              id: String(row.id).split(":")[0],
+                            });
+                            setOpenEditModal(true);
+                          }}
+                        >
+                          <Edit fontSize="inherit" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleDelete(row.id)}
+                        >
+                          <Delete fontSize="inherit" />
+                        </IconButton>
+                      </Stack>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+              {paginatedData.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={isEditingQty ? 9 : 8}
+                    align="center"
+                    sx={{ py: 3 }}
+                  >
+                    No items match your filters.
                   </TableCell>
                 </TableRow>
-              ))}
-          </TableBody>
-        </Table>
-
-        {hasChanges && (
-          <Box
-            sx={{
-              mt: 2,
-              p: 2,
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: 2,
-              borderTop: "1px solid",
-              borderColor: "divider",
-            }}
-          >
-            <Button
-              variant="text"
-              color="inherit"
-              startIcon={<RestartAlt />}
-              onClick={handleResetChanges}
-            >
-              Discard
-            </Button>
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<Save />}
-              onClick={handleBulkSave}
-            >
-              Save All
-            </Button>
-          </Box>
-        )}
-      </TableContainer>
-
-      {/* --- HIDDEN PRINT TEMPLATE --- */}
-      <Box sx={{ display: "none" }}>
-        <Box
-          ref={componentRef}
-          sx={{
-            p: "10mm", // Use mm for consistent print sizing
-            bgcolor: "white",
-            color: "black",
-            width: "210mm", // Standard A4 Width
-            // Remove minHeight to prevent forcing extra pages
-            "& *": {
-              color: "black !important",
-              borderColor: "rgba(0, 0, 0, 0.2) !important",
-            },
-          }}
-        >
-          <style>{`
-      @media print {
-        @page { 
-          size: A4; 
-          margin: 0; /* Let the Box handle padding instead */
-        }
-        body { 
-          margin: 0; 
-          -webkit-print-color-adjust: exact; 
-        }
-        /* Ensure no extra space at the end of the document */
-        html, body { height: auto !important; overflow: visible !important; }
-      }
-    `}</style>
-
-          {/* Header */}
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              mb: 2,
-            }}
-          >
-            <Box>
-              <Typography
-                variant="h4"
-                fontWeight="bold"
-                sx={{ color: "#1a237e !important" }}
-              >
-                KIMWIN CORPORATION
-              </Typography>
-              <Typography variant="h6">Inventory Assets Report</Typography>
-            </Box>
-            <Box sx={{ textAlign: "right" }}>
-              <Typography variant="body2">
-                Date: {new Date().toLocaleDateString()}
-              </Typography>
-            </Box>
-          </Box>
-
-          <Divider
-            sx={{
-              mb: 3,
-              borderBottomWidth: 2,
-              borderColor: "black !important",
-            }}
-          />
-
-          <Table size="small">
-            <TableHead>
-              <TableRow
-                sx={{
-                  "& th": {
-                    fontWeight: "bold",
-                    borderBottom: "2px solid black !important",
-                  },
-                }}
-              >
-                <TableCell>ID</TableCell>
-                <TableCell>Item Name</TableCell>
-                <TableCell>Category</TableCell>
-                <TableCell align="right">Qty</TableCell>
-                <TableCell>Unit</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {inventoryData.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.id}</TableCell>
-                  <TableCell sx={{ fontWeight: "bold" }}>{row.name}</TableCell>
-                  <TableCell>{row.category}</TableCell>
-                  <TableCell align="right">{row.quantity}</TableCell>
-                  <TableCell>{row.uom}</TableCell>
-                </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
-
-          {/* Signatures */}
-          <Box
-            sx={{
-              mt: 6,
-              display: "flex",
-              justifyContent: "space-between",
-              px: 4,
-            }}
-          >
-            <Box
-              sx={{
-                borderTop: "1px solid black !important",
-                width: 180,
-                textAlign: "center",
-                pt: 1,
-              }}
-            >
-              <Typography variant="caption">Prepared By</Typography>
-            </Box>
-            <Box
-              sx={{
-                borderTop: "1px solid black !important",
-                width: 180,
-                textAlign: "center",
-                pt: 1,
-              }}
-            >
-              <Typography variant="caption">Verified By</Typography>
-            </Box>
-          </Box>
         </Box>
-      </Box>
-      {/* Modals & Snackbar */}
+
+        <TablePagination
+          rowsPerPageOptions={[10, 20, 50]}
+          component="div"
+          count={filteredData.length}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+        />
+      </TableContainer>
+
       <AddInventoryModal
         open={openAddModal}
+        userLevel={user?.user_level} // Use user_level from the user object
         handleClose={() => setOpenAddModal(false)}
-        onSaveSuccess={fetchInventory}
-        mode={mode}
+        onSaveSuccess={() => {
+          fetchInventory();
+          showMessage("Added!", "success");
+        }}
       />
       <EditInventoryModal
         open={openEditModal}
         handleClose={() => setOpenEditModal(false)}
-        onSaveSuccess={fetchInventory}
-        mode={mode}
+        onSaveSuccess={() => {
+          fetchInventory();
+          showMessage("Updated!", "info");
+        }}
         itemData={selectedItem}
       />
+      <PrintInventoryModal
+        open={openPrintModal}
+        userLevel={user?.user_level}
+        handleClose={() => setOpenPrintModal(false)}
+        inventoryData={inventoryData}
+      />
+
       <Snackbar
         open={snackbar.open}
-        autoHideDuration={3000}
-        onClose={handleCloseSnackbar}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       >
-        <Alert
-          onClose={handleCloseSnackbar}
-          severity={snackbar.severity}
-          variant="filled"
-        >
+        <Alert severity={snackbar.severity} variant="filled">
           {snackbar.message}
         </Alert>
       </Snackbar>

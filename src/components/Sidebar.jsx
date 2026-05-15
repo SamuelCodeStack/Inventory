@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useLocation } from "react-router-dom"; // Added these
+import { Link, useLocation } from "react-router-dom";
 import {
   Drawer,
   Box,
@@ -12,54 +12,89 @@ import {
   Switch,
 } from "@mui/material";
 import {
-  Dashboard,
   Inventory,
   ShoppingCart,
-  People,
-  Receipt,
-  Settings,
+  Dashboard,
+  Assignment, // Icon for Job Order
+  Layers, // Icon for Raw Materials
+  ManageAccounts, // Icon for User Management
+  Storage,
 } from "@mui/icons-material";
 
-export default function Sidebar({ toggleDarkMode, mode }) {
-  const location = useLocation(); // Gets the current URL path
+export default function Sidebar({
+  toggleDarkMode,
+  mode,
+  mobileOpen,
+  handleDrawerToggle,
+  user, // Added user prop to access user_level
+}) {
+  const location = useLocation();
+  const drawerWidth = 240;
+
+  // Helper for Admin check - Updated to include Superadmin (0) and Admin (1)
+  const isAdmin =
+    user?.user_level === 0 ||
+    user?.user_level === "0" ||
+    user?.user_level === 1 ||
+    user?.user_level === "1";
 
   const menuItems = [
+    // Dashboard is now restricted to Admin only
+    ...(isAdmin
+      ? [
+          {
+            text: "Dashboard",
+            icon: <Dashboard />,
+            path: "/Dashboard",
+          },
+        ]
+      : []),
     {
-      text: "Dashboard",
-      icon: <Dashboard />,
-      section: "Main Menu",
-      path: "/dashboard",
+      text: "Inventory",
+      icon: <Inventory />,
+      // section: "Main Menu", // Section Header
+      path: "/inventory",
     },
-    { text: "Inventory", icon: <Inventory />, path: "/" }, // Home path
-    { text: "Purchase Order", icon: <ShoppingCart />, path: "/purchase-order" },
+
     {
-      text: "Supplier",
-      icon: <People />,
-      section: "Other Menu",
-      path: "/supplier",
+      text: "Raw Materials",
+      icon: <Layers />,
+      path: "/raw-materials",
     },
-    { text: "Invoice", icon: <Receipt />, path: "/invoice" },
-    {
-      text: "Settings",
-      icon: <Settings />,
-      section: "Help & Settings",
-      path: "/settings",
-    },
+
+    // Purchase Order restricted for user level 3 and 4
+    ...(![3, "3", 4, "4"].includes(user?.user_level)
+      ? [
+          {
+            text: "Purchase Order",
+            icon: <ShoppingCart />,
+            path: "/purchase-order",
+          },
+        ]
+      : []),
+
+    // {
+    //   text: "Backup",
+    //   icon: <Storage />,
+    //   path: "/backup",
+    // },
+
+    // User Management is now restricted to Admin only
+    ...(isAdmin
+      ? [
+          {
+            text: "User Management",
+            icon: <ManageAccounts />,
+            section: "Administration", // New Section Header
+            path: "/user-management",
+          },
+        ]
+      : []),
   ];
 
-  return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: 240,
-        flexShrink: 0,
-        "& .MuiDrawer-paper": {
-          width: 240,
-          boxSizing: "border-box",
-          borderRight: mode === "light" ? "1px solid #eee" : "1px solid #333",
-        },
-      }}
-    >
+  // Reusable content for both types of drawers
+  const drawerContent = (
+    <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
       {/* Logo Section */}
       <Box sx={{ p: 3, display: "flex", alignItems: "center", gap: 1 }}>
         <Box
@@ -82,13 +117,12 @@ export default function Sidebar({ toggleDarkMode, mode }) {
           fontWeight="bold"
           color="primary"
         >
-          Kimwin Inventory
+          Inventory System
         </Typography>
       </Box>
 
-      <List sx={{ px: 2 }}>
+      <List sx={{ px: 2, order: { xs: 2, sm: 1 } }}>
         {menuItems.map((item, index) => {
-          // Check if the current URL matches this item's path
           const isActive = location.pathname === item.path;
 
           return (
@@ -110,11 +144,11 @@ export default function Sidebar({ toggleDarkMode, mode }) {
                 </Typography>
               )}
               <ListItem disablePadding sx={{ mb: 0.5 }}>
-                {/* Link component makes it navigate without refreshing */}
                 <ListItemButton
                   component={Link}
                   to={item.path}
                   selected={isActive}
+                  onClick={handleDrawerToggle} // Closes drawer on mobile when link is clicked
                   sx={{
                     borderRadius: 2,
                     "&.Mui-selected": {
@@ -156,12 +190,17 @@ export default function Sidebar({ toggleDarkMode, mode }) {
 
       <Box
         sx={{
-          mt: "auto",
+          mt: { xs: 0, sm: "auto" },
           p: 2,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           borderTop: mode === "light" ? "1px solid #eee" : "1px solid #333",
+          borderBottom: {
+            xs: mode === "light" ? "1px solid #eee" : "1px solid #333",
+            sm: "none",
+          },
+          order: { xs: 1, sm: 2 }, // Moves the toggle box above the list on mobile (XS)
         }}
       >
         <Typography variant="body2" color="text.secondary">
@@ -171,8 +210,69 @@ export default function Sidebar({ toggleDarkMode, mode }) {
           size="small"
           checked={mode === "dark"}
           onChange={toggleDarkMode}
+          // Option 1: Use MUI's built-in green success color
+          color="success"
+          // Option 2: Custom green styling for more control
+          sx={{
+            "& .MuiSwitch-switchBase.Mui-checked": {
+              color: "#4caf50", // The thumb color when checked
+              "&:hover": {
+                backgroundColor: "rgba(76, 175, 80, 0.08)",
+              },
+            },
+            "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+              backgroundColor: "#4caf50", // The track color when checked
+            },
+          }}
         />
       </Box>
-    </Drawer>
+    </Box>
+  );
+
+  return (
+    <Box
+      component="nav"
+      sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+    >
+      {/* Mobile Temporary Drawer */}
+      <Drawer
+        variant="temporary"
+        anchor="left" // Explicitly slide from left to right
+        open={mobileOpen}
+        onClose={handleDrawerToggle}
+        ModalProps={{
+          keepMounted: true, // Better open performance on mobile.
+          disableScrollLock: true, // FIX: Prevents layout shift/scrollbar flashing when drawer toggles
+        }}
+        sx={{
+          display: { xs: "block", sm: "none" },
+          "& .MuiDrawer-paper": {
+            width: drawerWidth,
+            boxSizing: "border-box",
+            borderRight: mode === "light" ? "1px solid #eee" : "1px solid #333",
+            backgroundColor: mode === "light" ? "#fff" : "#121212",
+          },
+        }}
+      >
+        {drawerContent}
+      </Drawer>
+
+      {/* Desktop Permanent Drawer */}
+      <Drawer
+        variant="permanent"
+        sx={{
+          display: { xs: "none", sm: "block" },
+          "& .MuiDrawer-paper": {
+            width: drawerWidth,
+            boxSizing: "border-box",
+            borderRight: mode === "light" ? "1px solid #eee" : "1px solid #333",
+            backgroundColor: mode === "light" ? "#fff" : "#121212",
+          },
+        }}
+        open
+      >
+        {drawerContent}
+      </Drawer>
+    </Box>
   );
 }
