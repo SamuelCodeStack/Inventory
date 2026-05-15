@@ -1,3 +1,4 @@
+
 CREATE TABLE inventory (
     item_id SERIAL PRIMARY KEY,
     item_name VARCHAR(255) NOT NULL,
@@ -71,17 +72,6 @@ CREATE TABLE raw_materials_ledger (
     recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE activity_logs (
-    log_id SERIAL PRIMARY KEY,
-    user_id INT REFERENCES users(user_id) ON DELETE SET NULL,
-    user_name VARCHAR(255), -- Stores name at time of action in case user is deleted
-    action_type VARCHAR(50) NOT NULL, -- 'INSERT', 'UPDATE', 'DELETE'
-    table_name VARCHAR(100) NOT NULL, -- 'inventory', 'purchase_order', etc.
-    record_id INT, -- The ID of the item affected
-    description TEXT, -- Summary of what changed (e.g., "Updated quantity from 10 to 50")
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
-
 
 CREATE TABLE users (
     user_id SERIAL PRIMARY KEY,
@@ -94,3 +84,23 @@ CREATE TABLE users (
     reset_otp VARCHAR(6),
     otp_expiry TIMESTAMP
 );
+
+CREATE TABLE activity_logs (
+    log_id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(user_id) ON DELETE SET NULL,
+    user_name VARCHAR(255), -- Stores name at time of action in case user is deleted
+    action_type VARCHAR(50) NOT NULL, -- 'INSERT', 'UPDATE', 'DELETE'
+    table_name VARCHAR(100) NOT NULL, -- 'inventory', 'purchase_order', etc.
+    record_id INT, -- The ID of the item affected
+    description TEXT, -- Summary of what changed (e.g., "Updated quantity from 10 to 50")
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE "session" (
+  "sid" varchar NOT NULL COLLATE "default",
+  "sess" json NOT NULL,
+  "expire" timestamp(6) NOT NULL,
+  CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
+) WITH (OIDS=FALSE);
+
+CREATE INDEX "IX_session_expire" ON "session" ("expire");

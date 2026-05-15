@@ -706,13 +706,13 @@ app.get("/api/raw-materials", async (req, res) => {
       id: m.material_id,
       name: m.material_name,
       category: m.category,
-      measurementValue: parseFloat(m.measurement_value),
-      measurementUnit: m.measurement_unit,
-      packaging: m.packaging,
-      quantity: parseFloat(m.quantity),
+      measurementValue: parseFloat(m.base_value),
+      measurementUnit: m.base_unit,
+      packaging: m.qty_unit,
+      quantity: parseFloat(m.qty_value),
       previousQuantity:
-        m.prev_qty !== null ? parseFloat(m.prev_qty) : parseFloat(m.quantity),
-      minStock: parseFloat(m.min_stock),
+        m.prev_qty !== null ? parseFloat(m.prev_qty) : parseFloat(m.qty_value),
+      minStock: parseFloat(m.min_stock_threshold),
       createdAt: m.created_at,
       updated_at: m.updated_at,
     }));
@@ -735,7 +735,7 @@ app.post("/api/raw-materials", async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO raw_materials 
-        (material_name, category, measurement_value, measurement_unit, packaging, quantity, min_stock) 
+        (material_name, category, base_value, base_unit, qty_unit, qty_value, min_stock_threshold) 
         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [
         name,
@@ -768,7 +768,7 @@ app.post("/api/raw-materials/bulk-add", async (req, res) => {
     for (const item of items) {
       const result = await pool.query(
         `INSERT INTO raw_materials 
-          (material_name, category, measurement_value, measurement_unit, packaging, quantity, min_stock) 
+          (material_name, category, base_value, base_unit, qty_unit, qty_value, min_stock_threshold) 
           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
         [
           item.name,
@@ -807,13 +807,13 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
     await client.query("BEGIN");
     for (const item of items) {
       const currentRes = await client.query(
-        "SELECT material_name, quantity FROM raw_materials WHERE material_id = $1",
+        "SELECT material_name, qty_value FROM raw_materials WHERE material_id = $1",
         [item.id],
       );
 
       if (currentRes.rows.length > 0) {
         const materialName = currentRes.rows[0].material_name;
-        const oldQty = Math.floor(currentRes.rows[0].quantity);
+        const oldQty = Math.floor(currentRes.rows[0].qty_value);
         const newQty = Math.floor(item.quantity);
 
         if (oldQty !== newQty) {
@@ -829,12 +829,12 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
 
           await client.query(
             `INSERT INTO raw_materials_ledger (material_id, old_qty_value, new_qty_value, change_amount)
-             VALUES ($1, $2, $3, $4)`,
+              VALUES ($1, $2, $3, $4)`,
             [item.id, oldQty, newQty, newQty - oldQty],
           );
 
           await client.query(
-            "UPDATE raw_materials SET quantity = $1, updated_at = now() WHERE material_id = $2",
+            "UPDATE raw_materials SET qty_value = $1, updated_at = now() WHERE material_id = $2",
             [newQty, item.id],
           );
 
@@ -871,25 +871,25 @@ app.put("/api/raw-materials/:id", async (req, res) => {
   } = req.body;
   try {
     const currentRes = await pool.query(
-      "SELECT quantity FROM raw_materials WHERE material_id = $1",
+      "SELECT qty_value FROM raw_materials WHERE material_id = $1",
       [id],
     );
-    const oldQty = currentRes.rows[0]?.quantity || 0;
+    const oldQty = currentRes.rows[0]?.qty_value || 0;
 
     if (oldQty !== quantity) {
       await pool.query(
         `INSERT INTO raw_materials_ledger (material_id, old_qty_value, new_qty_value, change_amount)
-         VALUES ($1, $2, $3, $4)`,
+          VALUES ($1, $2, $3, $4)`,
         [id, oldQty, quantity, quantity - oldQty],
       );
     }
 
     await pool.query(
       `UPDATE raw_materials SET 
-        material_name=$1, category=$2, measurement_value=$3, measurement_unit=$4, 
-        packaging=$5, quantity=$6, min_stock=$7,
+        material_name=$1, category=$2, base_value=$3, base_unit=$4, 
+        qty_unit=$5, qty_value=$6, min_stock_threshold=$7,
         updated_at = CASE 
-          WHEN quantity != $6 THEN now() 
+          WHEN qty_value != $6 THEN now() 
           ELSE updated_at 
         END
         WHERE material_id=$8`,
@@ -1232,5 +1232,5 @@ app.post("/api/auth/reset-password", async (req, res) => {
 });
 
 app.listen(port, "0.0.0.0", () =>
-  console.log(`Server running on http://192.168.1.105:${port}`),
+  console.log(`Server running on http://192.168.1.155:${port}`),
 );
