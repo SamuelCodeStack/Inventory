@@ -20,6 +20,7 @@ import {
   TablePagination,
   MenuItem,
   Grid, // Added for responsiveness
+  Checkbox, // Added for selection
 } from "@mui/material";
 import {
   Add,
@@ -32,6 +33,9 @@ import {
   Print,
   FilterListOff,
   Undo, // Added for Discard icon consistency
+  CheckCircleOutline, // Added for Selection toggle on
+  RadioButtonUnchecked, // Added for Selection toggle off
+  CheckBoxOutlineBlank, // Imported for the custom look
 } from "@mui/icons-material";
 import AddInventoryModal from "./AddInventoryModal";
 import EditInventoryModal from "./EditInventoryModal";
@@ -45,6 +49,8 @@ export default function Inventory({ mode, user }) {
   const [openEditModal, setOpenEditModal] = useState(false);
   const [openPrintModal, setOpenPrintModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]); // Track selected rows for deletion
+  const [isSelectionEnabled, setIsSelectionEnabled] = useState(false); // Track checkbox visibility state
 
   // --- FILTER STATES ---
   const [searchQuery, setSearchQuery] = useState("");
@@ -269,11 +275,66 @@ export default function Inventory({ mode, user }) {
       );
       if (res.ok) {
         setInventoryData((prev) => prev.filter((item) => item.id !== id));
+        setSelectedIds((prev) =>
+          prev.filter((selectedId) => selectedId !== id),
+        );
         showMessage("Deleted successfully", "success");
       }
     } catch (e) {
       showMessage("Delete failed", "error");
     }
+  };
+
+  // --- NEW HANDLERS FOR SELECTION & BULK DELETION ---
+  const handleSelectRow = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+  };
+
+  const handleSelectAllRows = (e) => {
+    if (e.target.checked) {
+      const currentIds = paginatedData.map((row) => row.id);
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...currentIds])));
+    } else {
+      const currentIds = paginatedData.map((row) => row.id);
+      setSelectedIds((prev) => prev.filter((id) => !currentIds.includes(id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.length} selected item(s)?`))
+      return;
+
+    let successCount = 0;
+    for (const id of selectedIds) {
+      const cleanId = String(id).split(":")[0];
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/inventory/${cleanId}`,
+          {
+            method: "DELETE",
+            credentials: "include",
+          },
+        );
+        if (res.ok) {
+          successCount++;
+        }
+      } catch (e) {
+        console.error("Failed to delete item " + cleanId, e);
+      }
+    }
+
+    if (successCount > 0) {
+      setInventoryData((prev) =>
+        prev.filter((item) => !selectedIds.includes(item.id)),
+      );
+      showMessage(`Successfully deleted ${successCount} item(s)`, "success");
+    } else {
+      showMessage("Bulk delete failed", "error");
+    }
+    setSelectedIds([]);
   };
 
   return (
@@ -297,7 +358,7 @@ export default function Inventory({ mode, user }) {
       >
         <Box>
           <Typography variant="h5" fontWeight="bold">
-            Inventory Management
+            Finished Goods Inventory Management
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Stock Control & Material Tracking
@@ -311,8 +372,29 @@ export default function Inventory({ mode, user }) {
             width: { xs: "100%", sm: "auto" },
             overflowX: "auto", // Allow buttons to scroll if they overflow
             pb: { xs: 1, sm: 0 },
+            alignItems: "center",
           }}
         >
+          {/* BULK DELETE BUTTON - VISIBLE WHEN ITEMS ARE CHECKED */}
+          {selectedIds.length > 0 && canModify && (
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<Delete />}
+              onClick={handleBulkDelete}
+              size="small"
+              sx={{
+                borderRadius: 2,
+                fontWeight: "bold",
+                textTransform: "none",
+                px: 3,
+                flexShrink: 0,
+              }}
+            >
+              Delete Selected ({selectedIds.length})
+            </Button>
+          )}
+
           {hasChanges && (
             <>
               <Button
@@ -345,6 +427,7 @@ export default function Inventory({ mode, user }) {
               </Button>
             </>
           )}
+
           <Button
             variant="outlined"
             startIcon={<Print />}
@@ -361,30 +444,94 @@ export default function Inventory({ mode, user }) {
             Print
           </Button>
 
+          {/* SELECTION MODE TOGGLE BUTTON */}
+          {canModify && !isEditingQty && (
+            <Button
+              variant={isSelectionEnabled ? "contained" : "outlined"}
+              startIcon={
+                isSelectionEnabled ? (
+                  <CheckCircleOutline />
+                ) : (
+                  <CheckBoxOutlineBlank sx={{ color: "#ef7d14" }} />
+                )
+              }
+              onClick={() => {
+                setIsSelectionEnabled(!isSelectionEnabled);
+                if (isSelectionEnabled) setSelectedIds([]); // Clear selection when turning off
+              }}
+              size="small"
+              sx={{
+                borderRadius: 2,
+                fontWeight: "bold",
+                textTransform: "none",
+                px: 3,
+                flexShrink: 0,
+                backgroundColor: isSelectionEnabled
+                  ? "#ef7d14"
+                  : isDark
+                    ? "rgba(239, 125, 20, 0.08)"
+                    : "#f9f9fb",
+                color: isSelectionEnabled ? "#ffffff" : "#ef7d14",
+                borderColor: "#ef7d14",
+                "&:hover": {
+                  backgroundColor: isSelectionEnabled
+                    ? "#d66e0f"
+                    : isDark
+                      ? "rgba(239, 125, 20, 0.15)"
+                      : "#f1f1f5",
+                  borderColor: "#d66e0f",
+                },
+              }}
+            >
+              {isSelectionEnabled ? "Selection On" : "Select Rows"}
+            </Button>
+          )}
+
           {/* EDIT QTY AND ADD ITEM RESTRICTED TO ADMIN/PRODUCTION */}
           {canModify && (
             <>
-              <Button
-                variant={isEditingQty ? "contained" : "outlined"}
-                color={isEditingQty ? "warning" : "primary"}
-                startIcon={<EditNote />}
-                onClick={() => setIsEditingQty(!isEditingQty)}
-                size="small"
-                sx={{
-                  borderRadius: 2,
-                  fontWeight: "bold",
-                  textTransform: "none",
-                  px: 3,
-                  flexShrink: 0,
-                }}
-              >
-                {isEditingQty ? "Lock" : "Edit Qty"}
-              </Button>
+              {/* REMOVED LOCK BUTTON STATE EXPRESSION / COMPLETELY HIDES WHEN EDITING */}
+              {isEditingQty ? (
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<Undo />}
+                  onClick={handleDiscard}
+                  size="small"
+                  sx={{
+                    borderRadius: 2,
+                    fontWeight: "bold",
+                    textTransform: "none",
+                    px: 3,
+                    flexShrink: 0,
+                  }}
+                >
+                  Cancel Edit
+                </Button>
+              ) : (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  startIcon={<EditNote />}
+                  onClick={() => setIsEditingQty(!isEditingQty)}
+                  size="small"
+                  sx={{
+                    borderRadius: 2,
+                    fontWeight: "bold",
+                    textTransform: "none",
+                    px: 3,
+                    flexShrink: 0,
+                  }}
+                >
+                  Edit Qty
+                </Button>
+              )}
               <Button
                 variant="contained"
                 startIcon={<Add />}
                 onClick={() => setOpenAddModal(true)}
                 size="small"
+                disabled={isEditingQty} // Disable button add when edit qty is on to prevent conflicts
                 sx={{
                   borderRadius: 2,
                   fontWeight: "bold",
@@ -404,6 +551,7 @@ export default function Inventory({ mode, user }) {
         component={Paper}
         sx={{ borderRadius: 3, p: { xs: 1, sm: 2 } }}
       >
+        {" "}
         {/* --- FILTER BAR --- */}
         <Grid container spacing={2} sx={{ mb: 3, px: { xs: 1, sm: 0 } }}>
           <Grid item xs={12} md={6}>
@@ -474,13 +622,13 @@ export default function Inventory({ mode, user }) {
                 onClick={handleResetFilters}
                 color="inherit"
                 size="small"
+                sx={{ textTransform: "none" }}
               >
                 Reset Filters
               </Button>
             </Grid>
           )}
         </Grid>
-
         <Box sx={{ overflowX: "auto" }}>
           {" "}
           {/* Added horizontal scroll for table */}
@@ -491,6 +639,24 @@ export default function Inventory({ mode, user }) {
               }}
             >
               <TableRow>
+                {/* SELECT ALL CHECKBOX COLUMN HEADER */}
+                {canModify && isSelectionEnabled && (
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      indeterminate={
+                        selectedIds.length > 0 &&
+                        selectedIds.length < paginatedData.length
+                      }
+                      checked={
+                        paginatedData.length > 0 &&
+                        paginatedData.every((row) =>
+                          selectedIds.includes(row.id),
+                        )
+                      }
+                      onChange={handleSelectAllRows}
+                    />
+                  </TableCell>
+                )}
                 <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
                 <TableCell sx={{ fontWeight: "bold" }}>Item Name</TableCell>
                 <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
@@ -521,7 +687,20 @@ export default function Inventory({ mode, user }) {
             </TableHead>
             <TableBody>
               {paginatedData.map((row) => (
-                <TableRow key={row.id} hover>
+                <TableRow
+                  key={row.id}
+                  hover
+                  selected={selectedIds.includes(row.id)}
+                >
+                  {/* SELECTION ROW CHECKBOX */}
+                  {canModify && isSelectionEnabled && (
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={selectedIds.includes(row.id)}
+                        onChange={() => handleSelectRow(row.id)}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell>#{String(row.id).split(":")[0]}</TableCell>
                   <TableCell>
                     <Typography variant="body2" fontWeight="bold">
@@ -688,7 +867,7 @@ export default function Inventory({ mode, user }) {
                     </Box>
                   </TableCell>
 
-                  {/* ACTION BUTTONS RESTRICTED TO ADMIN/PRODUCTION */}
+                  {/* ACTION BUTTONS RESTRICTED TO ADMIN/PRODUCTION - REMOVED REMOVE/DELETE ICON BUTTON */}
                   {canViewActionColumn && (
                     <TableCell align="right">
                       <Stack
@@ -709,13 +888,6 @@ export default function Inventory({ mode, user }) {
                         >
                           <Edit fontSize="inherit" />
                         </IconButton>
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => handleDelete(row.id)}
-                        >
-                          <Delete fontSize="inherit" />
-                        </IconButton>
                       </Stack>
                     </TableCell>
                   )}
@@ -724,7 +896,7 @@ export default function Inventory({ mode, user }) {
               {paginatedData.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={isEditingQty ? 9 : 8}
+                    colSpan={isEditingQty ? 10 : 9}
                     align="center"
                     sx={{ py: 3 }}
                   >
@@ -735,7 +907,6 @@ export default function Inventory({ mode, user }) {
             </TableBody>
           </Table>
         </Box>
-
         <TablePagination
           rowsPerPageOptions={[10, 20, 50]}
           component="div"

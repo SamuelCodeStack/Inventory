@@ -20,6 +20,7 @@ import {
   InputAdornment,
   TablePagination,
   Grid,
+  Checkbox,
 } from "@mui/material";
 import {
   Add,
@@ -32,6 +33,8 @@ import {
   RestartAlt,
   EditNote,
   Undo,
+  CheckBox as CheckBoxIcon,
+  CheckBoxOutlineBlank,
 } from "@mui/icons-material";
 
 // --- MODAL IMPORTS ---
@@ -44,6 +47,8 @@ export default function RawMaterials({ mode, userLevel }) {
   const [originalData, setOriginalData] = useState([]); // Added to track changes
   const [loading, setLoading] = useState(true);
   const [isEditingQty, setIsEditingQty] = useState(false); // Toggle for bulk edit mode
+  const [selectedIds, setSelectedIds] = useState([]); // Added for bulk delete checkboxes
+  const [enableCheckboxes, setEnableCheckboxes] = useState(false); // Added toggle state for checkboxes
 
   // --- PERMISSION CHECKS ---
   const canPrint =
@@ -53,9 +58,9 @@ export default function RawMaterials({ mode, userLevel }) {
     userLevel === "1" ||
     userLevel === 2 ||
     userLevel === "2" ||
-    userLevel === 3 ||
     userLevel === "3" ||
-    userLevel === 4 ||
+    userLevel === "3" ||
+    userLevel === "4" ||
     userLevel === "4";
   const canAction =
     userLevel === 0 ||
@@ -101,6 +106,7 @@ export default function RawMaterials({ mode, userLevel }) {
       const initializedData = data.map((item) => ({ ...item, adjustment: "" }));
       setMaterials(initializedData);
       setOriginalData(JSON.parse(JSON.stringify(initializedData))); // Keep a deep copy
+      setSelectedIds([]); // Clear selections on refetch
     } catch (error) {
       showSnackbar("Failed to load raw materials", "error");
     } finally {
@@ -265,6 +271,55 @@ export default function RawMaterials({ mode, userLevel }) {
     }
   };
 
+  // --- BULK DELETE HANDLER ---
+  const handleBulkDelete = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete the ${selectedIds.length} selected material(s)?`,
+      )
+    )
+      return;
+    try {
+      let successCount = 0;
+      for (const id of selectedIds) {
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/raw-materials/${id}`,
+          { method: "DELETE", credentials: "include" },
+        );
+        if (response.ok) successCount++;
+      }
+      if (successCount > 0) {
+        showSnackbar(
+          `${successCount} material(s) deleted successfully`,
+          "info",
+        );
+        fetchMaterials();
+      }
+    } catch (error) {
+      showSnackbar("Error during bulk delete action", "error");
+    }
+  };
+
+  const handleSelectAll = (event) => {
+    if (event.target.checked) {
+      const idsOnPage = paginatedMaterials.map((m) => m.id);
+      setSelectedIds((prev) => [...new Set([...prev, ...idsOnPage])]);
+    } else {
+      const idsOnPage = paginatedMaterials.map((m) => m.id);
+      setSelectedIds((prev) => prev.filter((id) => !idsOnPage.includes(id)));
+    }
+  };
+
+  const handleSelectOne = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+  };
+
+  const isAllSelectedOnPage =
+    paginatedMaterials.length > 0 &&
+    paginatedMaterials.every((m) => selectedIds.includes(m.id));
+
   return (
     <Box
       sx={{
@@ -293,6 +348,25 @@ export default function RawMaterials({ mode, userLevel }) {
           </Typography>
         </Box>
         <Stack direction="row" spacing={1.5} sx={{ width: "auto" }}>
+          {selectedIds.length > 0 &&
+            !isEditingQty &&
+            canAction &&
+            enableCheckboxes && (
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={<Delete />}
+                onClick={handleBulkDelete}
+                sx={{
+                  borderRadius: 2,
+                  fontWeight: "bold",
+                  textTransform: "none",
+                  px: 3,
+                }}
+              >
+                Delete Selected ({selectedIds.length})
+              </Button>
+            )}
           {hasChanges && (
             <>
               <Button
@@ -341,12 +415,17 @@ export default function RawMaterials({ mode, userLevel }) {
               Print
             </Button>
           )}
-          {canAction && (
+          {canAction && !isEditingQty && (
             <Button
-              variant={isEditingQty ? "contained" : "outlined"}
-              color={isEditingQty ? "warning" : "primary"}
-              startIcon={<EditNote />}
-              onClick={() => setIsEditingQty(!isEditingQty)}
+              variant={enableCheckboxes ? "contained" : "outlined"}
+              color="primary"
+              startIcon={
+                enableCheckboxes ? <CheckBoxIcon /> : <CheckBoxOutlineBlank />
+              }
+              onClick={() => {
+                setEnableCheckboxes(!enableCheckboxes);
+                if (enableCheckboxes) setSelectedIds([]); // Optional: clear selections when turned off
+              }}
               sx={{
                 borderRadius: 2,
                 fontWeight: "bold",
@@ -354,13 +433,36 @@ export default function RawMaterials({ mode, userLevel }) {
                 px: 3,
               }}
             >
-              {isEditingQty ? "Lock" : "Edit Qty"}
+              {enableCheckboxes ? "Selection On" : "Select Rows"}
+            </Button>
+          )}
+          {canAction && (!hasChanges || !isEditingQty) && (
+            <Button
+              variant={isEditingQty ? "contained" : "outlined"}
+              color={isEditingQty ? "error" : "primary"}
+              startIcon={isEditingQty ? <Undo /> : <EditNote />}
+              onClick={() => {
+                if (isEditingQty) {
+                  handleDiscard();
+                } else {
+                  setIsEditingQty(true);
+                }
+              }}
+              sx={{
+                borderRadius: 2,
+                fontWeight: "bold",
+                textTransform: "none",
+                px: 3,
+              }}
+            >
+              {isEditingQty ? "Cancel Edit" : "Edit Qty"}
             </Button>
           )}
           {canAction && (
             <Button
               variant="contained"
               size="small"
+              disabled={isEditingQty}
               startIcon={<Add />}
               onClick={() => setOpenAddModal(true)}
               sx={{
@@ -477,6 +579,18 @@ export default function RawMaterials({ mode, userLevel }) {
                   }}
                 >
                   <TableRow>
+                    {canAction && !isEditingQty && enableCheckboxes && (
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          color="primary"
+                          indeterminate={
+                            selectedIds.length > 0 && !isAllSelectedOnPage
+                          }
+                          checked={isAllSelectedOnPage}
+                          onChange={handleSelectAll}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
                     <TableCell sx={{ fontWeight: "bold" }}>
                       Material Name
@@ -505,7 +619,15 @@ export default function RawMaterials({ mode, userLevel }) {
                   {paginatedMaterials.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={isEditingQty ? 8 : 7}
+                        colSpan={
+                          isEditingQty
+                            ? 8
+                            : canAction && enableCheckboxes
+                              ? 8
+                              : canAction || enableCheckboxes
+                                ? 7
+                                : 6
+                        }
                         align="center"
                         sx={{ py: 5 }}
                       >
@@ -522,8 +644,19 @@ export default function RawMaterials({ mode, userLevel }) {
                       if (parseInt(row.adjustment) < 0)
                         adjustmentLabel = "Stock Out";
 
+                      const isItemSelected = selectedIds.includes(row.id);
+
                       return (
-                        <TableRow key={row.id} hover>
+                        <TableRow key={row.id} hover checked={isItemSelected}>
+                          {canAction && !isEditingQty && enableCheckboxes && (
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                color="primary"
+                                checked={isItemSelected}
+                                onChange={() => handleSelectOne(row.id)}
+                              />
+                            </TableCell>
+                          )}
                           <TableCell>#{row.id}</TableCell>
                           <TableCell>
                             <Typography variant="body2" fontWeight="600">
@@ -542,36 +675,45 @@ export default function RawMaterials({ mode, userLevel }) {
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            <TextField
-                              type="number"
-                              size="small"
-                              variant={isEditingQty ? "outlined" : "standard"}
-                              disabled={
-                                !isEditingQty ||
-                                (row.adjustment !== "" &&
-                                  row.adjustment !== null)
-                              }
-                              value={row.quantity}
-                              onChange={(e) =>
-                                handleQuantityChangeLocal(
-                                  row.id,
-                                  e.target.value,
-                                )
-                              }
-                              inputProps={{
-                                step: 1, // Suggests whole numbers in UI
+                            <Paper
+                              variant={isEditingQty ? "outlined" : "none"}
+                              sx={{
+                                display: "inline-block",
+                                p: isEditingQty ? "2px 4px" : 0,
+                                bgcolor: "transparent",
                               }}
-                              InputProps={{
-                                disableUnderline: true,
-                                sx: {
-                                  fontWeight: "bold",
-                                  width: "100px",
-                                  "& input": {
-                                    textAlign: "left",
+                            >
+                              <TextField
+                                type="number"
+                                size="small"
+                                variant={isEditingQty ? "outlined" : "standard"}
+                                disabled={
+                                  !isEditingQty ||
+                                  (row.adjustment !== "" &&
+                                    row.adjustment !== null)
+                                }
+                                value={row.quantity}
+                                onChange={(e) =>
+                                  handleQuantityChangeLocal(
+                                    row.id,
+                                    e.target.value,
+                                  )
+                                }
+                                inputProps={{
+                                  step: 1, // Suggests whole numbers in UI
+                                }}
+                                InputProps={{
+                                  disableUnderline: true,
+                                  sx: {
+                                    fontWeight: "bold",
+                                    width: "100px",
+                                    "& input": {
+                                      textAlign: "left",
+                                    },
                                   },
-                                },
-                              }}
-                            />
+                                }}
+                              />
+                            </Paper>
                           </TableCell>
                           {isEditingQty && (
                             <TableCell>
@@ -641,13 +783,6 @@ export default function RawMaterials({ mode, userLevel }) {
                                   }}
                                 >
                                   <Edit fontSize="inherit" />
-                                </IconButton>
-                                <IconButton
-                                  size="small"
-                                  color="error"
-                                  onClick={() => handleDelete(row.id)}
-                                >
-                                  <Delete fontSize="inherit" />
                                 </IconButton>
                               </Stack>
                             </TableCell>

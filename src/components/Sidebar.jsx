@@ -36,7 +36,9 @@ export default function Sidebar({
     user?.user_level === 0 ||
     user?.user_level === "0" ||
     user?.user_level === 1 ||
-    user?.user_level === "1";
+    user?.user_level === "1" ||
+    user?.user_level === 2 ||
+    user?.user_level === "2";
 
   const menuItems = [
     // Dashboard is now restricted to Admin only
@@ -50,7 +52,7 @@ export default function Sidebar({
         ]
       : []),
     {
-      text: "Inventory",
+      text: "Finished Goods",
       icon: <Inventory />,
       // section: "Main Menu", // Section Header
       path: "/inventory",
@@ -63,15 +65,15 @@ export default function Sidebar({
     },
 
     // Purchase Order restricted for user level 3 and 4
-    ...(![3, "3", 4, "4"].includes(user?.user_level)
-      ? [
-          {
-            text: "Purchase Order",
-            icon: <ShoppingCart />,
-            path: "/purchase-order",
-          },
-        ]
-      : []),
+    // ...(![3, "3", 4, "4"].includes(user?.user_level)
+    //   ? [
+    //       {
+    //         text: "Purchase Order",
+    //         icon: <ShoppingCart />,
+    //         path: "/purchase-order",
+    //       },
+    //     ]
+    //   : []),
 
     // {
     //   text: "Backup",
