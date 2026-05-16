@@ -145,6 +145,11 @@ export default function EditRawMaterialModal({
               label="Material Name"
               name="name"
               value={formData.name}
+              inputProps={{ maxLength: 100 }}
+              error={formData.name.length > 100}
+              helperText={
+                formData.name.length > 100 ? "Maximum 100 characters" : ""
+              }
               onChange={handleChange}
               size="small"
             />
@@ -248,7 +253,14 @@ export default function EditRawMaterialModal({
         <Button
           variant="contained"
           onClick={handleSubmit}
-          disabled={isUnchanged || !formData.name} // --- DISABLED IF NO CHANGES ---
+          disabled={
+            isUnchanged ||
+            !formData.name ||
+            formData.name.length > 100 ||
+            formData.category.length > 15 ||
+            formData.measurementUnit.length > 15 ||
+            formData.packaging.length > 15
+          } // --- DISABLED IF NO CHANGES ---
           sx={{ px: 4, fontWeight: "bold" }}
         >
           Update Material

@@ -712,7 +712,7 @@ app.get("/api/raw-materials", async (req, res) => {
       quantity: parseFloat(m.qty_value),
       previousQuantity:
         m.prev_qty !== null ? parseFloat(m.prev_qty) : parseFloat(m.qty_value),
-      minStock: parseFloat(m.min_stock_threshold),
+      minStock: parseFloat(m.minimum_stock),
       createdAt: m.created_at,
       updated_at: m.updated_at,
     }));
@@ -735,7 +735,7 @@ app.post("/api/raw-materials", async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO raw_materials 
-        (material_name, category, base_value, base_unit, qty_unit, qty_value, min_stock_threshold) 
+        (material_name, category, base_value, base_unit, qty_unit, qty_value, minimum_stock) 
         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [
         name,
@@ -768,8 +768,8 @@ app.post("/api/raw-materials/bulk-add", async (req, res) => {
     for (const item of items) {
       const result = await pool.query(
         `INSERT INTO raw_materials 
-          (material_name, category, base_value, base_unit, qty_unit, qty_value, min_stock_threshold) 
-          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+           (material_name, category, base_value, base_unit, qty_unit, qty_value, minimum_stock) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
         [
           item.name,
           item.category,
@@ -829,7 +829,7 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
 
           await client.query(
             `INSERT INTO raw_materials_ledger (material_id, old_qty_value, new_qty_value, change_amount)
-              VALUES ($1, $2, $3, $4)`,
+               VALUES ($1, $2, $3, $4)`,
             [item.id, oldQty, newQty, newQty - oldQty],
           );
 
@@ -879,7 +879,7 @@ app.put("/api/raw-materials/:id", async (req, res) => {
     if (oldQty !== quantity) {
       await pool.query(
         `INSERT INTO raw_materials_ledger (material_id, old_qty_value, new_qty_value, change_amount)
-          VALUES ($1, $2, $3, $4)`,
+           VALUES ($1, $2, $3, $4)`,
         [id, oldQty, quantity, quantity - oldQty],
       );
     }
@@ -887,7 +887,7 @@ app.put("/api/raw-materials/:id", async (req, res) => {
     await pool.query(
       `UPDATE raw_materials SET 
         material_name=$1, category=$2, base_value=$3, base_unit=$4, 
-        qty_unit=$5, qty_value=$6, min_stock_threshold=$7,
+        qty_unit=$5, qty_value=$6, minimum_stock=$7,
         updated_at = CASE 
           WHEN qty_value != $6 THEN now() 
           ELSE updated_at 

@@ -55,6 +55,10 @@ export default function AddRawMaterialModal({
   const isInvalid = items.some(
     (item) =>
       !item.name.trim() ||
+      item.name.length > 100 ||
+      item.category.length > 15 ||
+      item.measurementUnit.length > 15 ||
+      item.packaging.length > 15 ||
       !item.measurementValue ||
       !item.quantity ||
       !item.minStock,
@@ -148,6 +152,11 @@ export default function AddRawMaterialModal({
                     fullWidth
                     label="Material Name"
                     value={item.name}
+                    inputProps={{ maxLength: 100 }}
+                    error={item.name.length > 100}
+                    helperText={
+                      item.name.length > 100 ? "Maximum 100 characters" : ""
+                    }
                     onChange={(e) =>
                       handleChange(index, "name", e.target.value)
                     }

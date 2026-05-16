@@ -1,9 +1,8 @@
-
 CREATE TABLE inventory (
     item_id SERIAL PRIMARY KEY,
-    item_name VARCHAR(255) NOT NULL,
-    category VARCHAR(255),
-    unit VARCHAR(255),
+    item_name VARCHAR(100) NOT NULL,
+    category VARCHAR(20),
+    unit VARCHAR(20),
     quantity INTEGER DEFAULT 0,
 	price DECIMAL(12, 2) DEFAULT 0.00,
     minimum_stock INTEGER DEFAULT 10,
@@ -15,9 +14,31 @@ CREATE TABLE inventory_ledger (
     printinv_id SERIAL PRIMARY KEY,
     -- Fixed: item_id references inventory(item_id)
     item_id INTEGER REFERENCES inventory(item_id) ON DELETE CASCADE,
-    old_quantity DECIMAL(10, 2),
-    new_quantity DECIMAL(10, 2),
-    change_amount DECIMAL(10, 2), -- The difference (e.g., +10 or -5)
+    old_quantity INTEGER DEFAULT 0,
+    new_quantity INTEGER DEFAULT 0,
+    change_amount INTEGER DEFAULT 0, -- The difference (e.g., +10 or -5)
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE raw_materials (
+    material_id SERIAL PRIMARY KEY,
+    material_name VARCHAR(100) NOT NULL,
+    category VARCHAR(15),
+    base_value NUMERIC(12, 2) DEFAULT 0.00,
+    base_unit VARCHAR(15) NOT NULL, 
+    qty_value INTEGER DEFAULT 0,
+    qty_unit VARCHAR(15) NOT NULL, 
+	minimum_stock INTEGER DEFAULT 10,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE raw_materials_ledger (
+    ledger_id SERIAL PRIMARY KEY,
+    material_id INTEGER REFERENCES raw_materials(material_id) ON DELETE CASCADE,
+    old_qty_value INTEGER DEFAULT 0,
+    new_qty_value INTEGER DEFAULT 0,
+    change_amount INTEGER DEFAULT 0,
     recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -48,38 +69,13 @@ CREATE TABLE item_order(
 	price DECIMAL(12, 2) NOT NULL	
 );
 
-
-CREATE TABLE raw_materials (
-    material_id SERIAL PRIMARY KEY,
-    material_name VARCHAR(255) NOT NULL,
-    category VARCHAR(100),
-    base_value NUMERIC(12, 2) DEFAULT 0.00,
-    base_unit VARCHAR(20) NOT NULL, 
-    qty_value NUMERIC(12, 2) DEFAULT 0.00,
-    qty_unit VARCHAR(50) NOT NULL, 
-    min_stock_threshold NUMERIC(12, 2) NOT NULL,
-    min_stock_target VARCHAR(10) DEFAULT 'base', 
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE raw_materials_ledger (
-    ledger_id SERIAL PRIMARY KEY,
-    material_id INTEGER REFERENCES raw_materials(material_id) ON DELETE CASCADE,
-    old_qty_value NUMERIC(12, 2),
-    new_qty_value NUMERIC(12, 2),
-    change_amount NUMERIC(12, 2),
-    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-
 CREATE TABLE users (
     user_id SERIAL PRIMARY KEY,
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
-    -- 0: Admin, 1: Office, 2: Production, 3: Viewer
-    user_level INTEGER DEFAULT 3, 
+    -- 0: SuperAdmin, 1: Admin , 2: Office , 3: Production , 4 :Viewer
+    user_level INTEGER DEFAULT 4, 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     reset_otp VARCHAR(6),
     otp_expiry TIMESTAMP

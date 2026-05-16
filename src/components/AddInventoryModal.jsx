@@ -55,7 +55,30 @@ export default function AddInventoryModal({
 
   const handleChange = (index, field, value) => {
     const newItems = [...items];
-    newItems[index][field] = value;
+
+    // Validate and clean values based on datatype limits
+    if (field === "name") {
+      newItems[index][field] = value.slice(0, 100); // VARCHAR(100)
+    } else if (field === "quantity" || field === "minStock") {
+      if (value === "") {
+        newItems[index][field] = "";
+      } else {
+        const parsed = parseInt(value, 10);
+        newItems[index][field] = isNaN(parsed)
+          ? ""
+          : String(Math.max(0, parsed));
+      }
+    } else if (field === "price") {
+      if (value === "") {
+        newItems[index][field] = "";
+      } else {
+        // Prevent negative values for DECIMAL(12,2)
+        newItems[index][field] = parseFloat(value) < 0 ? "0" : value;
+      }
+    } else {
+      newItems[index][field] = value;
+    }
+
     setItems(newItems);
   };
 
@@ -125,6 +148,7 @@ export default function AddInventoryModal({
                     placeholder="Enter item name..."
                     value={item.name}
                     error={!item.name && item.name !== ""} // Show red if user touched and left empty
+                    inputProps={{ maxLength: 100 }} // VARCHAR(100) limit
                     onChange={(e) =>
                       handleChange(index, "name", e.target.value)
                     }
@@ -200,6 +224,7 @@ export default function AddInventoryModal({
                       placeholder="0.00"
                       value={item.price}
                       error={item.price === ""}
+                      inputProps={{ min: 0, step: "0.01" }} // DECIMAL limit rules
                       onChange={(e) =>
                         handleChange(index, "price", e.target.value)
                       }
@@ -222,6 +247,7 @@ export default function AddInventoryModal({
                     size="small"
                     value={item.quantity}
                     error={item.quantity === ""}
+                    inputProps={{ min: 0, step: "1" }} // INTEGER rules
                     onChange={(e) =>
                       handleChange(index, "quantity", e.target.value)
                     }
@@ -243,6 +269,7 @@ export default function AddInventoryModal({
                     size="small"
                     value={item.minStock}
                     error={item.minStock === ""}
+                    inputProps={{ min: 0, step: "1" }} // INTEGER rules
                     onChange={(e) =>
                       handleChange(index, "minStock", e.target.value)
                     }

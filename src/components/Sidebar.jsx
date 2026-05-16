@@ -14,7 +14,7 @@ import {
 import {
   Inventory,
   ShoppingCart,
-  Dashboard,
+  Dashboard, // Icon for Job Order
   Assignment, // Icon for Job Order
   Layers, // Icon for Raw Materials
   ManageAccounts, // Icon for User Management
@@ -31,8 +31,7 @@ export default function Sidebar({
   const location = useLocation();
   const drawerWidth = 240;
 
-  // Helper for Admin check - Updated to include Superadmin (0) and Admin (1)
-  const isAdmin =
+  const hasDashboardAccess =
     user?.user_level === 0 ||
     user?.user_level === "0" ||
     user?.user_level === 1 ||
@@ -40,9 +39,16 @@ export default function Sidebar({
     user?.user_level === 2 ||
     user?.user_level === "2";
 
+  // Helper for Admin check - Updated to include Superadmin (0) and Admin (1)
+  const isAdmin =
+    user?.user_level === 0 ||
+    user?.user_level === "0" ||
+    user?.user_level === 1 ||
+    user?.user_level === "1";
+
   const menuItems = [
     // Dashboard is now restricted to Admin only
-    ...(isAdmin
+    ...(hasDashboardAccess
       ? [
           {
             text: "Dashboard",

@@ -54,12 +54,19 @@ export default function EditInventoryModal({
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+
+    let updatedValue = value;
+    if (name === "name") {
+      updatedValue = value.slice(0, 100); // VARCHAR(100)
+    } else if (name === "minStock") {
+      updatedValue = Math.max(0, parseInt(value, 10) || 0); // INTEGER >= 0
+    } else if (name === "price") {
+      updatedValue = Math.max(0, parseFloat(value) || 0); // DECIMAL >= 0
+    }
+
     setFormData({
       ...formData,
-      [name]:
-        name === "minStock" || name === "price"
-          ? parseFloat(value) || 0
-          : value,
+      [name]: updatedValue,
     });
   };
 
@@ -114,6 +121,7 @@ export default function EditInventoryModal({
               label="Item Name"
               name="name"
               value={formData.name}
+              inputProps={{ maxLength: 100 }} // VARCHAR(100) limit
               onChange={handleChange}
             />
           </Grid>
@@ -156,6 +164,7 @@ export default function EditInventoryModal({
               label="Minimum Stock Level"
               name="minStock"
               value={formData.minStock}
+              inputProps={{ min: 0, step: "1" }} // INTEGER limit rules
               onChange={handleChange}
             />
           </Grid>
@@ -166,6 +175,7 @@ export default function EditInventoryModal({
               label="Price"
               name="price"
               value={formData.price}
+              inputProps={{ min: 0, step: "0.01" }} // DECIMAL limit rules
               onChange={handleChange}
             />
           </Grid>
