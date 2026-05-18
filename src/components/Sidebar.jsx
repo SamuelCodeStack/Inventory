@@ -48,15 +48,15 @@ export default function Sidebar({
 
   const menuItems = [
     // Dashboard is now restricted to Admin only
-    ...(hasDashboardAccess
-      ? [
-          {
-            text: "Dashboard",
-            icon: <Dashboard />,
-            path: "/Dashboard",
-          },
-        ]
-      : []),
+    // ...(hasDashboardAccess
+    //   ? [
+    //       {
+    //         text: "Dashboard",
+    //         icon: <Dashboard />,
+    //         path: "/Dashboard",
+    //       },
+    //     ]
+    //   : []),
     {
       text: "Finished Goods",
       icon: <Inventory />,

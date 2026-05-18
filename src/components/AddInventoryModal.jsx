@@ -4,14 +4,14 @@ import {
   Box,
   Typography,
   TextField,
+  MenuItem,
   Button,
   Grid,
   IconButton,
-  MenuItem,
   Divider,
   Stack,
 } from "@mui/material";
-import { AddCircle, Delete, Save } from "@mui/icons-material";
+import { AddCircle, Delete, Save, Close } from "@mui/icons-material";
 
 const CATEGORIES = ["Paper", "Plastic", "Injection", "Trading"];
 const UNITS = ["Pieces", "Bundle", "Box"];
@@ -125,16 +125,29 @@ export default function AddInventoryModal({
           overflowY: "auto",
         }}
       >
-        <Typography variant="h5" fontWeight="bold" mb={4}>
-          Inventory Intake
-        </Typography>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 4,
+          }}
+        >
+          <Typography variant="h5" fontWeight="bold">
+            Inventory Intake
+          </Typography>
+          <IconButton onClick={handleClose} aria-label="close">
+            <Close />
+          </IconButton>
+        </Box>
 
         <Stack spacing={4} divider={<Divider />}>
           {items.map((item, index) => (
             <Box key={index}>
               <Grid container spacing={2} alignItems="flex-end">
+                {/* --- PRIMARY focus ROW: WHAT IS THE ITEM? --- */}
                 {/* ITEM NAME */}
-                <Grid item xs={12} md={3}>
+                <Grid item xs={12} md={8}>
                   <Typography
                     variant="caption"
                     fontWeight="bold"
@@ -152,11 +165,12 @@ export default function AddInventoryModal({
                     onChange={(e) =>
                       handleChange(index, "name", e.target.value)
                     }
+                    autoFocus={index === 0}
                   />
                 </Grid>
 
                 {/* CATEGORY */}
-                <Grid item xs={6} md={2}>
+                <Grid item xs={12} md={4}>
                   <Typography
                     variant="caption"
                     fontWeight="bold"
@@ -182,8 +196,9 @@ export default function AddInventoryModal({
                   </TextField>
                 </Grid>
 
+                {/* --- SECONDARY Focus ROW: METRICS AND LOGISTICS --- */}
                 {/* UNIT */}
-                <Grid item xs={6} md={1.5}>
+                <Grid item xs={6} md={3}>
                   <Typography
                     variant="caption"
                     fontWeight="bold"
@@ -209,7 +224,7 @@ export default function AddInventoryModal({
 
                 {/* PRICE */}
                 {String(userLevel) !== "3" && (
-                  <Grid item xs={6} md={1.5}>
+                  <Grid item xs={6} md={3}>
                     <Typography
                       variant="caption"
                       fontWeight="bold"
@@ -233,7 +248,7 @@ export default function AddInventoryModal({
                 )}
 
                 {/* QTY */}
-                <Grid item xs={6} md={1.5}>
+                <Grid item xs={6} md={3}>
                   <Typography
                     variant="caption"
                     fontWeight="bold"
@@ -255,7 +270,19 @@ export default function AddInventoryModal({
                 </Grid>
 
                 {/* MIN STOCK */}
-                <Grid item xs={6} md={1.5}>
+                <Grid
+                  item
+                  xs={6}
+                  md={
+                    items.length > 1
+                      ? String(userLevel) === "3"
+                        ? 2
+                        : 2
+                      : String(userLevel) === "3"
+                        ? 3
+                        : 3
+                  }
+                >
                   <Typography
                     variant="caption"
                     fontWeight="bold"
@@ -277,16 +304,22 @@ export default function AddInventoryModal({
                 </Grid>
 
                 {/* DELETE ACTION */}
-                <Grid item xs={12} md={1} sx={{ textAlign: "right" }}>
-                  <IconButton
-                    color="error"
-                    onClick={() => removeRow(index)}
-                    disabled={items.length === 1}
-                    sx={{ mb: 0.5 }}
+                {items.length > 1 && (
+                  <Grid
+                    item
+                    xs={12}
+                    md={1}
+                    sx={{ textAlign: "right", pb: 0.5 }}
                   >
-                    <Delete fontSize="small" />
-                  </IconButton>
-                </Grid>
+                    <IconButton
+                      color="error"
+                      onClick={() => removeRow(index)}
+                      disabled={items.length === 1}
+                    >
+                      <Delete fontSize="small" />
+                    </IconButton>
+                  </Grid>
+                )}
               </Grid>
             </Box>
           ))}

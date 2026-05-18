@@ -73,6 +73,7 @@ export default function Dashboard({ mode }) {
     color: theme.palette.text.primary,
     borderColor: borderColor,
     fontSize: "0.875rem",
+    py: 1.5,
   };
 
   const RenderStockTable = () => (
@@ -84,9 +85,13 @@ export default function Dashboard({ mode }) {
               <TableCell
                 key={head}
                 sx={{
-                  fontWeight: 800,
-                  color: headerText,
+                  fontWeight: 700,
+                  fontSize: "0.75rem",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  color: theme.palette.text.secondary,
                   borderColor: borderColor,
+                  py: 1.5,
                 }}
               >
                 {head}
@@ -100,7 +105,7 @@ export default function Dashboard({ mode }) {
               <TableCell
                 colSpan={3}
                 align="center"
-                sx={{ ...commonTableCellStyle, py: 4, border: "none" }}
+                sx={{ ...commonTableCellStyle, py: 6, border: "none" }}
               >
                 <Typography variant="body2" color="text.secondary" italic>
                   No items currently low or out of stock.
@@ -112,17 +117,19 @@ export default function Dashboard({ mode }) {
               const style = getStatusStyle(item.status);
               return (
                 <TableRow key={item.id} hover>
-                  <TableCell sx={commonTableCellStyle}>{item.name}</TableCell>
+                  <TableCell sx={{ ...commonTableCellStyle, fontWeight: 500 }}>
+                    {item.name}
+                  </TableCell>
                   <TableCell sx={commonTableCellStyle}>
                     {item.quantity} {item.uom}
                   </TableCell>
-                  <TableCell sx={{ borderColor: borderColor }}>
+                  <TableCell sx={{ borderColor: borderColor, py: 1.5 }}>
                     <Chip
                       label={item.status}
                       size="small"
                       sx={{
                         fontWeight: 700,
-                        fontSize: "0.75rem",
+                        fontSize: "0.725rem",
                         borderRadius: "6px",
                         color: style.color,
                         bgcolor: style.bgcolor,
@@ -148,9 +155,13 @@ export default function Dashboard({ mode }) {
               <TableCell
                 key={head}
                 sx={{
-                  fontWeight: 800,
-                  color: headerText,
+                  fontWeight: 700,
+                  fontSize: "0.75rem",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  color: theme.palette.text.secondary,
                   borderColor: borderColor,
+                  py: 1.5,
                 }}
               >
                 {head}
@@ -159,53 +170,67 @@ export default function Dashboard({ mode }) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {orders.slice(0, 5).map((order) => {
-            const style = getStatusStyle(order.status);
-            const formattedDate = order.date
-              ? new Date(order.date).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                })
-              : "N/A";
-            return (
-              <TableRow key={order.id} hover>
-                <TableCell
-                  sx={{
-                    ...commonTableCellStyle,
-                    fontWeight: 700,
-                    color: theme.palette.primary.main,
-                  }}
-                >
-                  {order.poNo}
-                </TableCell>
-                <TableCell sx={commonTableCellStyle}>
-                  {order.company || "N/A"}
-                </TableCell>
-                <TableCell
-                  sx={{
-                    ...commonTableCellStyle,
-                    color: theme.palette.text.secondary,
-                  }}
-                >
-                  {formattedDate}
-                </TableCell>
-                <TableCell sx={{ borderColor: borderColor }}>
-                  <Chip
-                    label={order.status}
-                    size="small"
+          {orders.length === 0 ? (
+            <TableRow>
+              <TableCell
+                colSpan={4}
+                align="center"
+                sx={{ ...commonTableCellStyle, py: 6, border: "none" }}
+              >
+                <Typography variant="body2" color="text.secondary" italic>
+                  No active orders found.
+                </Typography>
+              </TableCell>
+            </TableRow>
+          ) : (
+            orders.slice(0, 5).map((order) => {
+              const style = getStatusStyle(order.status);
+              const formattedDate = order.date
+                ? new Date(order.date).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })
+                : "N/A";
+              return (
+                <TableRow key={order.id} hover>
+                  <TableCell
                     sx={{
-                      fontWeight: 700,
-                      fontSize: "0.75rem",
-                      borderRadius: "6px",
-                      color: style.color,
-                      bgcolor: style.bgcolor,
-                      border: "none",
+                      ...commonTableCellStyle,
+                      fontWeight: 600,
+                      color: theme.palette.primary.main,
                     }}
-                  />
-                </TableCell>
-              </TableRow>
-            );
-          })}
+                  >
+                    {order.poNo}
+                  </TableCell>
+                  <TableCell sx={commonTableCellStyle}>
+                    {order.company || "N/A"}
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      ...commonTableCellStyle,
+                      color: theme.palette.text.secondary,
+                    }}
+                  >
+                    {formattedDate}
+                  </TableCell>
+                  <TableCell sx={{ borderColor: borderColor, py: 1.5 }}>
+                    <Chip
+                      label={order.status}
+                      size="small"
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: "0.725rem",
+                        borderRadius: "6px",
+                        color: style.color,
+                        bgcolor: style.bgcolor,
+                        border: "none",
+                      }}
+                    />
+                  </TableCell>
+                </TableRow>
+              );
+            })
+          )}
         </TableBody>
       </Table>
     </TableContainer>
@@ -216,18 +241,94 @@ export default function Dashboard({ mode }) {
       sx={{
         p: { xs: 2, sm: 4 },
         mt: 8,
-        bgcolor: "background.default",
+        bgcolor: isDark ? "background.default" : "#f8f9fa",
         minHeight: "100vh",
       }}
     >
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h5" fontWeight="bold">
-          Dashboard
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Operational summary and critical alerts.
-        </Typography>
+      <Box
+        sx={{
+          mb: 4,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-end",
+          flexWrap: "wrap",
+          gap: 2,
+        }}
+      >
+        <Box>
+          <Typography
+            variant="h4"
+            fontWeight="800"
+            sx={{ letterSpacing: "-0.02em", mb: 0.5 }}
+          >
+            Dashboard
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Operational summary and critical alerts.
+          </Typography>
+        </Box>
       </Box>
+
+      {/* Metrics Row Section */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2.5,
+              borderRadius: 3,
+              border: `1px solid ${borderColor}`,
+              background: paperBg,
+            }}
+          >
+            <Typography
+              variant="caption"
+              fontWeight="700"
+              color="text.secondary"
+              sx={{ textTransform: "uppercase", letterSpacing: "0.05em" }}
+            >
+              Stock Alerts
+            </Typography>
+            <Typography
+              variant="h4"
+              fontWeight="800"
+              sx={{
+                mt: 1,
+                color: inventory.length > 0 ? "#ffa726" : "text.primary",
+              }}
+            >
+              {inventory.length}
+            </Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2.5,
+              borderRadius: 3,
+              border: `1px solid ${borderColor}`,
+              background: paperBg,
+            }}
+          >
+            <Typography
+              variant="caption"
+              fontWeight="700"
+              color="text.secondary"
+              sx={{ textTransform: "uppercase", letterSpacing: "0.05em" }}
+            >
+              Active Orders
+            </Typography>
+            <Typography
+              variant="h4"
+              fontWeight="800"
+              sx={{ mt: 1, color: theme.palette.primary.main }}
+            >
+              {orders.length}
+            </Typography>
+          </Paper>
+        </Grid>
+      </Grid>
 
       <Grid container spacing={4}>
         <Grid item xs={12} lg={6}>
@@ -238,6 +339,7 @@ export default function Dashboard({ mode }) {
               borderRadius: 4,
               border: `1px solid ${borderColor}`,
               background: paperBg,
+              boxShadow: isDark ? "none" : "0px 4px 20px rgba(0, 0, 0, 0.02)",
             }}
           >
             <Stack
@@ -247,7 +349,11 @@ export default function Dashboard({ mode }) {
               sx={{ mb: 3 }}
             >
               <Inventory2 sx={{ color: "#ffa726" }} />
-              <Typography variant="h6" fontWeight="bold">
+              <Typography
+                variant="h6"
+                fontWeight="700"
+                sx={{ letterSpacing: "-0.01em" }}
+              >
                 Inventory Attention
               </Typography>
               <Box sx={{ flexGrow: 1 }} />
@@ -256,9 +362,13 @@ export default function Dashboard({ mode }) {
                 to="/inventory" // Routes to your Inventory.jsx path
                 size="small"
                 endIcon={<ArrowForward />}
-                sx={{ fontWeight: 700, color: "text.secondary" }}
+                sx={{
+                  fontWeight: 700,
+                  color: "text.secondary",
+                  textTransform: "none",
+                }}
               >
-                More
+                View All
               </Button>
             </Stack>
             <RenderStockTable />
@@ -273,6 +383,7 @@ export default function Dashboard({ mode }) {
               borderRadius: 4,
               border: `1px solid ${borderColor}`,
               background: paperBg,
+              boxShadow: isDark ? "none" : "0px 4px 20px rgba(0, 0, 0, 0.02)",
             }}
           >
             <Stack
@@ -282,7 +393,11 @@ export default function Dashboard({ mode }) {
               sx={{ mb: 3 }}
             >
               <ListAlt sx={{ color: "#29b6f6" }} />
-              <Typography variant="h6" fontWeight="bold">
+              <Typography
+                variant="h6"
+                fontWeight="700"
+                sx={{ letterSpacing: "-0.01em" }}
+              >
                 Active Orders
               </Typography>
               <Box sx={{ flexGrow: 1 }} />
@@ -291,9 +406,13 @@ export default function Dashboard({ mode }) {
                 to="/purchase-order" // Routes to your PurchaseOrder.jsx path
                 size="small"
                 endIcon={<ArrowForward />}
-                sx={{ fontWeight: 700, color: "text.secondary" }}
+                sx={{
+                  fontWeight: 700,
+                  color: "text.secondary",
+                  textTransform: "none",
+                }}
               >
-                More
+                View All
               </Button>
             </Stack>
             <RenderOrdersTable />

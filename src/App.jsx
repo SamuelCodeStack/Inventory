@@ -153,7 +153,9 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
             <Route
               path="/"
               element={
-                [3, "3", 4, "4"].includes(user.user_level) ? (
+                [0, "0", 1, "1", 2, "2", 3, "3", 4, "4"].includes(
+                  user.user_level,
+                ) ? (
                   <Navigate to="/inventory" replace />
                 ) : (
                   <Dashboard mode={mode} user={user} />
