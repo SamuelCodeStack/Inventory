@@ -768,8 +768,8 @@ app.post("/api/raw-materials/bulk-add", async (req, res) => {
     for (const item of items) {
       const result = await pool.query(
         `INSERT INTO raw_materials 
-           (material_name, category, base_value, base_unit, qty_unit, qty_value, minimum_stock) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+            (material_name, category, base_value, base_unit, qty_unit, qty_value, minimum_stock) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
         [
           item.name,
           item.category,
@@ -806,9 +806,12 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
   try {
     await client.query("BEGIN");
     for (const item of items) {
+      // CLEAN ID HERE to handle "36:1" issues
+      const cleanedItemId = cleanId(item.id);
+
       const currentRes = await client.query(
         "SELECT material_name, qty_value FROM raw_materials WHERE material_id = $1",
-        [item.id],
+        [cleanedItemId],
       );
 
       if (currentRes.rows.length > 0) {
@@ -829,20 +832,20 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
 
           await client.query(
             `INSERT INTO raw_materials_ledger (material_id, old_qty_value, new_qty_value, change_amount)
-               VALUES ($1, $2, $3, $4)`,
-            [item.id, oldQty, newQty, newQty - oldQty],
+                VALUES ($1, $2, $3, $4)`,
+            [cleanedItemId, oldQty, newQty, newQty - oldQty],
           );
 
           await client.query(
             "UPDATE raw_materials SET qty_value = $1, updated_at = now() WHERE material_id = $2",
-            [newQty, item.id],
+            [newQty, cleanedItemId],
           );
 
           await logActivity(
             req,
             actionType,
             "raw_materials",
-            item.id,
+            cleanedItemId,
             description,
           );
         }
@@ -852,6 +855,7 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
     res.json({ message: "Bulk update successful" });
   } catch (err) {
     await client.query("ROLLBACK");
+    console.error("Bulk update error:", err); // Log the actual error to your terminal
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
@@ -879,7 +883,7 @@ app.put("/api/raw-materials/:id", async (req, res) => {
     if (oldQty !== quantity) {
       await pool.query(
         `INSERT INTO raw_materials_ledger (material_id, old_qty_value, new_qty_value, change_amount)
-           VALUES ($1, $2, $3, $4)`,
+            VALUES ($1, $2, $3, $4)`,
         [id, oldQty, quantity, quantity - oldQty],
       );
     }
