@@ -819,7 +819,11 @@ export default function RawMaterials({ mode, userLevel }) {
       <PrintRawMaterialModal
         open={openPrintModal}
         handleClose={() => setOpenPrintModal(false)}
-        materialsData={materials}
+        materialsData={
+          enableCheckboxes && selectedIds.length > 0
+            ? materials.filter((m) => selectedIds.includes(m.id))
+            : materials
+        }
       />
       {selectedItem && (
         <EditRawMaterialModal

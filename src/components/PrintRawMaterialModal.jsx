@@ -122,21 +122,38 @@ export default function PrintRawMaterialModal({
   const handleExportExcel = () => {
     const worksheetData = filteredData.map((row) => {
       const diff = (row.quantity || 0) - (row.previousQuantity || 0);
+
+      // Clean up the measurement presentation string dynamically
+      const val =
+        row.measurementValue && Number(row.measurementValue) !== 0
+          ? row.measurementValue
+          : "";
+      const unit = row.measurementUnit || "";
+      const pkg = row.packaging || "";
+      const measurementString = `${val} ${unit} ${pkg}`
+        .replace(/\s+/g, " ")
+        .trim();
+
       if (printAll) {
         return {
           "Material Name": row.name,
           Category: row.category,
-          Measurement: `${row.measurementValue} ${row.measurementUnit}`,
+          Measurement: measurementString,
           Quantity: row.quantity,
-          Status: row.quantity <= 0 ? "Out of Stock" : row.status || "In Stock",
+          Status:
+            row.quantity <= 0
+              ? "Out of Stock"
+              : row.quantity <= (row.minStock || 10)
+                ? "Low Stock"
+                : "In Stock",
         };
       } else {
         return {
           ID: row.id,
           "Material Name": row.name,
-          Measurement: `${row.measurementValue} ${row.measurementUnit}`,
+          Measurement: measurementString,
           "Prev. Qty": row.previousQuantity,
-          Adjustment: diff > 0 ? `+${diff}` : diff,
+          Adjustment: diff > 0 ? `+${diff}` : `${diff}`,
           "Current Qty": row.quantity,
           "Last Updated": new Date(
             row.updated_at || row.createdAt,
@@ -281,6 +298,8 @@ export default function PrintRawMaterialModal({
                 boxShadow: "none",
                 margin: 0,
                 width: "100%",
+                height: "auto !important",
+                minHeight: "auto !important",
                 "& *": { color: "black !important" },
               },
             }}
@@ -368,6 +387,18 @@ export default function PrintRawMaterialModal({
                   filteredData.map((row) => {
                     const diff =
                       (row.quantity || 0) - (row.previousQuantity || 0);
+
+                    // Clean up presentation string for print table layout
+                    const val =
+                      row.measurementValue && Number(row.measurementValue) !== 0
+                        ? row.measurementValue
+                        : "";
+                    const unit = row.measurementUnit || "";
+                    const pkg = row.packaging || "";
+                    const measurementString = `${val} ${unit} ${pkg}`
+                      .replace(/\s+/g, " ")
+                      .trim();
+
                     return (
                       <TableRow key={row.id}>
                         {printAll ? (
@@ -377,7 +408,7 @@ export default function PrintRawMaterialModal({
                             </TableCell>
                             <TableCell>{row.category}</TableCell>
                             <TableCell align="right">
-                              {row.measurementValue} {row.measurementUnit}
+                              {measurementString}
                             </TableCell>
                             <TableCell
                               align="right"
@@ -388,7 +419,9 @@ export default function PrintRawMaterialModal({
                             <TableCell>
                               {row.quantity <= 0
                                 ? "Out of Stock"
-                                : row.status || "In Stock"}
+                                : row.quantity <= (row.minStock || 10)
+                                  ? "Low Stock"
+                                  : "In Stock"}
                             </TableCell>
                           </>
                         ) : (
@@ -398,7 +431,7 @@ export default function PrintRawMaterialModal({
                               {row.name}
                             </TableCell>
                             <TableCell align="right">
-                              {row.measurementValue} {row.measurementUnit}
+                              {measurementString}
                             </TableCell>
                             <TableCell align="right">
                               {row.previousQuantity}
@@ -476,7 +509,7 @@ export default function PrintRawMaterialModal({
             px: 4,
             borderColor: "#f2994a",
             color: "#f2994a",
-            "&:hover": { borderColor: "#d8853a", color: "#d8853a" },
+            "& hover": { borderColor: "#d8853a", color: "#d8853a" },
           }}
         >
           Export Excel
@@ -491,7 +524,7 @@ export default function PrintRawMaterialModal({
             fontWeight: "bold",
             px: 4,
             bgcolor: "#f2994a",
-            "&:hover": { bgcolor: "#d8853a" },
+            "& hover": { bgcolor: "#d8853a" },
           }}
         >
           Print Report

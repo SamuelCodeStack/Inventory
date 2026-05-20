@@ -794,7 +794,7 @@ export default function Inventory({ mode, user }) {
                                     ? "#e74c3c"
                                     : "rgba(255, 255, 255, 0.23)",
                             },
-                            "&:hover fieldset": {
+                            "&hover fieldset": {
                               borderColor:
                                 parseFloat(row.movement) > 0
                                   ? "#2ecc71"
@@ -917,7 +917,6 @@ export default function Inventory({ mode, user }) {
           onRowsPerPageChange={handleChangeRowsPerPage}
         />
       </TableContainer>
-
       <AddInventoryModal
         open={openAddModal}
         userLevel={user?.user_level} // Use user_level from the user object
@@ -940,7 +939,11 @@ export default function Inventory({ mode, user }) {
         open={openPrintModal}
         userLevel={user?.user_level}
         handleClose={() => setOpenPrintModal(false)}
-        inventoryData={inventoryData}
+        inventoryData={
+          selectedIds.length > 0
+            ? inventoryData.filter((item) => selectedIds.includes(item.id))
+            : inventoryData
+        }
       />
 
       <Snackbar
