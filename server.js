@@ -7,6 +7,12 @@ import pgSession from "connect-pg-simple"; // Added
 import bcrypt from "bcrypt"; // Added
 import cron from "node-cron";
 import nodemailer from "nodemailer"; // Added
+import path from "path";
+import fs from "fs";
+import multer from "multer";
+
+// Configure the temporary disk storage engine environment for incoming file chunks
+const upload = multer({ dest: "C:/Users/Samuel/Desktop/Backup/temp/" });
 
 dotenv.config();
 
@@ -1051,6 +1057,159 @@ app.get("/api/logs", async (req, res) => {
     res.status(500).json({ error: "Fetch logs failed" });
   }
 });
+
+// ==========================================
+// 6. BACKUP & EXPORT ENDPOINTS
+// ==========================================
+
+app.post("/api/backup/export", async (req, res) => {
+  const backupDir =
+    req.body.destinationPath || "C:/Users/Samuel/Desktop/Backup";
+
+  try {
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+  } catch (dirErr) {
+    console.error("❌ Failed to create directory:", dirErr.message);
+  }
+
+  const inventoryPath = `${backupDir.replace(/\\/g, "/")}/Inventory.csv`;
+  const rawMaterialsPath = `${backupDir.replace(/\\/g, "/")}/raw_materials.csv`;
+
+  try {
+    // 1. Run Inventory Table Export
+    await pool.query(`
+      COPY (SELECT * FROM inventory) 
+      TO '${inventoryPath}' 
+      WITH CSV HEADER;
+    `);
+
+    // 2. Run Raw Materials Table Export
+    await pool.query(`
+      COPY (SELECT * FROM raw_materials) 
+      TO '${rawMaterialsPath}' 
+      WITH CSV HEADER;
+    `);
+
+    await logActivity(
+      req,
+      "EXPORT",
+      "system",
+      null,
+      `Exported database backups manually to Desktop/Backup`,
+    );
+
+    res.status(200).json({
+      message: "Database system backups exported successfully!",
+      paths: { inventory: inventoryPath, rawMaterials: rawMaterialsPath },
+    });
+  } catch (err) {
+    console.error("❌ BACKUP EXPORT SYSTEM FAILURE:", err.message);
+
+    if (err.code === "42501") {
+      return res.status(403).json({
+        error: "Database system permission denied.",
+        message:
+          "The PostgreSQL windows service user account does not have authorization to write files to your Desktop workspace directory directly.",
+      });
+    }
+
+    res.status(500).json({
+      error: "Export processing sequence failed.",
+      message: err.message,
+    });
+  }
+});
+
+// New Explicit Import Route Endpoint using Multer middleware
+app.post(
+  "/api/backup/import",
+  upload.single("backupFile"),
+  async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({
+        error: "Upload failed",
+        message: "No payload backup file provided.",
+      });
+    }
+
+    const targetTable = req.body.targetTable;
+    const uploadedFilePath = req.file.path.replace(/\\/g, "/");
+
+    // Safety whitelist validation checking
+    if (!targetTable || !["inventory", "raw_materials"].includes(targetTable)) {
+      if (fs.existsSync(uploadedFilePath)) fs.unlinkSync(uploadedFilePath);
+      return res.status(400).json({
+        error: "Invalid Target",
+        message:
+          "Please specify a valid destination table ('inventory' or 'raw_materials').",
+      });
+    }
+
+    try {
+      // Read the file header metadata row to verify file data entries match relations
+      const fileContent = fs.readFileSync(uploadedFilePath, "utf8");
+      const firstLine = fileContent.split(/\r?\n/)[0];
+
+      if (!firstLine) {
+        throw new Error(
+          "The uploaded file structure header row evaluation failed.",
+        );
+      }
+
+      // Split and trace target array column items safely, removing carriage returns (\r)
+      const headers = firstLine
+        .replace(/\r/g, "")
+        .split(",")
+        .map((h) => h.trim().toLowerCase());
+
+      // Dynamic column alignment block to bridge CSV text with DB relations
+      const finalColumns = headers.map((column) => {
+        if (targetTable === "inventory") {
+          if (column === "raw_material_id") return "material_id";
+          if (column === "material_id") return "raw_material_id";
+        }
+        return column;
+      });
+
+      const targetColumns = `(${finalColumns.join(", ")})`;
+
+      // Open execution query package transactions safely
+      await pool.query("BEGIN");
+      await pool.query(`TRUNCATE TABLE ${targetTable} CASCADE;`);
+      await pool.query(`
+        COPY ${targetTable} ${targetColumns}
+        FROM '${uploadedFilePath}' 
+        WITH (FORMAT csv, HEADER true);
+      `);
+      await pool.query("COMMIT");
+
+      // Clear disk space footprint
+      if (fs.existsSync(uploadedFilePath)) fs.unlinkSync(uploadedFilePath);
+
+      await logActivity(
+        req,
+        "IMPORT",
+        "system",
+        null,
+        `Restored ${targetTable} file datasets via control panel dashboard upload.`,
+      );
+
+      res.status(200).json({
+        message: `Successfully synchronized system data table properties directly into ${targetTable}!`,
+      });
+    } catch (err) {
+      await pool.query("ROLLBACK");
+      if (fs.existsSync(uploadedFilePath)) fs.unlinkSync(uploadedFilePath);
+
+      console.error("❌ IMPORT PARSER ERROR:", err.message);
+      res
+        .status(400)
+        .json({ error: "Data parser failed", message: err.message });
+    }
+  },
+);
 
 // ==========================================
 // AUTOMATIC LOG CLEANUP

@@ -81,12 +81,6 @@ export default function Sidebar({
     //     ]
     //   : []),
 
-    // {
-    //   text: "Backup",
-    //   icon: <Storage />,
-    //   path: "/backup",
-    // },
-
     // User Management is now restricted to Admin only
     ...(isAdmin
       ? [
@@ -95,6 +89,11 @@ export default function Sidebar({
             icon: <ManageAccounts />,
             section: "Administration", // New Section Header
             path: "/user-management",
+          },
+          {
+            text: "Backup",
+            icon: <Storage />,
+            path: "/backup",
           },
         ]
       : []),

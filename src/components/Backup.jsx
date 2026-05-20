@@ -2,54 +2,123 @@ import React, { useState } from "react";
 import {
   Box,
   Typography,
-  Grid,
   Card,
   CardContent,
   Button,
   Stack,
   alpha,
   LinearProgress,
+  TextField,
+  Divider,
 } from "@mui/material";
 import {
-  Storage,
-  TableChart,
-  CloudUpload,
+  FolderSpecial,
   CheckCircle,
   ErrorOutline,
+  CloudUpload,
 } from "@mui/icons-material";
 
 export default function Backup({ mode }) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ type: "", message: "" });
 
-  const handleBackup = async (type) => {
+  // State to hold the custom backup directory path
+  const [backupDir, setBackupDir] = useState(
+    () =>
+      localStorage.getItem("backup_directory") ||
+      "C:/Users/Samuel/Desktop/Backup",
+  );
+
+  // Sync state changes back to localStorage
+  const handleDirChange = (e) => {
+    const newPath = e.target.value;
+    setBackupDir(newPath);
+    localStorage.setItem("backup_directory", newPath);
+  };
+
+  // --- 1. Export Action ---
+  const handleBackupExport = async () => {
     setLoading(true);
     setStatus({ type: "", message: "" });
 
     try {
-      // Replace with your actual VITE_API_URL
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/backup/${type}`,
+        `${import.meta.env.VITE_API_URL}/backup/export`,
         {
           method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ destinationPath: backupDir }),
         },
       );
+
+      const data = await response.json();
 
       if (response.ok) {
         setStatus({
           type: "success",
-          message: `Successfully backed up to ${type}!`,
+          message:
+            data.message || `Successfully exported backups to ${backupDir}`,
         });
       } else {
-        throw new Error("Backup failed");
+        throw new Error(data.message || "Backup export sequence failed.");
       }
     } catch (err) {
       setStatus({
         type: "error",
-        message: "Failed to connect to backup service.",
+        message:
+          err.message || "Failed to connect to the backend backup service.",
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // --- 2. Import Action ---
+  const handleBackupImport = async (event, targetTable) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setLoading(true);
+    setStatus({ type: "", message: "" });
+
+    const formData = new FormData();
+    formData.append("backupFile", file);
+    formData.append("targetTable", targetTable); // Pass chosen destination table explicitly
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/backup/import`,
+        {
+          method: "POST",
+          body: formData, // Multi-part form boundary handled automatically
+        },
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setStatus({
+          type: "success",
+          message:
+            data.message ||
+            `Successfully imported dataset into ${targetTable}!`,
+        });
+      } else {
+        throw new Error(
+          data.message ||
+            `Failed parsing the backup CSV file for ${targetTable}.`,
+        );
+      }
+    } catch (err) {
+      setStatus({
+        type: "error",
+        message: err.message || "Network error processing backup restoration.",
+      });
+    } finally {
+      setLoading(false);
+      event.target.value = ""; // Reset file selection input footprint
     }
   };
 
@@ -57,41 +126,54 @@ export default function Backup({ mode }) {
     <Box
       sx={{
         p: 4,
-        pt: 12, // Increases padding at the top to clear the Header
+        pt: 12,
+        width: "100%",
         maxWidth: 1000,
         margin: "0 auto",
         minHeight: "100vh",
-        // ADDED: Centering Logic
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
+        boxSizing: "border-box",
       }}
     >
+      {/* Title Section */}
       <Box sx={{ mb: 4, textAlign: "center" }}>
-        {" "}
-        {/* ADDED: Center Text */}
         <Typography variant="h4" fontWeight={800} gutterBottom>
-          System Backup
+          System Data Management
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Export your PostgreSQL database records to ensure data safety.
+          Securely export snapshots or restore records back into the server
+          infrastructure.
         </Typography>
       </Box>
 
-      {/* ADDED: Progress bar when loading */}
+      {/* Directory Configuration */}
+      <Box sx={{ width: "100%", maxWidth: 600, mx: "auto", mb: 4 }}>
+        <TextField
+          fullWidth
+          label="Server Export Directory Target"
+          variant="outlined"
+          value={backupDir}
+          onChange={handleDirChange}
+          helperText="Path evaluated directly on your hosting system environment"
+          size="small"
+        />
+      </Box>
+
+      {/* Loading Progress Bar */}
       {loading && (
-        <Box sx={{ width: "100%", mb: 3, maxWidth: 600 }}>
+        <Box sx={{ width: "100%", maxWidth: 600, mx: "auto", mb: 3 }}>
           <LinearProgress sx={{ borderRadius: 5, height: 8 }} />
         </Box>
       )}
 
+      {/* Status Notice Dialog boxes */}
       {status.message && (
         <Box
           sx={{
             p: 2,
-            mb: 3,
+            mb: 4,
             width: "100%",
             maxWidth: 600,
+            mx: "auto",
             borderRadius: 2,
             display: "flex",
             alignItems: "center",
@@ -111,93 +193,184 @@ export default function Backup({ mode }) {
         </Box>
       )}
 
-      <Grid
-        container
-        spacing={3}
-        justifyContent="center" // ADDED: Centers cards in the grid
+      {/* Main Side-by-Side Card Layout Wrapper */}
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", sm: "row" },
+          gap: 4,
+          justifyContent: "center",
+          alignItems: "stretch",
+          maxWidth: 900,
+          width: "100%",
+          mx: "auto",
+        }}
       >
-        {/* Local Excel Option */}
-        <Grid item xs={12} sm={10} md={6}>
-          {" "}
-          {/* UPDATED: responsive widths */}
-          <Card
+        {/* EXPORT CARD (Left Side) */}
+        <Card
+          sx={{
+            flex: 1,
+            width: "100%",
+            borderRadius: 4,
+            transition: "0.3s",
+            display: "flex",
+            flexDirection: "column",
+            "&:hover": { transform: "translateY(-5px)", boxShadow: 6 },
+          }}
+        >
+          <CardContent
             sx={{
-              height: "100%",
-              borderRadius: 4,
-              transition: "0.3s",
-              "&:hover": { transform: "translateY(-5px)", boxShadow: 6 },
+              p: 4,
+              flexGrow: 1,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
             }}
           >
-            <CardContent sx={{ p: 4 }}>
-              <Stack spacing={2} alignItems="center" textAlign="center">
-                <TableChart sx={{ fontSize: 60, color: "#66bb6a" }} />
-                <Typography variant="h6" fontWeight={700}>
-                  Excel Export
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Convert PostgreSQL tables into .xlsx format. Best for manual
-                  reporting and local storage.
-                </Typography>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  disabled={loading}
-                  onClick={() => handleBackup("excel")}
-                  sx={{
-                    bgcolor: "#66bb6a",
-                    "&:hover": { bgcolor: "#43a047" },
-                    py: 1.5,
-                    fontWeight: 700,
-                  }}
-                >
-                  Download Excel
-                </Button>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
+            <Stack spacing={2} alignItems="center" textAlign="center">
+              <FolderSpecial sx={{ fontSize: 60, color: "#ff9100" }} />
 
-        {/* Cloud Sync Option */}
-        <Grid item xs={12} sm={10} md={6}>
-          {" "}
-          {/* UPDATED: responsive widths */}
-          <Card
+              <Typography variant="h6" fontWeight={700}>
+                Server Local CSV Export
+              </Typography>
+
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ minHeight: 40 }}
+              >
+                Extract historical data points straight to: <br />
+                <code style={{ fontSize: "11px", wordBreak: "break-all" }}>
+                  {backupDir}
+                </code>
+              </Typography>
+
+              <Box sx={{ width: "100%", pt: 1 }}>
+                <Typography
+                  variant="caption"
+                  display="block"
+                  color="text.disabled"
+                  sx={{ mb: 1, textAlign: "left" }}
+                >
+                  • inventory ➔ Inventory.csv <br />• raw_materials ➔
+                  raw_materials.csv
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Box sx={{ pt: 3 }}>
+              <Button
+                variant="contained"
+                fullWidth
+                disabled={loading}
+                onClick={handleBackupExport}
+                sx={{
+                  bgcolor: "#ff9100",
+                  "&:hover": { bgcolor: "#ff6d00" },
+                  py: 1.5,
+                  fontWeight: 700,
+                }}
+              >
+                Run Database Export
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+
+        {/* IMPORT/RESTORE CARD (Right Side) */}
+        <Card
+          sx={{
+            flex: 1,
+            width: "100%",
+            borderRadius: 4,
+            transition: "0.3s",
+            display: "flex",
+            flexDirection: "column",
+            "&:hover": { transform: "translateY(-5px)", boxShadow: 6 },
+          }}
+        >
+          <CardContent
             sx={{
-              height: "100%",
-              borderRadius: 4,
-              transition: "0.3s",
-              "&:hover": { transform: "translateY(-5px)", boxShadow: 6 },
+              p: 4,
+              flexGrow: 1,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
             }}
           >
-            <CardContent sx={{ p: 4 }}>
-              <Stack spacing={2} alignItems="center" textAlign="center">
-                <CloudUpload sx={{ fontSize: 60, color: "#29b6f6" }} />
-                <Typography variant="h6" fontWeight={700}>
-                  Cloud Sync
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Upload a compressed SQL dump directly to remote storage. Best
-                  for disaster recovery.
-                </Typography>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  disabled={loading}
-                  onClick={() => handleBackup("cloud")}
-                  sx={{
-                    bgcolor: "#29b6f6",
-                    "&:hover": { bgcolor: "#039be5" },
-                    py: 1.5,
-                    fontWeight: 700,
-                  }}
-                >
-                  Sync to Cloud
-                </Button>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+            <Stack
+              spacing={2}
+              alignItems="center"
+              textAlign="center"
+              sx={{ width: "100%" }}
+            >
+              <CloudUpload sx={{ fontSize: 60, color: "#2196f3" }} />
+
+              <Typography variant="h6" fontWeight={700}>
+                Import System Database
+              </Typography>
+
+              <Typography variant="body2" color="text.secondary">
+                Select a table structured spreadsheet file to append or
+                overwrite target database contents.
+              </Typography>
+
+              <Divider flexItem sx={{ my: 1 }} />
+            </Stack>
+
+            {/* Split Action Buttons Container */}
+            <Stack spacing={2} sx={{ pt: 2, width: "100%" }}>
+              {/* Inventory Upload Trigger Button */}
+              <Button
+                variant="contained"
+                component="label"
+                fullWidth
+                disabled={loading}
+                sx={{
+                  bgcolor: "#2196f3",
+                  "&:hover": { bgcolor: "#1976d2" },
+                  py: 1.2,
+                  fontWeight: 700,
+                }}
+              >
+                Import to Inventory
+                <input
+                  type="file"
+                  accept=".csv"
+                  hidden
+                  onChange={(e) => handleBackupImport(e, "inventory")}
+                />
+              </Button>
+
+              {/* Raw Materials Upload Trigger Button */}
+              <Button
+                variant="outlined"
+                component="label"
+                fullWidth
+                disabled={loading}
+                sx={{
+                  color: "#2196f3",
+                  borderColor: "#2196f3",
+                  "&:hover": {
+                    borderColor: "#1976d2",
+                    bgcolor: alpha("#2196f3", 0.04),
+                  },
+                  py: 1.2,
+                  fontWeight: 700,
+                }}
+              >
+                Import to Raw Materials
+                <input
+                  type="file"
+                  accept=".csv"
+                  hidden
+                  onChange={(e) => handleBackupImport(e, "raw_materials")}
+                />
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Box>
     </Box>
   );
 }
