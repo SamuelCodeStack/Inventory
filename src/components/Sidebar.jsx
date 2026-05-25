@@ -46,6 +46,8 @@ export default function Sidebar({
     user?.user_level === 1 ||
     user?.user_level === "1";
 
+  const superAdmin = user?.user_level === 0 || user?.user_level === "0";
+
   const menuItems = [
     // Dashboard is now restricted to Admin only
     // ...(hasDashboardAccess
@@ -90,6 +92,15 @@ export default function Sidebar({
             section: "Administration", // New Section Header
             path: "/user-management",
           },
+          // {
+          //   text: "Backup",
+          //   icon: <Storage />,
+          //   path: "/backup",
+          // },
+        ]
+      : []),
+    ...(superAdmin
+      ? [
           {
             text: "Backup",
             icon: <Storage />,

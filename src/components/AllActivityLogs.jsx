@@ -13,12 +13,20 @@ import {
   CircularProgress,
   Avatar,
   Stack,
+  Button,
+  TextField, // Swapped FormControl/Select/InputLabel/MenuItem for TextField
 } from "@mui/material";
-import { History as HistoryIcon } from "@mui/icons-material";
+import {
+  History as HistoryIcon,
+  ExpandMore as ExpandMoreIcon,
+} from "@mui/icons-material";
 
 export default function AllActivityLogs({ mode }) {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  // States added for pagination and filtering
+  const [visibleDaysCount, setVisibleDaysCount] = useState(1);
+  const [selectedDayFilter, setSelectedDayFilter] = useState("ALL");
 
   const isDark = mode === "dark";
 
@@ -33,7 +41,7 @@ export default function AllActivityLogs({ mode }) {
       } catch (err) {
         console.error("Failed to fetch all logs", err);
       } finally {
-        setLoading(false);
+        loading && setLoading(false);
       }
     };
     fetchLogs();
@@ -90,6 +98,47 @@ export default function AllActivityLogs({ mode }) {
 
   const groupedLogs = getGroupedLogs();
 
+  // Sorted list of unique date groups available in your current logs
+  const availableDays = Object.keys(groupedLogs);
+
+  // Helper to accurately map standard YYYY-MM-DD input strings to your custom grouping keys
+  const getGroupKeyFromCalendarInput = (isoString) => {
+    if (!isoString) return "ALL";
+
+    // Parse the calendar date safely as local midnight to avoid timezone offsetting
+    const [year, month, day] = isoString.split("-");
+    const targetDate = new Date(year, month - 1, day);
+
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (targetDate.toDateString() === today.toDateString()) {
+      return "Today";
+    }
+    if (targetDate.toDateString() === yesterday.toDateString()) {
+      return "Yesterday";
+    }
+
+    return targetDate.toLocaleDateString(undefined, {
+      dateStyle: "long",
+    });
+  };
+
+  // Determine which days should be rendered based on view states and filters
+  const getDisplayedDateGroups = () => {
+    if (selectedDayFilter !== "ALL") {
+      const resolvedKey = getGroupKeyFromCalendarInput(selectedDayFilter);
+      return availableDays.includes(resolvedKey) ? [resolvedKey] : [];
+    }
+    // Default or "See More" behavior: slice chronological keys array sequentially
+    return availableDays.slice(0, visibleDaysCount);
+  };
+
+  const displayedDateGroups = getDisplayedDateGroups();
+  const hasMoreDaysToShow =
+    selectedDayFilter === "ALL" && visibleDaysCount < availableDays.length;
+
   if (loading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 10 }}>
@@ -102,17 +151,51 @@ export default function AllActivityLogs({ mode }) {
     <Box
       sx={{ p: 4, mt: 8, bgcolor: "background.default", minHeight: "100vh" }}
     >
-      <Box sx={{ mb: 4 }}>
-        <Typography
-          variant="h5"
-          fontWeight="bold"
-          sx={{ display: "flex", alignItems: "center", gap: 1 }}
-        >
-          <HistoryIcon /> System Activity Logs
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Real-time history of all actions performed in the system (Last 7 Days)
-        </Typography>
+      <Box
+        sx={{
+          mb: 4,
+          display: "flex",
+          justifyContent: "space-between", // Fixed string literal from 'between' to valid 'space-between'
+          alignItems: "flex-end",
+          flexWrap: "wrap",
+          gap: 2,
+        }}
+      >
+        <Box sx={{ flexGrow: 1 }}>
+          <Typography
+            variant="h5"
+            fontWeight="bold"
+            sx={{ display: "flex", alignItems: "center", gap: 1 }}
+          >
+            <HistoryIcon /> System Activity Logs
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Real-time history of all actions performed in the system (Last 7
+            Days)
+          </Typography>
+        </Box>
+
+        {/* Day selection filter using calendar date picker */}
+        <Stack direction="row" spacing={1} alignItems="center">
+          <TextField
+            label="Filter by Date"
+            type="date"
+            size="small"
+            value={selectedDayFilter === "ALL" ? "" : selectedDayFilter}
+            onChange={(e) => setSelectedDayFilter(e.target.value || "ALL")}
+            InputLabelProps={{ shrink: true }}
+            sx={{ minWidth: 220 }}
+          />
+          {selectedDayFilter !== "ALL" && (
+            <Button
+              size="small"
+              onClick={() => setSelectedDayFilter("ALL")}
+              sx={{ textTransform: "none", fontWeight: "bold" }}
+            >
+              Clear
+            </Button>
+          )}
+        </Stack>
       </Box>
 
       <TableContainer
@@ -133,7 +216,7 @@ export default function AllActivityLogs({ mode }) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {Object.keys(groupedLogs).map((dateGroup) => (
+            {displayedDateGroups.map((dateGroup) => (
               <React.Fragment key={dateGroup}>
                 {/* Date Header Row */}
                 <TableRow>
@@ -238,7 +321,7 @@ export default function AllActivityLogs({ mode }) {
                 })}
               </React.Fragment>
             ))}
-            {logs.length === 0 && (
+            {(logs.length === 0 || displayedDateGroups.length === 0) && (
               <TableRow>
                 <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
                   No logs found.
@@ -248,6 +331,26 @@ export default function AllActivityLogs({ mode }) {
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Progressive pagination controller */}
+      {hasMoreDaysToShow && (
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
+          <Button
+            variant="outlined"
+            color="primary"
+            endIcon={<ExpandMoreIcon />}
+            onClick={() => setVisibleDaysCount((prev) => prev + 1)}
+            sx={{
+              fontWeight: "bold",
+              textTransform: "none",
+              px: 4,
+              borderRadius: 2,
+            }}
+          >
+            See More Logs
+          </Button>
+        </Box>
+      )}
     </Box>
   );
 }

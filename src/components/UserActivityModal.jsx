@@ -14,16 +14,29 @@ import {
   Chip,
   Box,
   CircularProgress,
+  Button, // Added for pagination
+  TextField, // Added for calendar filtering
+  Stack, // Added for layout handling
 } from "@mui/material";
-import { Close, History } from "@mui/icons-material";
+import {
+  Close,
+  History,
+  ExpandMore as ExpandMoreIcon,
+} from "@mui/icons-material";
 
 export default function UserActivityModal({ open, handleClose, user }) {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
+  // States added for pagination and filtering
+  const [visibleDaysCount, setVisibleDaysCount] = useState(1);
+  const [selectedDayFilter, setSelectedDayFilter] = useState("ALL");
 
   useEffect(() => {
     if (open && user) {
       fetchUserLogs();
+      // Reset view states when dialog reopens for a new user context
+      setVisibleDaysCount(1);
+      setSelectedDayFilter("ALL");
     }
   }, [open, user]);
 
@@ -97,6 +110,45 @@ export default function UserActivityModal({ open, handleClose, user }) {
 
   const groupedLogs = getGroupedLogs();
 
+  // Sorted list of unique date groups available in your current logs
+  const availableDays = Object.keys(groupedLogs);
+
+  // Helper to accurately map standard YYYY-MM-DD input strings to your custom grouping keys
+  const getGroupKeyFromCalendarInput = (isoString) => {
+    if (!isoString) return "ALL";
+
+    const [year, month, day] = isoString.split("-");
+    const targetDate = new Date(year, month - 1, day);
+
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (targetDate.toDateString() === today.toDateString()) {
+      return "Today";
+    }
+    if (targetDate.toDateString() === yesterday.toDateString()) {
+      return "Yesterday";
+    }
+
+    return targetDate.toLocaleDateString(undefined, {
+      dateStyle: "long",
+    });
+  };
+
+  // Determine which days should be rendered based on view states and filters
+  const getDisplayedDateGroups = () => {
+    if (selectedDayFilter !== "ALL") {
+      const resolvedKey = getGroupKeyFromCalendarInput(selectedDayFilter);
+      return availableDays.includes(resolvedKey) ? [resolvedKey] : [];
+    }
+    return availableDays.slice(0, visibleDaysCount);
+  };
+
+  const displayedDateGroups = getDisplayedDateGroups();
+  const hasMoreDaysToShow =
+    selectedDayFilter === "ALL" && visibleDaysCount < availableDays.length;
+
   return (
     <Dialog
       open={open}
@@ -122,13 +174,41 @@ export default function UserActivityModal({ open, handleClose, user }) {
       </DialogTitle>
 
       <DialogContent dividers>
+        {/* Calendar date picker integrated inside the modal filter view row */}
+        {!loading && logs.length > 0 && (
+          <Box sx={{ mb: 3, display: "flex", justifyContent: "flex-end" }}>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <TextField
+                label="Filter by Date"
+                type="date"
+                size="small"
+                value={selectedDayFilter === "ALL" ? "" : selectedDayFilter}
+                onChange={(e) => setSelectedDayFilter(e.target.value || "ALL")}
+                InputLabelProps={{ shrink: true }}
+                sx={{ minWidth: 220 }}
+              />
+              {selectedDayFilter !== "ALL" && (
+                <Button
+                  size="small"
+                  onClick={() => setSelectedDayFilter("ALL")}
+                  sx={{ textTransform: "none", fontWeight: "bold" }}
+                >
+                  Clear
+                </Button>
+              )}
+            </Stack>
+          </Box>
+        )}
+
         {loading ? (
           <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
             <CircularProgress />
           </Box>
-        ) : logs.length === 0 ? (
+        ) : logs.length === 0 || displayedDateGroups.length === 0 ? (
           <Typography align="center" sx={{ py: 5 }} color="text.secondary">
-            No activities recorded for this user.
+            {logs.length === 0
+              ? "No activities recorded for this user."
+              : "No logs found for this specific date."}
           </Typography>
         ) : (
           <TableContainer>
@@ -143,7 +223,7 @@ export default function UserActivityModal({ open, handleClose, user }) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {Object.keys(groupedLogs).map((dateGroup) => (
+                {displayedDateGroups.map((dateGroup) => (
                   <React.Fragment key={dateGroup}>
                     {/* Date Header Row */}
                     <TableRow>
@@ -214,6 +294,26 @@ export default function UserActivityModal({ open, handleClose, user }) {
               </TableBody>
             </Table>
           </TableContainer>
+        )}
+
+        {/* Progressive pagination controller component */}
+        {!loading && hasMoreDaysToShow && (
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
+            <Button
+              variant="outlined"
+              color="primary"
+              endIcon={<ExpandMoreIcon />}
+              onClick={() => setVisibleDaysCount((prev) => prev + 1)}
+              sx={{
+                fontWeight: "bold",
+                textTransform: "none",
+                px: 4,
+                borderRadius: 2,
+              }}
+            >
+              See More Logs
+            </Button>
+          </Box>
         )}
       </DialogContent>
     </Dialog>
