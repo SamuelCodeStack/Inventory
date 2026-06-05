@@ -1,13 +1,43 @@
+
 CREATE TABLE inventory (
     item_id SERIAL PRIMARY KEY,
     item_name VARCHAR(100) NOT NULL,
     category VARCHAR(20),
+	brand VARCHAR(40) NOT NULL,
+	supplier VARCHAR(40),
     unit VARCHAR(20),
     quantity INTEGER DEFAULT 0,
 	price DECIMAL(12, 2) DEFAULT 0.00,
     minimum_stock INTEGER DEFAULT 10,
 	created_at DATE NOT NULL,
 	updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE brand (
+    brand_id SERIAL PRIMARY KEY,
+    -- Naka-reference sa inventory table (siguraduhing umiiral na ito)
+    item_id INTEGER REFERENCES inventory(item_id) ON DELETE CASCADE,
+   	brand_name VARCHAR(40) NOT NULL,
+	set_color VARCHAR(50) 
+);
+
+CREATE TABLE supplier (
+    supplier_id SERIAL PRIMARY KEY,
+    -- Naka-reference sa inventory table (siguraduhing umiiral na ito)
+    item_id INTEGER REFERENCES inventory(item_id) ON DELETE CASCADE,
+    supplier_name VARCHAR(100) NOT NULL,
+    address TEXT,                           -- Binago sa TEXT para sa mahabang address
+    contact_no VARCHAR(50),                 -- Sapat na ang 50 para sa phone/mobile numbers
+    other_details TEXT                      -- Binago sa TEXT para sa flexible na mga tala
+);
+
+CREATE TABLE inventory_remarks (
+    ir_id SERIAL PRIMARY KEY,
+    -- Naka-reference sa inventory table
+    item_id INTEGER REFERENCES inventory(item_id) ON DELETE CASCADE,
+    remarks TEXT,                           -- Binago sa TEXT para hindi mag-error sa mahabang remarks
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- Ginawang TIMESTAMPTZ para sa eksaktong log ng oras
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE inventory_ledger (

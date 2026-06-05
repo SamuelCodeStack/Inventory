@@ -113,6 +113,7 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
   const isAdmin =
     user.user_level === 0 ||
     user.user_level === "0" ||
+    user.user_level === "1" ||
     user.user_level === 1 ||
     user.user_level === "1";
 
@@ -153,9 +154,17 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
             <Route
               path="/"
               element={
-                [0, "0", 1, "1", 2, "2", 3, "3", 4, "4"].includes(
-                  user.user_level,
-                ) ? (
+                [3, "3", 4, "4"].includes(user.user_level) ? (
+                  <Navigate to="/inventory" replace />
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                [3, "3", 4, "4"].includes(user.user_level) ? (
                   <Navigate to="/inventory" replace />
                 ) : (
                   <Dashboard mode={mode} user={user} />

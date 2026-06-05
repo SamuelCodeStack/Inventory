@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   Drawer,
@@ -10,6 +10,7 @@ import {
   ListItemIcon,
   ListItemText,
   Switch,
+  IconButton,
 } from "@mui/material";
 import {
   Inventory,
@@ -19,6 +20,9 @@ import {
   Layers, // Icon for Raw Materials
   ManageAccounts, // Icon for User Management
   Storage,
+  ChevronLeft,
+  Menu,
+  LocalShipping, // Icon for Supplier
 } from "@mui/icons-material";
 
 export default function Sidebar({
@@ -29,7 +33,8 @@ export default function Sidebar({
   user, // Added user prop to access user_level
 }) {
   const location = useLocation();
-  const drawerWidth = 240;
+  const [isCollapsed, setIsCollapsed] = useState(false); // Internal state to control hiding/collapsing desktop sidebar
+  const drawerWidth = isCollapsed ? 70 : 240; // Dynamically change width based on state
 
   const hasDashboardAccess =
     user?.user_level === 0 ||
@@ -50,15 +55,15 @@ export default function Sidebar({
 
   const menuItems = [
     // Dashboard is now restricted to Admin only
-    // ...(hasDashboardAccess
-    //   ? [
-    //       {
-    //         text: "Dashboard",
-    //         icon: <Dashboard />,
-    //         path: "/Dashboard",
-    //       },
-    //     ]
-    //   : []),
+    ...(hasDashboardAccess
+      ? [
+          {
+            text: "Dashboard",
+            icon: <Dashboard />,
+            path: "/Dashboard",
+          },
+        ]
+      : []),
     {
       text: "Finished Goods",
       icon: <Inventory />,
@@ -70,6 +75,12 @@ export default function Sidebar({
       text: "Raw Materials",
       icon: <Layers />,
       path: "/raw-materials",
+    },
+
+    {
+      text: "Suppliers",
+      icon: <LocalShipping />,
+      path: "/suppliers",
     },
 
     // Purchase Order restricted for user level 3 and 4
@@ -112,40 +123,89 @@ export default function Sidebar({
 
   // Reusable content for both types of drawers
   const drawerContent = (
-    <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+    <Box
+      sx={{
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        overflowX: "hidden",
+      }}
+    >
       {/* Logo Section */}
-      <Box sx={{ p: 3, display: "flex", alignItems: "center", gap: 1 }}>
+      <Box
+        sx={{
+          p: 2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 1,
+          minHeight: 64,
+        }}
+      >
         <Box
           sx={{
-            width: 32,
-            height: 32,
-            bgcolor: "primary.main",
-            borderRadius: 1,
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            color: "white",
+            gap: 1,
+            overflow: "hidden",
           }}
         >
-          <Inventory fontSize="small" />
+          <Box
+            sx={{
+              width: 32,
+              height: 32,
+              bgcolor: "primary.main",
+              borderRadius: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "white",
+              flexShrink: 0,
+            }}
+          >
+            <Inventory fontSize="small" />
+          </Box>
+          {!isCollapsed && (
+            <Typography
+              variant="h6"
+              fontSize={16}
+              fontWeight="bold"
+              color="primary"
+              sx={{
+                whiteSpace: "nowrap",
+                textOverflow: "ellipsis",
+                overflow: "hidden",
+              }}
+            >
+              Inventory
+            </Typography>
+          )}
         </Box>
-        <Typography
-          variant="h6"
-          fontSize={18}
-          fontWeight="bold"
-          color="primary"
+        {/* Toggle button visible only on desktop layout */}
+        <IconButton
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          size="small"
+          color="inherit"
+          sx={{
+            display: { xs: "none", sm: "inline-flex" },
+            color: mode === "light" ? "text.primary" : "white",
+          }}
         >
-          Inventory System
-        </Typography>
+          {isCollapsed ? (
+            <Menu fontSize="small" />
+          ) : (
+            <ChevronLeft fontSize="small" />
+          )}
+        </IconButton>
       </Box>
 
-      <List sx={{ px: 2, order: { xs: 2, sm: 1 } }}>
+      <List sx={{ px: isCollapsed ? 1 : 2, order: { xs: 2, sm: 1 } }}>
         {menuItems.map((item, index) => {
           const isActive = location.pathname === item.path;
 
           return (
             <React.Fragment key={index}>
-              {item.section && (
+              {item.section && !isCollapsed && (
                 <Typography
                   variant="caption"
                   sx={{
@@ -169,6 +229,8 @@ export default function Sidebar({
                   onClick={handleDrawerToggle} // Closes drawer on mobile when link is clicked
                   sx={{
                     borderRadius: 2,
+                    justifyContent: isCollapsed ? "center" : "initial",
+                    px: isCollapsed ? 1.5 : 2,
                     "&.Mui-selected": {
                       bgcolor:
                         mode === "light"
@@ -186,19 +248,23 @@ export default function Sidebar({
                 >
                   <ListItemIcon
                     sx={{
-                      minWidth: 40,
+                      minWidth: isCollapsed ? 0 : 40,
+                      mr: isCollapsed ? 0 : 0,
+                      justifyContent: "center",
                       color: isActive ? "primary.main" : "inherit",
                     }}
                   >
                     {item.icon}
                   </ListItemIcon>
-                  <ListItemText
-                    primary={item.text}
-                    primaryTypographyProps={{
-                      fontSize: 14,
-                      fontWeight: isActive ? 600 : 400,
-                    }}
-                  />
+                  {!isCollapsed && (
+                    <ListItemText
+                      primary={item.text}
+                      primaryTypographyProps={{
+                        fontSize: 14,
+                        fontWeight: isActive ? 600 : 400,
+                      }}
+                    />
+                  )}
                 </ListItemButton>
               </ListItem>
             </React.Fragment>
@@ -212,7 +278,7 @@ export default function Sidebar({
           p: 2,
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
+          justifyContent: isCollapsed ? "center" : "space-between",
           borderTop: mode === "light" ? "1px solid #eee" : "1px solid #333",
           borderBottom: {
             xs: mode === "light" ? "1px solid #eee" : "1px solid #333",
@@ -221,9 +287,11 @@ export default function Sidebar({
           order: { xs: 1, sm: 2 }, // Moves the toggle box above the list on mobile (XS)
         }}
       >
-        <Typography variant="body2" color="text.secondary">
-          Dark mode
-        </Typography>
+        {!isCollapsed && (
+          <Typography variant="body2" color="text.secondary">
+            Dark mode
+          </Typography>
+        )}
         <Switch
           size="small"
           checked={mode === "dark"}
@@ -250,7 +318,15 @@ export default function Sidebar({
   return (
     <Box
       component="nav"
-      sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+      sx={{
+        width: { sm: drawerWidth },
+        flexShrink: { sm: 0 },
+        transition: (theme) =>
+          theme.transitions.create("width", {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.enteringScreen,
+          }),
+      }}
     >
       {/* Mobile Temporary Drawer */}
       <Drawer
@@ -265,7 +341,7 @@ export default function Sidebar({
         sx={{
           display: { xs: "block", sm: "none" },
           "& .MuiDrawer-paper": {
-            width: drawerWidth,
+            width: 240, // Always maintain full size on mobile popups
             boxSizing: "border-box",
             borderRight: mode === "light" ? "1px solid #eee" : "1px solid #333",
             backgroundColor: mode === "light" ? "#fff" : "#121212",
@@ -285,6 +361,12 @@ export default function Sidebar({
             boxSizing: "border-box",
             borderRight: mode === "light" ? "1px solid #eee" : "1px solid #333",
             backgroundColor: mode === "light" ? "#fff" : "#121212",
+            transition: (theme) =>
+              theme.transitions.create("width", {
+                easing: theme.transitions.easing.sharp,
+                duration: theme.transitions.duration.enteringScreen,
+              }),
+            overflowX: "hidden",
           },
         }}
         open

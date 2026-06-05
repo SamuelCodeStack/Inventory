@@ -23,7 +23,7 @@ import {
 } from "@mui/icons-material";
 import UserActivityModal from "./UserActivityModal"; // Import the modal
 
-export default function Header({ mode, user, onMenuClick }) {
+export default function Header({ mode, user, onMenuClick, sidebarCollapsed }) {
   // Added onMenuClick prop back
   // Added user prop
   const navigate = useNavigate(); // Hook for navigation
@@ -31,6 +31,9 @@ export default function Header({ mode, user, onMenuClick }) {
   const [unreadLogs, setUnreadLogs] = useState(0); // State for notification badge
   const [openPersonalLogs, setOpenPersonalLogs] = useState(false); // Modal state
   const open = Boolean(anchorEl);
+
+  // Dynamic drawer width to eliminate the layout gap when minimized
+  const currentDrawerWidth = sidebarCollapsed ? "70px" : "240px";
 
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
@@ -136,17 +139,16 @@ export default function Header({ mode, user, onMenuClick }) {
 
   return (
     <AppBar
-      position="fixed"
+      position="sticky"
       elevation={0}
       sx={{
         backgroundColor: "background.paper",
         color: "text.primary",
-        width: { sm: "calc(100% - 240px)" },
-        ml: { sm: "240px" },
+        width: "100%",
         borderBottom: "1px solid",
         borderColor: mode === "light" ? "#eee" : "#333",
-        left: "auto",
-        right: 0,
+        top: 0,
+        zIndex: (theme) => theme.zIndex.drawer + 1,
       }}
     >
       {/* Changed to space-between so menu icon is left and profile is right */}

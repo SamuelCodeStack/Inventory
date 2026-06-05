@@ -21,6 +21,11 @@ import {
   MenuItem,
   Grid, // Added for responsiveness
   Checkbox, // Added for selection
+  Menu,
+  Divider,
+  ListItemIcon,
+  ListItemText,
+  Tooltip,
 } from "@mui/material";
 import {
   Add,
@@ -36,6 +41,12 @@ import {
   CheckCircleOutline, // Added for Selection toggle on
   RadioButtonUnchecked, // Added for Selection toggle off
   CheckBoxOutlineBlank, // Imported for the custom look
+  KeyboardArrowDown,
+  KeyboardArrowUp,
+  BarChart,
+  Notes,
+  VisibilityOff,
+  Straighten, // Icon for Min Stock Level
 } from "@mui/icons-material";
 import AddInventoryModal from "./AddInventoryModal";
 import EditInventoryModal from "./EditInventoryModal";
@@ -51,6 +62,21 @@ export default function Inventory({ mode, user }) {
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]); // Track selected rows for deletion
   const [isSelectionEnabled, setIsSelectionEnabled] = useState(false); // Track checkbox visibility state
+
+  // --- DROPDOWN MENU STATE ---
+  const [anchorEl, setAnchorEl] = useState(null);
+  const isMenuOpen = Boolean(anchorEl);
+  const handleMenuOpen = (e) => setAnchorEl(e.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
+
+  // --- STATUS VIEW TOGGLE: 'badge' | 'bar' ---
+  const [statusView, setStatusView] = useState("badge");
+
+  // --- REMARKS COLUMN VISIBILITY TOGGLE ---
+  const [showRemarks, setShowRemarks] = useState(false);
+
+  // --- MIN STOCK COLUMN VISIBILITY TOGGLE ---
+  const [showMinStock, setShowMinStock] = useState(false);
 
   // --- FILTER STATES ---
   const [searchQuery, setSearchQuery] = useState("");
@@ -337,6 +363,77 @@ export default function Inventory({ mode, user }) {
     setSelectedIds([]);
   };
 
+  // --- STATUS BAR RENDERER ---
+  // Calculates a percentage from quantity vs minStock and renders a colored progress bar
+  const renderStatusBar = (row) => {
+    const minStock = row.min_stock ?? row.minStock ?? 0;
+    const qty = row.quantity ?? 0;
+
+    // Determine bar color and label based on status
+    const barColor =
+      row.status === "In Stock"
+        ? "#2ecc71"
+        : row.status === "Low Stock"
+          ? "#e67e22"
+          : "#e74c3c";
+
+    const bgColor =
+      row.status === "In Stock"
+        ? "rgba(46, 204, 113, 0.15)"
+        : row.status === "Low Stock"
+          ? "rgba(241, 145, 73, 0.15)"
+          : "rgba(231, 76, 60, 0.15)";
+
+    // Calculate percentage: cap at 100%, use minStock * 2 as "full" threshold
+    const maxRef = minStock > 0 ? minStock * 2 : 100;
+    const pct = qty <= 0 ? 0 : Math.min(Math.round((qty / maxRef) * 100), 100);
+
+    return (
+      <Box sx={{ minWidth: 130 }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mb: 0.4,
+          }}
+        >
+          <Typography
+            variant="caption"
+            sx={{ fontWeight: "bold", color: barColor, fontSize: "0.7rem" }}
+          >
+            {row.status}
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{ color: "text.secondary", fontSize: "0.7rem" }}
+          >
+            {pct}%
+          </Typography>
+        </Box>
+        <Box
+          sx={{
+            width: "100%",
+            height: 7,
+            borderRadius: 4,
+            bgcolor: bgColor,
+            overflow: "hidden",
+          }}
+        >
+          <Box
+            sx={{
+              width: `${pct}%`,
+              height: "100%",
+              borderRadius: 4,
+              bgcolor: barColor,
+              transition: "width 0.4s ease",
+            }}
+          />
+        </Box>
+      </Box>
+    );
+  };
+
   return (
     <Box
       sx={{
@@ -370,8 +467,6 @@ export default function Inventory({ mode, user }) {
           spacing={1.5}
           sx={{
             width: { xs: "100%", sm: "auto" },
-            overflowX: "auto", // Allow buttons to scroll if they overflow
-            pb: { xs: 1, sm: 0 },
             alignItems: "center",
           }}
         >
@@ -428,10 +523,11 @@ export default function Inventory({ mode, user }) {
             </>
           )}
 
+          {/* --- GROUPED ACTIONS DROPDOWN BUTTON --- */}
           <Button
             variant="outlined"
-            startIcon={<Print />}
-            onClick={() => setOpenPrintModal(true)}
+            onClick={handleMenuOpen}
+            endIcon={isMenuOpen ? <KeyboardArrowUp /> : <KeyboardArrowDown />}
             size="small"
             sx={{
               borderRadius: 2,
@@ -439,111 +535,177 @@ export default function Inventory({ mode, user }) {
               textTransform: "none",
               px: 3,
               flexShrink: 0,
+              borderColor: "#ef7d14",
+              color: "#ef7d14",
+              "&:hover": {
+                borderColor: "#d66e0f",
+                backgroundColor: isDark
+                  ? "rgba(239, 125, 20, 0.08)"
+                  : "#fff5ee",
+              },
             }}
           >
-            Print
+            Actions
           </Button>
 
-          {/* SELECTION MODE TOGGLE BUTTON */}
-          {canModify && !isEditingQty && (
-            <Button
-              variant={isSelectionEnabled ? "contained" : "outlined"}
-              startIcon={
-                isSelectionEnabled ? (
-                  <CheckCircleOutline />
-                ) : (
-                  <CheckBoxOutlineBlank sx={{ color: "#ef7d14" }} />
-                )
-              }
-              onClick={() => {
-                setIsSelectionEnabled(!isSelectionEnabled);
-                if (isSelectionEnabled) setSelectedIds([]); // Clear selection when turning off
-              }}
-              size="small"
-              sx={{
+          <Menu
+            anchorEl={anchorEl}
+            open={isMenuOpen}
+            onClose={handleMenuClose}
+            PaperProps={{
+              elevation: 3,
+              sx: {
+                mt: 1,
+                minWidth: 200,
                 borderRadius: 2,
-                fontWeight: "bold",
-                textTransform: "none",
-                px: 3,
-                flexShrink: 0,
-                backgroundColor: isSelectionEnabled
-                  ? "#ef7d14"
-                  : isDark
-                    ? "rgba(239, 125, 20, 0.08)"
-                    : "#f9f9fb",
-                color: isSelectionEnabled ? "#ffffff" : "#ef7d14",
-                borderColor: "#ef7d14",
-                "&:hover": {
-                  backgroundColor: isSelectionEnabled
-                    ? "#d66e0f"
-                    : isDark
-                      ? "rgba(239, 125, 20, 0.15)"
-                      : "#f1f1f5",
-                  borderColor: "#d66e0f",
+                overflow: "visible",
+                "& .MuiMenuItem-root": {
+                  borderRadius: 1,
+                  mx: 0.5,
+                  my: 0.25,
+                  px: 2,
+                  py: 1,
+                  fontSize: "0.875rem",
+                  fontWeight: "bold",
+                  gap: 1,
                 },
+              },
+            }}
+            transformOrigin={{ horizontal: "right", vertical: "top" }}
+            anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+          >
+            {/* PRINT */}
+            <MenuItem
+              onClick={() => {
+                setOpenPrintModal(true);
+                handleMenuClose();
               }}
             >
-              {isSelectionEnabled ? "Selection On" : "Select Rows"}
-            </Button>
-          )}
+              <ListItemIcon>
+                <Print fontSize="small" sx={{ color: "#ef7d14" }} />
+              </ListItemIcon>
+              <ListItemText>Print</ListItemText>
+            </MenuItem>
 
-          {/* EDIT QTY AND ADD ITEM RESTRICTED TO ADMIN/PRODUCTION */}
-          {canModify && (
-            <>
-              {/* REMOVED LOCK BUTTON STATE EXPRESSION / COMPLETELY HIDES WHEN EDITING */}
-              {isEditingQty ? (
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<Undo />}
-                  onClick={handleDiscard}
-                  size="small"
-                  sx={{
-                    borderRadius: 2,
-                    fontWeight: "bold",
-                    textTransform: "none",
-                    px: 3,
-                    flexShrink: 0,
-                  }}
-                >
-                  Cancel Edit
-                </Button>
-              ) : (
-                <Button
-                  variant="outlined"
-                  color="primary"
-                  startIcon={<EditNote />}
-                  onClick={() => setIsEditingQty(!isEditingQty)}
-                  size="small"
-                  sx={{
-                    borderRadius: 2,
-                    fontWeight: "bold",
-                    textTransform: "none",
-                    px: 3,
-                    flexShrink: 0,
-                  }}
-                >
-                  Edit Qty
-                </Button>
-              )}
-              <Button
-                variant="contained"
-                startIcon={<Add />}
-                onClick={() => setOpenAddModal(true)}
-                size="small"
-                disabled={isEditingQty} // Disable button add when edit qty is on to prevent conflicts
+            {/* VIEW REMARKS TOGGLE — shows/hides the Remarks column */}
+            <MenuItem
+              onClick={() => {
+                setShowRemarks((prev) => !prev);
+                handleMenuClose();
+              }}
+              sx={{ color: showRemarks ? "#ef7d14" : "text.primary" }}
+            >
+              <ListItemIcon>
+                {showRemarks ? (
+                  <VisibilityOff fontSize="small" sx={{ color: "#ef7d14" }} />
+                ) : (
+                  <Notes fontSize="small" sx={{ color: "#ef7d14" }} />
+                )}
+              </ListItemIcon>
+              <ListItemText>
+                {showRemarks ? "Hide Remarks" : "View Remarks"}
+              </ListItemText>
+            </MenuItem>
+
+            {/* MIN STOCK TOGGLE — shows/hides the Min Stock column next to Quantity */}
+            <MenuItem
+              onClick={() => {
+                setShowMinStock((prev) => !prev);
+                handleMenuClose();
+              }}
+              sx={{ color: showMinStock ? "#ef7d14" : "text.primary" }}
+            >
+              <ListItemIcon>
+                <Straighten fontSize="small" sx={{ color: "#ef7d14" }} />
+              </ListItemIcon>
+              <ListItemText>
+                {showMinStock ? "Hide Min Stock" : "Show Min Stock"}
+              </ListItemText>
+            </MenuItem>
+
+            {canModify && !isEditingQty && (
+              <MenuItem
+                onClick={() => {
+                  setIsSelectionEnabled(!isSelectionEnabled);
+                  if (isSelectionEnabled) setSelectedIds([]); // Clear selection when turning off
+                  handleMenuClose();
+                }}
                 sx={{
-                  borderRadius: 2,
-                  fontWeight: "bold",
-                  textTransform: "none",
-                  px: 3,
-                  flexShrink: 0,
+                  color: isSelectionEnabled ? "#ef7d14" : "text.primary",
                 }}
               >
-                Add Item
-              </Button>
-            </>
-          )}
+                <ListItemIcon>
+                  {isSelectionEnabled ? (
+                    <CheckCircleOutline
+                      fontSize="small"
+                      sx={{ color: "#ef7d14" }}
+                    />
+                  ) : (
+                    <CheckBoxOutlineBlank
+                      fontSize="small"
+                      sx={{ color: "#ef7d14" }}
+                    />
+                  )}
+                </ListItemIcon>
+                <ListItemText>
+                  {isSelectionEnabled ? "Selection On" : "Select Rows"}
+                </ListItemText>
+              </MenuItem>
+            )}
+
+            {canModify && <Divider sx={{ my: 0.5 }} />}
+
+            {/* EDIT QTY AND ADD ITEM RESTRICTED TO ADMIN/PRODUCTION */}
+            {canModify && (
+              <>
+                {/* REMOVED LOCK BUTTON STATE EXPRESSION / COMPLETELY HIDES WHEN EDITING */}
+                {isEditingQty ? (
+                  <MenuItem
+                    onClick={() => {
+                      handleDiscard();
+                      handleMenuClose();
+                    }}
+                    sx={{ color: "error.main" }}
+                  >
+                    <ListItemIcon>
+                      <Undo fontSize="small" color="error" />
+                    </ListItemIcon>
+                    <ListItemText>Cancel Edit</ListItemText>
+                  </MenuItem>
+                ) : (
+                  <MenuItem
+                    onClick={() => {
+                      setIsEditingQty(true);
+                      handleMenuClose();
+                    }}
+                  >
+                    <ListItemIcon>
+                      <EditNote fontSize="small" sx={{ color: "#ef7d14" }} />
+                    </ListItemIcon>
+                    <ListItemText>Edit Qty</ListItemText>
+                  </MenuItem>
+                )}
+                <MenuItem
+                  onClick={() => {
+                    setOpenAddModal(true);
+                    handleMenuClose();
+                  }}
+                  disabled={isEditingQty} // Disable button add when edit qty is on to prevent conflicts
+                  sx={{
+                    bgcolor: "#ef7d14",
+                    color: "#fff",
+                    "&:hover": { bgcolor: "#d66e0f" },
+                    "&.Mui-disabled": { opacity: 0.5, color: "#fff" },
+                  }}
+                >
+                  <ListItemIcon>
+                    <Add fontSize="small" sx={{ color: "#fff" }} />
+                  </ListItemIcon>
+                  <ListItemText>Add Item</ListItemText>
+                </MenuItem>
+              </>
+            )}
+          </Menu>
         </Stack>
       </Box>
 
@@ -659,6 +821,11 @@ export default function Inventory({ mode, user }) {
                 )}
                 <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
                 <TableCell sx={{ fontWeight: "bold" }}>Item Name</TableCell>
+
+                {/* NEW HEADERS: Brand & Supplier */}
+                <TableCell sx={{ fontWeight: "bold" }}>Brand</TableCell>
+                <TableCell sx={{ fontWeight: "bold" }}>Supplier</TableCell>
+
                 <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
                 <TableCell sx={{ fontWeight: "bold" }}>Unit</TableCell>
                 {canViewPrice && (
@@ -666,17 +833,97 @@ export default function Inventory({ mode, user }) {
                     Price
                   </TableCell>
                 )}
-                <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                <TableCell
+                  align="right"
+                  sx={{ fontWeight: "bold", pr: 2, minWidth: "100px" }}
+                >
                   Quantity
                 </TableCell>
+
+                {/* MIN STOCK HEADER — only visible when showMinStock is true */}
+                {showMinStock && (
+                  <TableCell
+                    align="right"
+                    sx={{
+                      fontWeight: "bold",
+                      minWidth: "100px",
+                      color: "#ef7d14",
+                    }}
+                  >
+                    Min Stock
+                  </TableCell>
+                )}
+
                 {isEditingQty && (
                   <TableCell align="center" sx={{ fontWeight: "bold" }}>
                     Adjustment
                   </TableCell>
                 )}
-                <TableCell align="center" sx={{ fontWeight: "bold" }}>
-                  Status
+
+                {/* STATUS COLUMN HEADER WITH VIEW TOGGLE BUTTON */}
+                <TableCell
+                  align="center"
+                  sx={{ fontWeight: "bold", minWidth: "160px" }}
+                >
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 1,
+                    }}
+                  >
+                    Status
+                    <Tooltip
+                      title={
+                        statusView === "badge"
+                          ? "Switch to bar chart view"
+                          : "Switch to badge view"
+                      }
+                    >
+                      <IconButton
+                        size="small"
+                        onClick={() =>
+                          setStatusView((v) =>
+                            v === "badge" ? "bar" : "badge",
+                          )
+                        }
+                        sx={{
+                          p: 0.4,
+                          borderRadius: 1,
+                          border: "1px solid",
+                          borderColor:
+                            statusView === "bar" ? "#ef7d14" : "divider",
+                          color:
+                            statusView === "bar" ? "#ef7d14" : "text.secondary",
+                          bgcolor:
+                            statusView === "bar"
+                              ? isDark
+                                ? "rgba(239,125,20,0.12)"
+                                : "rgba(239,125,20,0.08)"
+                              : "transparent",
+                          "&:hover": {
+                            borderColor: "#ef7d14",
+                            color: "#ef7d14",
+                            bgcolor: isDark
+                              ? "rgba(239,125,20,0.12)"
+                              : "rgba(239,125,20,0.08)",
+                          },
+                        }}
+                      >
+                        <BarChart sx={{ fontSize: 15 }} />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
                 </TableCell>
+
+                {/* NEW HEADER: Remarks — only visible when showRemarks is true */}
+                {showRemarks && (
+                  <TableCell sx={{ fontWeight: "bold", minWidth: "150px" }}>
+                    Remarks
+                  </TableCell>
+                )}
+
                 {/* ACTION COLUMN VISIBLE ONLY TO ADMIN/PRODUCTION */}
                 {canViewActionColumn && (
                   <TableCell align="right" sx={{ fontWeight: "bold" }}>
@@ -686,217 +933,294 @@ export default function Inventory({ mode, user }) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {paginatedData.map((row) => (
-                <TableRow
-                  key={row.id}
-                  hover
-                  selected={selectedIds.includes(row.id)}
-                >
-                  {/* SELECTION ROW CHECKBOX */}
-                  {canModify && isSelectionEnabled && (
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        checked={selectedIds.includes(row.id)}
-                        onChange={() => handleSelectRow(row.id)}
+              {paginatedData.map((row) => {
+                const currentMinStock = row.min_stock ?? row.minStock ?? 0;
+                return (
+                  <TableRow
+                    key={row.id}
+                    hover
+                    selected={selectedIds.includes(row.id)}
+                  >
+                    {/* SELECTION ROW CHECKBOX */}
+                    {canModify && isSelectionEnabled && (
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selectedIds.includes(row.id)}
+                          onChange={() => handleSelectRow(row.id)}
+                        />
+                      </TableCell>
+                    )}
+                    <TableCell>#{String(row.id).split(":")[0]}</TableCell>
+                    <TableCell
+                      sx={{
+                        maxWidth: "200px",
+                        whiteSpace: "normal",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      <Typography variant="body2" fontWeight="bold">
+                        {row.name}
+                      </Typography>
+                    </TableCell>
+
+                    {/* NEW CELL DATA: Brand & Supplier */}
+                    <TableCell>{row.brand || "—"}</TableCell>
+                    <TableCell>{row.supplier || "—"}</TableCell>
+
+                    <TableCell>
+                      <Chip
+                        label={row.category}
+                        size="small"
+                        variant="outlined"
                       />
                     </TableCell>
-                  )}
-                  <TableCell>#{String(row.id).split(":")[0]}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight="bold">
-                      {row.name}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={row.category}
-                      size="small"
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell>{row.uom}</TableCell>
-                  {canViewPrice && (
-                    <TableCell align="right">
-                      ₱
-                      {Number(row.price).toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                      })}
-                    </TableCell>
-                  )}
-                  <TableCell align="right">
-                    <TextField
-                      type="number"
-                      variant={isEditingQty ? "outlined" : "standard"}
-                      size="small"
-                      disabled={
-                        !isEditingQty ||
-                        (row.movement !== "" && row.movement !== null)
-                      }
-                      value={row.quantity}
-                      onKeyDown={(e) => {
-                        if (e.key === "." || e.key === "e") e.preventDefault();
-                      }}
-                      onChange={(e) =>
-                        handleQuantityChangeLocal(row.id, e.target.value)
-                      }
-                      InputProps={{
-                        disableUnderline: true,
-                        sx: {
-                          fontWeight: "bold",
-                          width: "80px",
-                          "& input": {
-                            textAlign: "right",
-                            paddingRight: "8px",
-                          },
-                        },
-                      }}
-                    />
-                  </TableCell>
-
-                  {/* Adjustment Input (Stock In/Out Functionality) */}
-                  {isEditingQty && (
-                    <TableCell align="center">
+                    <TableCell>{row.uom}</TableCell>
+                    {canViewPrice && (
+                      <TableCell align="right">
+                        ₱
+                        {Number(row.price).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                        })}
+                      </TableCell>
+                    )}
+                    <TableCell align="right" sx={{ pr: 2 }}>
                       <TextField
-                        placeholder="+/-"
-                        label={
-                          parseFloat(row.movement) > 0
-                            ? "Stock In"
-                            : parseFloat(row.movement) < 0
-                              ? "Stock Out"
-                              : "Adjustment"
-                        }
+                        type="number"
+                        variant={isEditingQty ? "outlined" : "standard"}
                         size="small"
-                        disabled={(() => {
-                          const original = originalData.find(
-                            (o) => o.id === row.id,
-                          );
-                          return (
-                            original &&
-                            row.quantity !== original.quantity &&
-                            (row.movement === "" || row.movement === null)
-                          );
-                        })()}
-                        value={row.movement || ""}
+                        disabled={
+                          !isEditingQty ||
+                          (row.movement !== "" && row.movement !== null)
+                        }
+                        value={row.quantity}
                         onKeyDown={(e) => {
                           if (e.key === "." || e.key === "e")
                             e.preventDefault();
                         }}
-                        onChange={(e) =>
-                          handleMovementChange(row.id, e.target.value)
-                        }
-                        sx={{
-                          "& .MuiOutlinedInput-root": {
-                            "& fieldset": {
-                              borderColor:
+                        onChange={(e) => {
+                          let val = e.target.value;
+                          // Capped quantity input parsing at 9,999,999
+                          if (val !== "" && parseFloat(val) > 9999999) {
+                            val = "9999999";
+                          }
+                          handleQuantityChangeLocal(row.id, val);
+                        }}
+                        InputProps={{
+                          disableUnderline: true,
+                          sx: {
+                            fontWeight: "bold",
+                            display: "flex",
+                            justifyContent: "flex-end",
+                            minWidth: "100px",
+                            "& input": {
+                              textAlign: "right",
+                              paddingRight: "8px",
+                              flexGrow: 1,
+                              width: `${Math.max(4, String(row.quantity).length) * 0.5}ch`,
+                            },
+                          },
+                        }}
+                      />
+                    </TableCell>
+
+                    {/* MIN STOCK CELL — only visible when showMinStock is true */}
+                    {showMinStock && (
+                      <TableCell align="right" sx={{ pr: 2 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: "bold",
+                            color:
+                              row.quantity <= currentMinStock
+                                ? "#ef7d14"
+                                : "text.secondary",
+                          }}
+                        >
+                          {currentMinStock}
+                        </Typography>
+                      </TableCell>
+                    )}
+
+                    {/* Adjustment Input (Stock In/Out Functionality) */}
+                    {isEditingQty && (
+                      <TableCell align="center">
+                        <TextField
+                          placeholder="+/-"
+                          label={
+                            parseFloat(row.movement) > 0
+                              ? "Stock In"
+                              : parseFloat(row.movement) < 0
+                                ? "Stock Out"
+                                : "Adjustment"
+                          }
+                          size="small"
+                          disabled={(() => {
+                            const original = originalData.find(
+                              (o) => o.id === row.id,
+                            );
+                            return (
+                              original &&
+                              row.quantity !== original.quantity &&
+                              (row.movement === "" || row.movement === null)
+                            );
+                          })()}
+                          value={row.movement || ""}
+                          onKeyDown={(e) => {
+                            if (e.key === "." || e.key === "e")
+                              e.preventDefault();
+                          }}
+                          onChange={(e) => {
+                            let val = e.target.value;
+                            // Safe check if a numeric string boundary exceeds upper limits
+                            if (val !== "" && val !== "-" && val !== "+") {
+                              const parsed = parseFloat(val);
+                              if (parsed > 9999999) val = "9999999";
+                              if (parsed < -9999999) val = "-9999999";
+                            }
+                            handleMovementChange(row.id, val);
+                          }}
+                          sx={{
+                            "& .MuiOutlinedInput-root": {
+                              "& fieldset": {
+                                borderColor:
+                                  parseFloat(row.movement) > 0
+                                    ? "#2ecc71"
+                                    : parseFloat(row.movement) < 0
+                                      ? "#e74c3c"
+                                      : "rgba(255, 255, 255, 0.23)",
+                              },
+                              "&:hover fieldset": {
+                                borderColor:
+                                  parseFloat(row.movement) > 0
+                                    ? "#2ecc71"
+                                    : parseFloat(row.movement) < 0
+                                      ? "#e74c3c"
+                                      : "rgba(255, 255, 255, 0.5)",
+                              },
+                              "&.Mui-focused fieldset": {
+                                borderColor:
+                                  parseFloat(row.movement) > 0
+                                    ? "#2ecc71"
+                                    : parseFloat(row.movement) < 0
+                                      ? "#e74c3c"
+                                      : "#f39c12",
+                              },
+                            },
+                            "& .MuiInputLabel-root": {
+                              color:
                                 parseFloat(row.movement) > 0
                                   ? "#2ecc71"
                                   : parseFloat(row.movement) < 0
                                     ? "#e74c3c"
-                                    : "rgba(255, 255, 255, 0.23)",
+                                    : "text.secondary",
                             },
-                            "&hover fieldset": {
-                              borderColor:
-                                parseFloat(row.movement) > 0
-                                  ? "#2ecc71"
-                                  : parseFloat(row.movement) < 0
-                                    ? "#e74c3c"
-                                    : "rgba(255, 255, 255, 0.5)",
-                            },
-                            "&.Mui-focused fieldset": {
-                              borderColor:
+                            "& .MuiInputLabel-root.Mui-focused": {
+                              color:
                                 parseFloat(row.movement) > 0
                                   ? "#2ecc71"
                                   : parseFloat(row.movement) < 0
                                     ? "#e74c3c"
                                     : "#f39c12",
                             },
-                          },
-                          "& .MuiInputLabel-root": {
-                            color:
-                              parseFloat(row.movement) > 0
-                                ? "#2ecc71"
-                                : parseFloat(row.movement) < 0
-                                  ? "#e74c3c"
-                                  : "text.secondary",
-                          },
-                          "& .MuiInputLabel-root.Mui-focused": {
-                            color:
-                              parseFloat(row.movement) > 0
-                                ? "#2ecc71"
-                                : parseFloat(row.movement) < 0
-                                  ? "#e74c3c"
-                                  : "#f39c12",
-                          },
-                        }}
-                        InputProps={{
-                          sx: {
-                            fontSize: "0.9rem",
-                            width: "120px",
+                          }}
+                          InputProps={{
+                            sx: {
+                              fontSize: "0.9rem",
+                              width: "120px",
+                              fontWeight: "bold",
+                              color: "text.primary",
+                            },
+                          }}
+                        />
+                      </TableCell>
+                    )}
+
+                    {/* STATUS CELL — toggles between badge and bar view */}
+                    <TableCell align="center">
+                      {statusView === "bar" ? (
+                        renderStatusBar(row)
+                      ) : (
+                        <Box
+                          sx={{
+                            display: "inline-block",
+                            px: 1.5,
+                            py: 0.5,
+                            borderRadius: 1.5,
+                            fontSize: "0.75rem",
                             fontWeight: "bold",
-                            color: "text.primary",
-                          },
-                        }}
-                      />
-                    </TableCell>
-                  )}
-
-                  <TableCell align="center">
-                    <Box
-                      sx={{
-                        display: "inline-block",
-                        px: 1.5,
-                        py: 0.5,
-                        borderRadius: 1.5,
-                        fontSize: "0.75rem",
-                        fontWeight: "bold",
-                        bgcolor:
-                          row.status === "In Stock"
-                            ? "rgba(46, 204, 113, 0.15)"
-                            : row.status === "Low Stock"
-                              ? "rgba(241, 145, 73, 0.15)"
-                              : "rgba(231, 76, 60, 0.15)",
-                        color:
-                          row.status === "In Stock"
-                            ? "#2ecc71"
-                            : row.status === "Low Stock"
-                              ? "#e67e22"
-                              : "#e74c3c",
-                      }}
-                    >
-                      {row.status}
-                    </Box>
-                  </TableCell>
-
-                  {/* ACTION BUTTONS RESTRICTED TO ADMIN/PRODUCTION - REMOVED REMOVE/DELETE ICON BUTTON */}
-                  {canViewActionColumn && (
-                    <TableCell align="right">
-                      <Stack
-                        direction="row"
-                        spacing={1}
-                        justifyContent="flex-end"
-                      >
-                        <IconButton
-                          size="small"
-                          color="info"
-                          onClick={() => {
-                            setSelectedItem({
-                              ...row,
-                              id: String(row.id).split(":")[0],
-                            });
-                            setOpenEditModal(true);
+                            bgcolor:
+                              row.status === "In Stock"
+                                ? "rgba(46, 204, 113, 0.15)"
+                                : row.status === "Low Stock"
+                                  ? "rgba(241, 145, 73, 0.15)"
+                                  : "rgba(231, 76, 60, 0.15)",
+                            color:
+                              row.status === "In Stock"
+                                ? "#2ecc71"
+                                : row.status === "Low Stock"
+                                  ? "#e67e22"
+                                  : "#e74c3c",
                           }}
                         >
-                          <Edit fontSize="inherit" />
-                        </IconButton>
-                      </Stack>
+                          {row.status}
+                        </Box>
+                      )}
                     </TableCell>
-                  )}
-                </TableRow>
-              ))}
+
+                    {/* NEW CELL DATA: Remarks — only visible when showRemarks is true */}
+                    {showRemarks && (
+                      <TableCell
+                        sx={{
+                          maxWidth: "250px",
+                          whiteSpace: "normal",
+                          wordBreak: "break-word",
+                          color: "text.secondary",
+                          fontSize: "0.85rem",
+                        }}
+                      >
+                        {row.remarks || "—"}
+                      </TableCell>
+                    )}
+
+                    {/* ACTION BUTTONS RESTRICTED TO ADMIN/PRODUCTION */}
+                    {canViewActionColumn && (
+                      <TableCell align="right">
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          justifyContent="flex-end"
+                        >
+                          <IconButton
+                            size="small"
+                            color="info"
+                            onClick={() => {
+                              setSelectedItem({
+                                ...row,
+                                id: String(row.id).split(":")[0],
+                              });
+                              setOpenEditModal(true);
+                            }}
+                          >
+                            <Edit fontSize="inherit" />
+                          </IconButton>
+                        </Stack>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })}
               {paginatedData.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={isEditingQty ? 10 : 9}
+                    colSpan={
+                      7 + // Binago mula 5 para isama ang 3 bagong columns (Brand, Supplier, Remarks) minus yung kailangang alignments
+                      (canModify && isSelectionEnabled ? 1 : 0) +
+                      (canViewPrice ? 1 : 0) +
+                      (isEditingQty ? 1 : 0) +
+                      (showRemarks ? 1 : 0) +
+                      (showMinStock ? 1 : 0) +
+                      (canViewActionColumn ? 1 : 0)
+                    }
                     align="center"
                     sx={{ py: 3 }}
                   >
@@ -917,6 +1241,7 @@ export default function Inventory({ mode, user }) {
           onRowsPerPageChange={handleChangeRowsPerPage}
         />
       </TableContainer>
+
       <AddInventoryModal
         open={openAddModal}
         userLevel={user?.user_level} // Use user_level from the user object
