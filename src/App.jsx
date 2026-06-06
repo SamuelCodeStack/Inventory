@@ -27,6 +27,7 @@ import AllActivityLogs from "./components/AllActivityLogs.jsx";
 import Dashboard from "./components/Dashboard.jsx"; // ADDED: Dashboard Import
 import Backup from "./components/Backup.jsx";
 import Profile from "./components/UserProfile.jsx"; // ADDED: Profile Import
+import Suppliers from "./components/Suppliers.jsx";
 
 function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
   const location = useLocation();
@@ -177,15 +178,15 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
                 <Inventory mode={mode} user={user} canEdit={canEditInventory} />
               }
             />
-            <Route
-              path="/purchase-order"
-              element={<PurchaseOrder mode={mode} user={user} />}
-            />
+
             <Route
               path="/raw-materials"
               element={<RawMaterials mode={mode} userLevel={user.user_level} />}
             />
-
+            <Route
+              path="/suppliers"
+              element={<Suppliers mode={mode} user={user} />}
+            />
             {/* Protected Routes based on user_level */}
             <Route
               path="/user-management"

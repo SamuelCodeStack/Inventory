@@ -1212,6 +1212,184 @@ app.post(
 );
 
 // ==========================================
+// 7. SUPPLIER ENDPOINTS
+// ==========================================
+
+// GET ALL SUPPLIERS — joins inventory to include item_name
+app.get("/api/suppliers", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT 
+        s.supplier_id,
+        s.item_id,
+        i.item_name,
+        s.supplier_name,
+        s.address,
+        s.contact_no,
+        s.other_details
+       FROM supplier s
+       LEFT JOIN inventory i ON s.item_id = i.item_id
+       ORDER BY s.supplier_id DESC`,
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Fetch suppliers error:", err);
+    res.status(500).json({ error: "Failed to fetch suppliers" });
+  }
+});
+
+// GET SINGLE SUPPLIER BY ID
+app.get("/api/suppliers/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      `SELECT 
+        s.supplier_id,
+        s.item_id,
+        i.item_name,
+        s.supplier_name,
+        s.address,
+        s.contact_no,
+        s.other_details
+       FROM supplier s
+       LEFT JOIN inventory i ON s.item_id = i.item_id
+       WHERE s.supplier_id = $1`,
+      [id],
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Supplier not found" });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Fetch supplier error:", err);
+    res.status(500).json({ error: "Failed to fetch supplier" });
+  }
+});
+
+// CREATE SUPPLIER
+app.post("/api/suppliers", async (req, res) => {
+  const { item_id, supplier_name, address, contact_no, other_details } =
+    req.body;
+
+  if (!supplier_name || !supplier_name.trim()) {
+    return res.status(400).json({ error: "Supplier name is required" });
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO supplier (item_id, supplier_name, address, contact_no, other_details)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [
+        item_id || null,
+        supplier_name.trim(),
+        address?.trim() || null,
+        contact_no?.trim() || null,
+        other_details?.trim() || null,
+      ],
+    );
+
+    await logActivity(
+      req,
+      "INSERT",
+      "supplier",
+      result.rows[0].supplier_id,
+      `Added new supplier: ${supplier_name.trim()}`,
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error("Create supplier error:", err);
+    res.status(500).json({ error: "Failed to create supplier" });
+  }
+});
+
+// UPDATE SUPPLIER
+app.put("/api/suppliers/:id", async (req, res) => {
+  const { id } = req.params;
+  const { item_id, supplier_name, address, contact_no, other_details } =
+    req.body;
+
+  if (!supplier_name || !supplier_name.trim()) {
+    return res.status(400).json({ error: "Supplier name is required" });
+  }
+
+  try {
+    // Check if supplier exists
+    const existing = await pool.query(
+      "SELECT supplier_name FROM supplier WHERE supplier_id = $1",
+      [id],
+    );
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: "Supplier not found" });
+    }
+
+    const result = await pool.query(
+      `UPDATE supplier SET
+        item_id = $1,
+        supplier_name = $2,
+        address = $3,
+        contact_no = $4,
+        other_details = $5
+       WHERE supplier_id = $6
+       RETURNING *`,
+      [
+        item_id || null,
+        supplier_name.trim(),
+        address?.trim() || null,
+        contact_no?.trim() || null,
+        other_details?.trim() || null,
+        id,
+      ],
+    );
+
+    await logActivity(
+      req,
+      "UPDATE",
+      "supplier",
+      id,
+      `Updated supplier: ${supplier_name.trim()}`,
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Update supplier error:", err);
+    res.status(500).json({ error: "Failed to update supplier" });
+  }
+});
+
+// DELETE SINGLE SUPPLIER
+app.delete("/api/suppliers/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Get name before deletion for logging
+    const info = await pool.query(
+      "SELECT supplier_name FROM supplier WHERE supplier_id = $1",
+      [id],
+    );
+    if (info.rows.length === 0) {
+      return res.status(404).json({ error: "Supplier not found" });
+    }
+    const supplierName = info.rows[0].supplier_name;
+
+    await pool.query("DELETE FROM supplier WHERE supplier_id = $1", [id]);
+
+    await logActivity(
+      req,
+      "DELETE",
+      "supplier",
+      id,
+      `Deleted supplier: ${supplierName}`,
+    );
+
+    res.json({ message: "Supplier deleted successfully" });
+  } catch (err) {
+    console.error("Delete supplier error:", err);
+    res.status(500).json({ error: "Failed to delete supplier" });
+  }
+});
+
+// ==========================================
 // AUTOMATIC LOG CLEANUP
 // Runs every minute for testing purposes
 // ==========================================

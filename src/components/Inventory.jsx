@@ -19,8 +19,8 @@ import {
   Alert,
   TablePagination,
   MenuItem,
-  Grid, // Added for responsiveness
-  Checkbox, // Added for selection
+  Grid,
+  Checkbox,
   Menu,
   Divider,
   ListItemIcon,
@@ -37,16 +37,16 @@ import {
   EditNote,
   Print,
   FilterListOff,
-  Undo, // Added for Discard icon consistency
-  CheckCircleOutline, // Added for Selection toggle on
-  RadioButtonUnchecked, // Added for Selection toggle off
-  CheckBoxOutlineBlank, // Imported for the custom look
+  Undo,
+  CheckCircleOutline,
+  RadioButtonUnchecked,
+  CheckBoxOutlineBlank,
   KeyboardArrowDown,
   KeyboardArrowUp,
   BarChart,
   Notes,
   VisibilityOff,
-  Straighten, // Icon for Min Stock Level
+  Straighten,
 } from "@mui/icons-material";
 import AddInventoryModal from "./AddInventoryModal";
 import EditInventoryModal from "./EditInventoryModal";
@@ -60,17 +60,14 @@ export default function Inventory({ mode, user }) {
   const [openEditModal, setOpenEditModal] = useState(false);
   const [openPrintModal, setOpenPrintModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [selectedIds, setSelectedIds] = useState([]); // Track selected rows for deletion
-  const [isSelectionEnabled, setIsSelectionEnabled] = useState(false); // Track checkbox visibility state
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [isSelectionEnabled, setIsSelectionEnabled] = useState(false);
 
   // --- DROPDOWN MENU STATE ---
   const [anchorEl, setAnchorEl] = useState(null);
   const isMenuOpen = Boolean(anchorEl);
   const handleMenuOpen = (e) => setAnchorEl(e.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);
-
-  // --- STATUS VIEW TOGGLE: 'badge' | 'bar' ---
-  const [statusView, setStatusView] = useState("badge");
 
   // --- REMARKS COLUMN VISIBILITY TOGGLE ---
   const [showRemarks, setShowRemarks] = useState(false);
@@ -860,61 +857,12 @@ export default function Inventory({ mode, user }) {
                   </TableCell>
                 )}
 
-                {/* STATUS COLUMN HEADER WITH VIEW TOGGLE BUTTON */}
+                {/* STATUS COLUMN HEADER — no toggle, always shows bar */}
                 <TableCell
                   align="center"
                   sx={{ fontWeight: "bold", minWidth: "160px" }}
                 >
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 1,
-                    }}
-                  >
-                    Status
-                    <Tooltip
-                      title={
-                        statusView === "badge"
-                          ? "Switch to bar chart view"
-                          : "Switch to badge view"
-                      }
-                    >
-                      <IconButton
-                        size="small"
-                        onClick={() =>
-                          setStatusView((v) =>
-                            v === "badge" ? "bar" : "badge",
-                          )
-                        }
-                        sx={{
-                          p: 0.4,
-                          borderRadius: 1,
-                          border: "1px solid",
-                          borderColor:
-                            statusView === "bar" ? "#ef7d14" : "divider",
-                          color:
-                            statusView === "bar" ? "#ef7d14" : "text.secondary",
-                          bgcolor:
-                            statusView === "bar"
-                              ? isDark
-                                ? "rgba(239,125,20,0.12)"
-                                : "rgba(239,125,20,0.08)"
-                              : "transparent",
-                          "&:hover": {
-                            borderColor: "#ef7d14",
-                            color: "#ef7d14",
-                            bgcolor: isDark
-                              ? "rgba(239,125,20,0.12)"
-                              : "rgba(239,125,20,0.08)",
-                          },
-                        }}
-                      >
-                        <BarChart sx={{ fontSize: 15 }} />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
+                  Status
                 </TableCell>
 
                 {/* NEW HEADER: Remarks — only visible when showRemarks is true */}
@@ -1135,37 +1083,8 @@ export default function Inventory({ mode, user }) {
                       </TableCell>
                     )}
 
-                    {/* STATUS CELL — toggles between badge and bar view */}
-                    <TableCell align="center">
-                      {statusView === "bar" ? (
-                        renderStatusBar(row)
-                      ) : (
-                        <Box
-                          sx={{
-                            display: "inline-block",
-                            px: 1.5,
-                            py: 0.5,
-                            borderRadius: 1.5,
-                            fontSize: "0.75rem",
-                            fontWeight: "bold",
-                            bgcolor:
-                              row.status === "In Stock"
-                                ? "rgba(46, 204, 113, 0.15)"
-                                : row.status === "Low Stock"
-                                  ? "rgba(241, 145, 73, 0.15)"
-                                  : "rgba(231, 76, 60, 0.15)",
-                            color:
-                              row.status === "In Stock"
-                                ? "#2ecc71"
-                                : row.status === "Low Stock"
-                                  ? "#e67e22"
-                                  : "#e74c3c",
-                          }}
-                        >
-                          {row.status}
-                        </Box>
-                      )}
-                    </TableCell>
+                    {/* STATUS CELL — always renders bar chart view */}
+                    <TableCell align="center">{renderStatusBar(row)}</TableCell>
 
                     {/* NEW CELL DATA: Remarks — only visible when showRemarks is true */}
                     {showRemarks && (

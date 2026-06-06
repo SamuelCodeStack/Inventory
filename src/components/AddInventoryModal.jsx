@@ -20,20 +20,24 @@ export default function AddInventoryModal({
   open,
   handleClose,
   onSaveSuccess,
-  userLevel, // Added userLevel prop
+  userLevel,
 }) {
   const emptyRow = {
     name: "",
     category: "",
     uom: "",
     quantity: "",
-    price: String(userLevel) === "3" ? "0.00" : "", // Default to 0.00 if Production
+    price: String(userLevel) === "3" ? "0.00" : "",
     minStock: "",
+    brand: "",
+    supplier_id: "",
   };
   const [items, setItems] = useState([emptyRow]);
   const [loading, setLoading] = useState(false);
   // State added to store existing inventory item names fetched from the server
   const [existingNames, setExistingNames] = useState([]);
+  // Suppliers list fetched from the server for the dropdown
+  const [suppliers, setSuppliers] = useState([]);
 
   // Fetch existing inventory data to run accurate duplication checks
   useEffect(() => {
@@ -42,9 +46,7 @@ export default function AddInventoryModal({
         try {
           const response = await fetch(
             `${import.meta.env.VITE_API_URL}/inventory`,
-            {
-              credentials: "include",
-            },
+            { credentials: "include" },
           );
           if (response.ok) {
             const data = await response.json();
@@ -57,6 +59,27 @@ export default function AddInventoryModal({
         }
       };
       fetchExistingInventory();
+    }
+  }, [open]);
+
+  // Fetch suppliers for the supplier dropdown
+  useEffect(() => {
+    if (open) {
+      const fetchSuppliers = async () => {
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_API_URL}/suppliers`,
+            { credentials: "include" },
+          );
+          if (response.ok) {
+            const data = await response.json();
+            setSuppliers(data);
+          }
+        } catch (error) {
+          console.error("Failed to fetch suppliers:", error);
+        }
+      };
+      fetchSuppliers();
     }
   }, [open]);
 
@@ -113,7 +136,7 @@ export default function AddInventoryModal({
     const newItems = [...items];
 
     // Validate and clean values based on datatype limits
-    if (field === "name") {
+    if (field === "name" || field === "brand") {
       newItems[index][field] = value.slice(0, 100); // VARCHAR(100)
     } else if (field === "quantity" || field === "minStock") {
       if (value === "") {
@@ -142,9 +165,7 @@ export default function AddInventoryModal({
     setLoading(true);
     try {
       const response = await fetch(
-        // `http://localhost:3000/api/inventory/bulk-add`,
         `${import.meta.env.VITE_API_URL}/inventory/bulk-add`,
-
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -164,6 +185,7 @@ export default function AddInventoryModal({
       setLoading(false);
     }
   };
+
   return (
     <Modal open={open} onClose={handleClose}>
       <Box
@@ -203,7 +225,8 @@ export default function AddInventoryModal({
             return (
               <Box key={index}>
                 <Grid container spacing={2} alignItems="flex-end">
-                  {/* --- PRIMARY focus ROW: WHAT IS THE ITEM? --- */}
+                  {/* --- ROW 1: ITEM NAME + CATEGORY --- */}
+
                   {/* ITEM NAME */}
                   <Grid item xs={12} md={8}>
                     <Typography
@@ -221,7 +244,7 @@ export default function AddInventoryModal({
                       error={
                         (!item.name && item.name !== "") ||
                         validationStatus.exists
-                      } // Show red if user touched and left empty or if duplicate error registers
+                      }
                       helperText={validationStatus.message}
                       inputProps={{ maxLength: 100 }} // VARCHAR(100) limit
                       onChange={(e) =>
@@ -258,7 +281,67 @@ export default function AddInventoryModal({
                     </TextField>
                   </Grid>
 
-                  {/* --- SECONDARY Focus ROW: METRICS AND LOGISTICS --- */}
+                  {/* --- ROW 2: BRAND + SUPPLIER — SUPPLIER only visible when category is Trading --- */}
+
+                  {/* BRAND */}
+                  <Grid item xs={12} md={item.category === "Trading" ? 6 : 12}>
+                    <Typography
+                      variant="caption"
+                      fontWeight="bold"
+                      sx={{ mb: 1, display: "block", color: "text.secondary" }}
+                    >
+                      BRAND
+                    </Typography>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder="e.g. Samsung, Nike..."
+                      value={item.brand}
+                      inputProps={{ maxLength: 100 }}
+                      onChange={(e) =>
+                        handleChange(index, "brand", e.target.value)
+                      }
+                    />
+                  </Grid>
+
+                  {/* SUPPLIER — only visible when category is Trading */}
+                  {item.category === "Trading" && (
+                    <Grid item xs={12} md={6}>
+                      <Typography
+                        variant="caption"
+                        fontWeight="bold"
+                        sx={{
+                          mb: 1,
+                          display: "block",
+                          color: "text.secondary",
+                        }}
+                      >
+                        SUPPLIER
+                      </Typography>
+                      <TextField
+                        select
+                        fullWidth
+                        size="small"
+                        value={item.supplier_id}
+                        onChange={(e) =>
+                          handleChange(index, "supplier_id", e.target.value)
+                        }
+                        SelectProps={{
+                          displayEmpty: true,
+                        }}
+                      >
+                        <MenuItem value="">— None —</MenuItem>
+                        {suppliers.map((s) => (
+                          <MenuItem key={s.supplier_id} value={s.supplier_id}>
+                            {s.supplier_name}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
+                  )}
+
+                  {/* --- ROW 3: UNIT + PRICE + QTY + MIN + DELETE --- */}
+
                   {/* UNIT */}
                   <Grid item xs={6} md={3}>
                     <Typography
@@ -286,7 +369,7 @@ export default function AddInventoryModal({
                     </TextField>
                   </Grid>
 
-                  {/* PRICE */}
+                  {/* PRICE — hidden for Production (userLevel 3) */}
                   {String(userLevel) !== "3" && (
                     <Grid item xs={6} md={3}>
                       <Typography
@@ -316,7 +399,7 @@ export default function AddInventoryModal({
                   )}
 
                   {/* QTY */}
-                  <Grid item xs={6} md={3}>
+                  <Grid item xs={6} md={String(userLevel) === "3" ? 3 : 2}>
                     <Typography
                       variant="caption"
                       fontWeight="bold"
@@ -338,19 +421,7 @@ export default function AddInventoryModal({
                   </Grid>
 
                   {/* MIN STOCK */}
-                  <Grid
-                    item
-                    xs={6}
-                    md={
-                      items.length > 1
-                        ? String(userLevel) === "3"
-                          ? 2
-                          : 2
-                        : String(userLevel) === "3"
-                          ? 3
-                          : 3
-                    }
-                  >
+                  <Grid item xs={6} md={String(userLevel) === "3" ? 3 : 2}>
                     <Typography
                       variant="caption"
                       fontWeight="bold"
@@ -371,7 +442,7 @@ export default function AddInventoryModal({
                     />
                   </Grid>
 
-                  {/* DELETE ACTION */}
+                  {/* DELETE ROW BUTTON */}
                   {items.length > 1 && (
                     <Grid
                       item
