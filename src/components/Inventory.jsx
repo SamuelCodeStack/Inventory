@@ -10,7 +10,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Chip,
   IconButton,
   Stack,
   TextField,
@@ -25,6 +24,7 @@ import {
   Divider,
   ListItemIcon,
   ListItemText,
+  Collapse,
   Tooltip,
 } from "@mui/material";
 import {
@@ -33,24 +33,44 @@ import {
   Delete,
   Search,
   Save,
-  RestartAlt,
   EditNote,
   Print,
   FilterListOff,
   Undo,
   CheckCircleOutline,
-  RadioButtonUnchecked,
   CheckBoxOutlineBlank,
   KeyboardArrowDown,
   KeyboardArrowUp,
-  BarChart,
   Notes,
   VisibilityOff,
   Straighten,
+  LocalOffer,
+  AddComment,
+  Send,
+  Cancel,
+  Sort,
 } from "@mui/icons-material";
 import AddInventoryModal from "./AddInventoryModal";
 import EditInventoryModal from "./EditInventoryModal";
 import PrintInventoryModal from "./PrintInventoryModal";
+import BrandModal from "./BrandModal";
+
+function getContrastText(hex) {
+  if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return "#ffffff";
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.55 ? "#1a1a2e" : "#ffffff";
+}
+
+function hexToRgba(hex, alpha = 0.07) {
+  if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return "transparent";
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 export default function Inventory({ mode, user }) {
   const [inventoryData, setInventoryData] = useState([]);
@@ -59,26 +79,31 @@ export default function Inventory({ mode, user }) {
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditModal, setOpenEditModal] = useState(false);
   const [openPrintModal, setOpenPrintModal] = useState(false);
+  const [openBrandModal, setOpenBrandModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [isSelectionEnabled, setIsSelectionEnabled] = useState(false);
 
-  // --- DROPDOWN MENU STATE ---
+  const [groupByBrand, setGroupByBrand] = useState(false);
+  const [brandColorMap, setBrandColorMap] = useState({});
+
   const [anchorEl, setAnchorEl] = useState(null);
   const isMenuOpen = Boolean(anchorEl);
   const handleMenuOpen = (e) => setAnchorEl(e.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);
 
-  // --- REMARKS COLUMN VISIBILITY TOGGLE ---
   const [showRemarks, setShowRemarks] = useState(false);
-
-  // --- MIN STOCK COLUMN VISIBILITY TOGGLE ---
   const [showMinStock, setShowMinStock] = useState(false);
 
-  // --- FILTER STATES ---
+  const [activeRemarkRowId, setActiveRemarkRowId] = useState(null);
+  const [remarkInputValue, setRemarkInputValue] = useState("");
+  const [savingRemark, setSavingRemark] = useState(false);
+  const [deletingRemarkId, setDeletingRemarkId] = useState(null);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [brandFilter, setBrandFilter] = useState("All");
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
@@ -90,8 +115,6 @@ export default function Inventory({ mode, user }) {
   });
   const isDark = mode === "dark";
 
-  // --- ROLE CONSTANTS ---
-  // Updated roles: ADMIN (0) and PRODUCTION (2) can do everything. OFFICE (1) and VIEW (3) only see.
   const canModify =
     user?.user_level === 0 ||
     user?.user_level === "0" ||
@@ -112,7 +135,6 @@ export default function Inventory({ mode, user }) {
     user?.user_level === 3 ||
     user?.user_level === "3";
 
-  // Logic to hide price for user level 3 (Production) and level 4
   const canViewPrice =
     user?.user_level !== 3 &&
     user?.user_level !== "3" &&
@@ -122,12 +144,28 @@ export default function Inventory({ mode, user }) {
   const showMessage = (msg, sev = "success") =>
     setSnackbar({ open: true, message: msg, severity: sev });
 
+  const fetchBrands = async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/brands`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const map = {};
+        data.forEach((b) => {
+          if (b.brand_name?.trim()) {
+            map[b.brand_name.trim()] = b.brand_color || "#1565c0";
+          }
+        });
+        setBrandColorMap(map);
+      }
+    } catch (e) {
+      console.error("Failed to fetch brand colors", e);
+    }
+  };
+
   const fetchInventory = async () => {
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/inventory`);
-      // const response = await fetch("http://localhost:3000/api/inventory");
       const data = await response.json();
-      // Initialize movement value as empty string for each item
       const initializedData = data.map((item) => ({ ...item, movement: "" }));
       setInventoryData(initializedData);
       setOriginalData(JSON.parse(JSON.stringify(initializedData)));
@@ -138,9 +176,9 @@ export default function Inventory({ mode, user }) {
 
   useEffect(() => {
     fetchInventory();
+    fetchBrands();
   }, []);
 
-  // --- FILTER LOGIC ---
   const filteredData = inventoryData.filter((item) => {
     const matchesSearch =
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -149,23 +187,40 @@ export default function Inventory({ mode, user }) {
       categoryFilter === "All" || item.category === categoryFilter;
     const matchesStatus =
       statusFilter === "All" || item.status === statusFilter;
-
-    return matchesSearch && matchesCategory && matchesStatus;
+    const matchesBrand =
+      brandFilter === "All" || item.brand?.trim() === brandFilter;
+    return matchesSearch && matchesCategory && matchesStatus && matchesBrand;
   });
+
+  const getGroupedData = (data) => {
+    const groups = {};
+    data.forEach((item) => {
+      const brandKey = item.brand?.trim();
+      if (!brandKey) return; // Laktawan ang item kapag walang brand o empty string
+
+      if (!groups[brandKey]) groups[brandKey] = [];
+      groups[brandKey].push(item);
+    });
+    return Object.entries(groups)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([brand, items]) => ({ brand, items }));
+  };
 
   const paginatedData = filteredData.slice(
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage,
   );
 
+  const groupedPaginatedData = getGroupedData(paginatedData);
+
   const handleResetFilters = () => {
     setSearchQuery("");
     setCategoryFilter("All");
     setStatusFilter("All");
+    setBrandFilter("All");
     setPage(0);
   };
 
-  // Pagination Handlers
   const handleChangePage = (event, newPage) => setPage(newPage);
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
@@ -180,7 +235,6 @@ export default function Inventory({ mode, user }) {
   });
 
   const handleQuantityChangeLocal = (id, newQuantity) => {
-    // Math.max(0, ...) ensures result is never negative, parseInt ensures whole number
     const qty = Math.max(0, parseInt(newQuantity) || 0);
     setInventoryData((prev) =>
       prev.map((item) => {
@@ -199,32 +253,24 @@ export default function Inventory({ mode, user }) {
     );
   };
 
-  // Logic for the Stock In/Out Input
   const handleMovementChange = (id, value) => {
-    // Allow only numbers and the minus sign
     if (/[^-0-9]/.test(value) && value !== "") return;
-
     setInventoryData((prev) =>
       prev.map((item) => {
         if (item.id === id) {
           const movementVal = value === "-" ? "-" : parseInt(value) || 0;
           const originalItem = originalData.find((o) => o.id === id);
           const baseQty = originalItem ? originalItem.quantity : item.quantity;
-
           const finalMovement = value === "-" ? 0 : movementVal;
           const newQty = baseQty + finalMovement;
-
           const threshold = item.minStock || 10;
-          // Ensure newQty result doesn't go below 0
           const clampedQty = newQty >= 0 ? newQty : 0;
-
           let newStatus =
             clampedQty === 0
               ? "Out of Stock"
               : clampedQty <= threshold
                 ? "Low Stock"
                 : "In Stock";
-
           return {
             ...item,
             movement: value,
@@ -239,7 +285,7 @@ export default function Inventory({ mode, user }) {
 
   const handleDiscard = () => {
     setInventoryData(JSON.parse(JSON.stringify(originalData)));
-    setIsEditingQty(false); // This locks the quantity fields
+    setIsEditingQty(false);
     showMessage("Changes discarded", "info");
   };
 
@@ -255,9 +301,7 @@ export default function Inventory({ mode, user }) {
           return {
             id: String(item.id).split(":")[0],
             quantity: item.quantity,
-            // type 1 for direct edit, 2 for adjustment (stock in/out)
             update_type: isAdjustment ? 2 : 1,
-            // Changed key to 'adjustment' to match common backend expectations for logging
             adjustment: isAdjustment ? item.movement : null,
             movement_value: isAdjustment ? item.movement : null,
           };
@@ -265,7 +309,6 @@ export default function Inventory({ mode, user }) {
     };
     try {
       const response = await fetch(
-        // `http://localhost:3000/api/inventory/bulk`,
         `${import.meta.env.VITE_API_URL}/inventory/bulk`,
         {
           method: "PATCH",
@@ -289,12 +332,8 @@ export default function Inventory({ mode, user }) {
     if (!window.confirm(`Delete item #${cleanId}?`)) return;
     try {
       const res = await fetch(
-        // `http://localhost:3000/api/inventory/${cleanId}`,
         `${import.meta.env.VITE_API_URL}/inventory/${cleanId}`,
-        {
-          method: "DELETE",
-          credentials: "include", // Required to send session cookies for activity logs
-        },
+        { method: "DELETE", credentials: "include" },
       );
       if (res.ok) {
         setInventoryData((prev) => prev.filter((item) => item.id !== id));
@@ -308,7 +347,6 @@ export default function Inventory({ mode, user }) {
     }
   };
 
-  // --- NEW HANDLERS FOR SELECTION & BULK DELETION ---
   const handleSelectRow = (id) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
@@ -329,26 +367,19 @@ export default function Inventory({ mode, user }) {
     if (selectedIds.length === 0) return;
     if (!window.confirm(`Delete ${selectedIds.length} selected item(s)?`))
       return;
-
     let successCount = 0;
     for (const id of selectedIds) {
       const cleanId = String(id).split(":")[0];
       try {
         const res = await fetch(
           `${import.meta.env.VITE_API_URL}/inventory/${cleanId}`,
-          {
-            method: "DELETE",
-            credentials: "include",
-          },
+          { method: "DELETE", credentials: "include" },
         );
-        if (res.ok) {
-          successCount++;
-        }
+        if (res.ok) successCount++;
       } catch (e) {
         console.error("Failed to delete item " + cleanId, e);
       }
     }
-
     if (successCount > 0) {
       setInventoryData((prev) =>
         prev.filter((item) => !selectedIds.includes(item.id)),
@@ -360,28 +391,91 @@ export default function Inventory({ mode, user }) {
     setSelectedIds([]);
   };
 
-  // --- STATUS BAR RENDERER ---
-  // Calculates a percentage from quantity vs minStock and renders a colored progress bar
+  const handleToggleRemarkInput = (rowId, currentRemark = "") => {
+    if (activeRemarkRowId === rowId) {
+      setActiveRemarkRowId(null);
+      setRemarkInputValue("");
+    } else {
+      setActiveRemarkRowId(rowId);
+      setRemarkInputValue(currentRemark);
+    }
+  };
+
+  const handleSaveRemark = async (itemId) => {
+    if (!remarkInputValue.trim()) {
+      showMessage("Remarks cannot be empty", "warning");
+      return;
+    }
+    try {
+      setSavingRemark(true);
+      const cleanId = String(itemId).split(":")[0];
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/inventory/${cleanId}/remarks`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ remarks: remarkInputValue.trim() }),
+        },
+      );
+      if (res.ok) {
+        showMessage("Remark saved successfully", "success");
+        setActiveRemarkRowId(null);
+        setRemarkInputValue("");
+        fetchInventory();
+      } else {
+        showMessage("Failed to save remark", "error");
+      }
+    } catch (e) {
+      showMessage("Network error saving remark", "error");
+    } finally {
+      setSavingRemark(false);
+    }
+  };
+
+  const handleDeleteRemark = async (itemId) => {
+    if (!window.confirm("Clear this remark?")) return;
+    try {
+      setDeletingRemarkId(itemId);
+      const cleanId = String(itemId).split(":")[0];
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/inventory/${cleanId}/remarks`,
+        { method: "DELETE", credentials: "include" },
+      );
+      if (res.ok) {
+        showMessage("Remark cleared", "info");
+        fetchInventory();
+      } else {
+        showMessage("Failed to clear remark", "error");
+      }
+    } catch (e) {
+      showMessage("Network error clearing remark", "error");
+    } finally {
+      setDeletingRemarkId(null);
+    }
+  };
+
+  const getStatusColor = (status) => {
+    if (status === "Out of Stock") return "#e74c3c";
+    if (status === "Low Stock") return "#e67e22";
+    return "inherit";
+  };
+
   const renderStatusBar = (row) => {
     const minStock = row.min_stock ?? row.minStock ?? 0;
     const qty = row.quantity ?? 0;
-
-    // Determine bar color and label based on status
     const barColor =
       row.status === "In Stock"
         ? "#2ecc71"
         : row.status === "Low Stock"
           ? "#e67e22"
           : "#e74c3c";
-
     const bgColor =
       row.status === "In Stock"
         ? "rgba(46, 204, 113, 0.15)"
         : row.status === "Low Stock"
           ? "rgba(241, 145, 73, 0.15)"
           : "rgba(231, 76, 60, 0.15)";
-
-    // Calculate percentage: cap at 100%, use minStock * 2 as "full" threshold
     const maxRef = minStock > 0 ? minStock * 2 : 100;
     const pct = qty <= 0 ? 0 : Math.min(Math.round((qty / maxRef) * 100), 100);
 
@@ -431,10 +525,423 @@ export default function Inventory({ mode, user }) {
     );
   };
 
+  const totalColumns =
+    7 +
+    (canModify && isSelectionEnabled ? 1 : 0) +
+    (canViewPrice ? 1 : 0) +
+    (isEditingQty ? 1 : 0) +
+    (showRemarks ? 1 : 0) +
+    (showMinStock ? 1 : 0) +
+    (canViewActionColumn ? 1 : 0);
+
+  const renderRow = (row, brandColor = null) => {
+    const currentMinStock = row.min_stock ?? row.minStock ?? 0;
+    const statusColor = getStatusColor(row.status);
+    const isRemarkOpen = activeRemarkRowId === row.id;
+
+    return (
+      <TableRow
+        key={row.id}
+        hover
+        selected={selectedIds.includes(row.id)}
+        sx={{
+          "& .MuiTableCell-root": { color: statusColor },
+          ...(brandColor && {
+            borderLeft: `4px solid ${brandColor}`,
+            "&:hover td": { bgcolor: hexToRgba(brandColor, 0.08) },
+          }),
+        }}
+      >
+        {canModify && isSelectionEnabled && (
+          <TableCell padding="checkbox">
+            <Checkbox
+              checked={selectedIds.includes(row.id)}
+              onChange={() => handleSelectRow(row.id)}
+            />
+          </TableCell>
+        )}
+
+        <TableCell>#{String(row.id).split(":")[0]}</TableCell>
+
+        <TableCell
+          sx={{
+            maxWidth: "200px",
+            whiteSpace: "normal",
+            wordBreak: "break-word",
+          }}
+        >
+          <Typography
+            variant="body2"
+            fontWeight="bold"
+            sx={{ color: statusColor }}
+          >
+            {row.name}
+          </Typography>
+        </TableCell>
+
+        <TableCell>
+          {row.brand?.trim() ? (
+            <Stack direction="row" alignItems="center" spacing={0.8}>
+              <Box
+                sx={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: "50%",
+                  flexShrink: 0,
+                  bgcolor: brandColorMap[row.brand.trim()] || "#9e9e9e",
+                  border: "1.5px solid",
+                  borderColor: isDark
+                    ? "rgba(255,255,255,0.2)"
+                    : "rgba(0,0,0,0.15)",
+                }}
+              />
+              <Typography variant="body2" sx={{ color: statusColor }}>
+                {row.brand}
+              </Typography>
+            </Stack>
+          ) : (
+            <Typography variant="body2" sx={{ color: "text.disabled" }}>
+              —
+            </Typography>
+          )}
+        </TableCell>
+
+        <TableCell>{row.supplier || "—"}</TableCell>
+        <TableCell>{row.category}</TableCell>
+        <TableCell>{row.uom}</TableCell>
+
+        {canViewPrice && (
+          <TableCell align="right">
+            ₱
+            {Number(row.price).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+            })}
+          </TableCell>
+        )}
+
+        <TableCell align="right" sx={{ pr: 2 }}>
+          {/*
+            FIX: disableUnderline moved from InputProps → slotProps.input
+            to prevent React "unknown DOM prop" warning in MUI v6.
+          */}
+          <TextField
+            type="number"
+            variant={isEditingQty ? "outlined" : "standard"}
+            size="small"
+            disabled={
+              !isEditingQty || (row.movement !== "" && row.movement !== null)
+            }
+            value={row.quantity}
+            onKeyDown={(e) => {
+              if (e.key === "." || e.key === "e") e.preventDefault();
+            }}
+            onChange={(e) => {
+              let val = e.target.value;
+              if (val !== "" && parseFloat(val) > 9999999) val = "9999999";
+              handleQuantityChangeLocal(row.id, val);
+            }}
+            slotProps={{
+              input: {
+                disableUnderline: true,
+                sx: {
+                  fontWeight: "bold",
+                  color: statusColor,
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  minWidth: "100px",
+                  "& input": {
+                    textAlign: "right",
+                    paddingRight: "8px",
+                    flexGrow: 1,
+                    color: statusColor,
+                    width: `${Math.max(4, String(row.quantity).length) * 0.5}ch`,
+                  },
+                },
+              },
+            }}
+          />
+        </TableCell>
+
+        {showMinStock && (
+          <TableCell align="right" sx={{ pr: 2 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: "bold",
+                color:
+                  row.quantity <= currentMinStock
+                    ? "#ef7d14"
+                    : "text.secondary",
+              }}
+            >
+              {currentMinStock}
+            </Typography>
+          </TableCell>
+        )}
+
+        {isEditingQty && (
+          <TableCell align="center">
+            <TextField
+              placeholder="+/-"
+              label={
+                parseFloat(row.movement) > 0
+                  ? "Stock In"
+                  : parseFloat(row.movement) < 0
+                    ? "Stock Out"
+                    : "Adjustment"
+              }
+              size="small"
+              disabled={(() => {
+                const original = originalData.find((o) => o.id === row.id);
+                return (
+                  original &&
+                  row.quantity !== original.quantity &&
+                  (row.movement === "" || row.movement === null)
+                );
+              })()}
+              value={row.movement || ""}
+              onKeyDown={(e) => {
+                if (e.key === "." || e.key === "e") e.preventDefault();
+              }}
+              onChange={(e) => {
+                let val = e.target.value;
+                if (val !== "" && val !== "-" && val !== "+") {
+                  const parsed = parseFloat(val);
+                  if (parsed > 9999999) val = "9999999";
+                  if (parsed < -9999999) val = "-9999999";
+                }
+                handleMovementChange(row.id, val);
+              }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  "& fieldset": {
+                    borderColor:
+                      parseFloat(row.movement) > 0
+                        ? "#2ecc71"
+                        : parseFloat(row.movement) < 0
+                          ? "#e74c3c"
+                          : "rgba(255,255,255,0.23)",
+                  },
+                  "&:hover fieldset": {
+                    borderColor:
+                      parseFloat(row.movement) > 0
+                        ? "#2ecc71"
+                        : parseFloat(row.movement) < 0
+                          ? "#e74c3c"
+                          : "rgba(255,255,255,0.5)",
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor:
+                      parseFloat(row.movement) > 0
+                        ? "#2ecc71"
+                        : parseFloat(row.movement) < 0
+                          ? "#e74c3c"
+                          : "#f39c12",
+                  },
+                },
+                "& .MuiInputLabel-root": {
+                  color:
+                    parseFloat(row.movement) > 0
+                      ? "#2ecc71"
+                      : parseFloat(row.movement) < 0
+                        ? "#e74c3c"
+                        : "text.secondary",
+                },
+                "& .MuiInputLabel-root.Mui-focused": {
+                  color:
+                    parseFloat(row.movement) > 0
+                      ? "#2ecc71"
+                      : parseFloat(row.movement) < 0
+                        ? "#e74c3c"
+                        : "#f39c12",
+                },
+              }}
+              InputProps={{
+                sx: {
+                  fontSize: "0.9rem",
+                  width: "120px",
+                  fontWeight: "bold",
+                  color: "text.primary",
+                },
+              }}
+            />
+          </TableCell>
+        )}
+
+        <TableCell align="center">{renderStatusBar(row)}</TableCell>
+
+        {showRemarks && (
+          <TableCell sx={{ minWidth: "220px", py: 0.5 }}>
+            <Box>
+              {row.remarks && !isRemarkOpen ? (
+                <Box>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.primary",
+                      fontSize: "0.8rem",
+                      maxWidth: "200px",
+                      whiteSpace: "normal",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {row.remarks}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "text.disabled",
+                      fontSize: "0.7rem",
+                      display: "block",
+                      mt: 0.2,
+                    }}
+                  >
+                    {row.remarks_added_by && `by ${row.remarks_added_by}`}
+                    {row.remarks_added_by && row.remarks_created_at && " · "}
+                    {row.remarks_created_at &&
+                      new Date(row.remarks_created_at).toLocaleDateString()}
+                  </Typography>
+                </Box>
+              ) : (
+                !isRemarkOpen && (
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.disabled",
+                      fontStyle: "italic",
+                      fontSize: "0.8rem",
+                    }}
+                  >
+                    —
+                  </Typography>
+                )
+              )}
+              <Collapse in={isRemarkOpen} unmountOnExit>
+                <Stack
+                  direction="row"
+                  spacing={0.5}
+                  alignItems="center"
+                  sx={{ mt: 0.5 }}
+                >
+                  <TextField
+                    size="small"
+                    fullWidth
+                    autoFocus
+                    placeholder={
+                      row.remarks ? "Update remark..." : "Add a remark..."
+                    }
+                    value={remarkInputValue}
+                    onChange={(e) => setRemarkInputValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSaveRemark(row.id);
+                      }
+                      if (e.key === "Escape") {
+                        setActiveRemarkRowId(null);
+                        setRemarkInputValue("");
+                      }
+                    }}
+                    inputProps={{ maxLength: 500 }}
+                    sx={{ fontSize: "0.8rem" }}
+                  />
+                  <Tooltip title="Save remark">
+                    <span>
+                      <IconButton
+                        size="small"
+                        color="success"
+                        onClick={() => handleSaveRemark(row.id)}
+                        disabled={savingRemark}
+                      >
+                        <Send fontSize="inherit" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="Cancel">
+                    <IconButton
+                      size="small"
+                      color="inherit"
+                      onClick={() => {
+                        setActiveRemarkRowId(null);
+                        setRemarkInputValue("");
+                      }}
+                    >
+                      <Cancel fontSize="inherit" />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+              </Collapse>
+            </Box>
+          </TableCell>
+        )}
+
+        {canViewActionColumn && (
+          <TableCell align="right">
+            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+              {showRemarks && canModify && (
+                <>
+                  <Tooltip
+                    title={
+                      isRemarkOpen
+                        ? "Cancel"
+                        : row.remarks
+                          ? "Edit remark"
+                          : "Add remark"
+                    }
+                  >
+                    <IconButton
+                      size="small"
+                      onClick={() =>
+                        handleToggleRemarkInput(row.id, row.remarks || "")
+                      }
+                      sx={{ color: isRemarkOpen ? "error.main" : "#ef7d14" }}
+                    >
+                      {isRemarkOpen ? (
+                        <Cancel fontSize="inherit" />
+                      ) : row.remarks ? (
+                        <Edit fontSize="inherit" />
+                      ) : (
+                        <AddComment fontSize="inherit" />
+                      )}
+                    </IconButton>
+                  </Tooltip>
+                  {row.remarks && !isRemarkOpen && (
+                    <Tooltip title="Clear remark">
+                      <span>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleDeleteRemark(row.id)}
+                          disabled={deletingRemarkId === row.id}
+                        >
+                          <Delete fontSize="inherit" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
+                </>
+              )}
+              <IconButton
+                size="small"
+                color="info"
+                onClick={() => {
+                  setSelectedItem({ ...row, id: String(row.id).split(":")[0] });
+                  setOpenEditModal(true);
+                }}
+              >
+                <Edit fontSize="inherit" />
+              </IconButton>
+            </Stack>
+          </TableCell>
+        )}
+      </TableRow>
+    );
+  };
+
   return (
     <Box
       sx={{
-        p: { xs: 2, sm: 4 }, // Reduced padding on mobile
+        p: { xs: 2, sm: 4 },
         mt: 8,
         bgcolor: "background.default",
         minHeight: "100vh",
@@ -443,7 +950,7 @@ export default function Inventory({ mode, user }) {
       <Box
         sx={{
           display: "flex",
-          flexDirection: { xs: "column", md: "row" }, // Stack on mobile
+          flexDirection: { xs: "column", md: "row" },
           justifyContent: "space-between",
           mb: 3,
           alignItems: { xs: "flex-start", md: "center" },
@@ -462,12 +969,8 @@ export default function Inventory({ mode, user }) {
         <Stack
           direction="row"
           spacing={1.5}
-          sx={{
-            width: { xs: "100%", sm: "auto" },
-            alignItems: "center",
-          }}
+          sx={{ width: { xs: "100%", sm: "auto" }, alignItems: "center" }}
         >
-          {/* BULK DELETE BUTTON - VISIBLE WHEN ITEMS ARE CHECKED */}
           {selectedIds.length > 0 && canModify && (
             <Button
               variant="contained"
@@ -520,7 +1023,6 @@ export default function Inventory({ mode, user }) {
             </>
           )}
 
-          {/* --- GROUPED ACTIONS DROPDOWN BUTTON --- */}
           <Button
             variant="outlined"
             onClick={handleMenuOpen}
@@ -545,10 +1047,16 @@ export default function Inventory({ mode, user }) {
             Actions
           </Button>
 
+          {/*
+            FIX: Added disableScrollLock to Menu.
+            Without it, MUI sets aria-hidden="true" on #root when the menu opens,
+            which blocks focus from the sidebar nav links → accessibility warning.
+          */}
           <Menu
             anchorEl={anchorEl}
             open={isMenuOpen}
             onClose={handleMenuClose}
+            disableScrollLock
             PaperProps={{
               elevation: 3,
               sx: {
@@ -571,7 +1079,6 @@ export default function Inventory({ mode, user }) {
             transformOrigin={{ horizontal: "right", vertical: "top" }}
             anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
           >
-            {/* PRINT */}
             <MenuItem
               onClick={() => {
                 setOpenPrintModal(true);
@@ -584,7 +1091,6 @@ export default function Inventory({ mode, user }) {
               <ListItemText>Print</ListItemText>
             </MenuItem>
 
-            {/* VIEW REMARKS TOGGLE — shows/hides the Remarks column */}
             <MenuItem
               onClick={() => {
                 setShowRemarks((prev) => !prev);
@@ -604,7 +1110,6 @@ export default function Inventory({ mode, user }) {
               </ListItemText>
             </MenuItem>
 
-            {/* MIN STOCK TOGGLE — shows/hides the Min Stock column next to Quantity */}
             <MenuItem
               onClick={() => {
                 setShowMinStock((prev) => !prev);
@@ -620,16 +1125,43 @@ export default function Inventory({ mode, user }) {
               </ListItemText>
             </MenuItem>
 
+            <MenuItem
+              onClick={() => {
+                setGroupByBrand((prev) => !prev);
+                handleMenuClose();
+              }}
+              sx={{ color: groupByBrand ? "#ef7d14" : "text.primary" }}
+            >
+              <ListItemIcon>
+                <Sort fontSize="small" sx={{ color: "#ef7d14" }} />
+              </ListItemIcon>
+              <ListItemText>
+                {groupByBrand ? "Ungroup Brands" : "Group by Brand"}
+              </ListItemText>
+            </MenuItem>
+
+            {canModify && (
+              <MenuItem
+                onClick={() => {
+                  setOpenBrandModal(true);
+                  handleMenuClose();
+                }}
+              >
+                <ListItemIcon>
+                  <LocalOffer fontSize="small" sx={{ color: "#ef7d14" }} />
+                </ListItemIcon>
+                <ListItemText>Manage Brands</ListItemText>
+              </MenuItem>
+            )}
+
             {canModify && !isEditingQty && (
               <MenuItem
                 onClick={() => {
                   setIsSelectionEnabled(!isSelectionEnabled);
-                  if (isSelectionEnabled) setSelectedIds([]); // Clear selection when turning off
+                  if (isSelectionEnabled) setSelectedIds([]);
                   handleMenuClose();
                 }}
-                sx={{
-                  color: isSelectionEnabled ? "#ef7d14" : "text.primary",
-                }}
+                sx={{ color: isSelectionEnabled ? "#ef7d14" : "text.primary" }}
               >
                 <ListItemIcon>
                   {isSelectionEnabled ? (
@@ -652,55 +1184,54 @@ export default function Inventory({ mode, user }) {
 
             {canModify && <Divider sx={{ my: 0.5 }} />}
 
-            {/* EDIT QTY AND ADD ITEM RESTRICTED TO ADMIN/PRODUCTION */}
+            {canModify && isEditingQty && (
+              <MenuItem
+                onClick={() => {
+                  handleDiscard();
+                  handleMenuClose();
+                }}
+                sx={{ color: "error.main" }}
+              >
+                <ListItemIcon>
+                  <Undo fontSize="small" color="error" />
+                </ListItemIcon>
+                <ListItemText>Cancel Edit</ListItemText>
+              </MenuItem>
+            )}
+
+            {canModify && !isEditingQty && (
+              <MenuItem
+                onClick={() => {
+                  setIsEditingQty(true);
+                  handleMenuClose();
+                }}
+              >
+                <ListItemIcon>
+                  <EditNote fontSize="small" sx={{ color: "#ef7d14" }} />
+                </ListItemIcon>
+                <ListItemText>Edit Qty</ListItemText>
+              </MenuItem>
+            )}
+
             {canModify && (
-              <>
-                {/* REMOVED LOCK BUTTON STATE EXPRESSION / COMPLETELY HIDES WHEN EDITING */}
-                {isEditingQty ? (
-                  <MenuItem
-                    onClick={() => {
-                      handleDiscard();
-                      handleMenuClose();
-                    }}
-                    sx={{ color: "error.main" }}
-                  >
-                    <ListItemIcon>
-                      <Undo fontSize="small" color="error" />
-                    </ListItemIcon>
-                    <ListItemText>Cancel Edit</ListItemText>
-                  </MenuItem>
-                ) : (
-                  <MenuItem
-                    onClick={() => {
-                      setIsEditingQty(true);
-                      handleMenuClose();
-                    }}
-                  >
-                    <ListItemIcon>
-                      <EditNote fontSize="small" sx={{ color: "#ef7d14" }} />
-                    </ListItemIcon>
-                    <ListItemText>Edit Qty</ListItemText>
-                  </MenuItem>
-                )}
-                <MenuItem
-                  onClick={() => {
-                    setOpenAddModal(true);
-                    handleMenuClose();
-                  }}
-                  disabled={isEditingQty} // Disable button add when edit qty is on to prevent conflicts
-                  sx={{
-                    bgcolor: "#ef7d14",
-                    color: "#fff",
-                    "&:hover": { bgcolor: "#d66e0f" },
-                    "&.Mui-disabled": { opacity: 0.5, color: "#fff" },
-                  }}
-                >
-                  <ListItemIcon>
-                    <Add fontSize="small" sx={{ color: "#fff" }} />
-                  </ListItemIcon>
-                  <ListItemText>Add Item</ListItemText>
-                </MenuItem>
-              </>
+              <MenuItem
+                onClick={() => {
+                  setOpenAddModal(true);
+                  handleMenuClose();
+                }}
+                disabled={isEditingQty}
+                sx={{
+                  bgcolor: "#ef7d14",
+                  color: "#fff",
+                  "&:hover": { bgcolor: "#d66e0f" },
+                  "&.Mui-disabled": { opacity: 0.5, color: "#fff" },
+                }}
+              >
+                <ListItemIcon>
+                  <Add fontSize="small" sx={{ color: "#fff" }} />
+                </ListItemIcon>
+                <ListItemText>Add Item</ListItemText>
+              </MenuItem>
             )}
           </Menu>
         </Stack>
@@ -710,10 +1241,13 @@ export default function Inventory({ mode, user }) {
         component={Paper}
         sx={{ borderRadius: 3, p: { xs: 1, sm: 2 } }}
       >
-        {" "}
-        {/* --- FILTER BAR --- */}
+        {/*
+          FIX: Grid v1 `item`, `xs`, `md` props replaced with Grid v2 `size` prop.
+          Old: <Grid item xs={12} md={6}>
+          New: <Grid size={{ xs: 12, md: 6 }}>
+        */}
         <Grid container spacing={2} sx={{ mb: 3, px: { xs: 1, sm: 0 } }}>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <TextField
               fullWidth
               size="small"
@@ -732,8 +1266,7 @@ export default function Inventory({ mode, user }) {
               }}
             />
           </Grid>
-
-          <Grid item xs={6} md={2.5}>
+          <Grid size={{ xs: 6, md: 2 }}>
             <TextField
               select
               fullWidth
@@ -752,8 +1285,7 @@ export default function Inventory({ mode, user }) {
               <MenuItem value="Trading">Trading</MenuItem>
             </TextField>
           </Grid>
-
-          <Grid item xs={6} md={2.5}>
+          <Grid size={{ xs: 6, md: 2 }}>
             <TextField
               select
               fullWidth
@@ -771,11 +1303,51 @@ export default function Inventory({ mode, user }) {
               <MenuItem value="Out of Stock">Out of Stock</MenuItem>
             </TextField>
           </Grid>
+          <Grid size={{ xs: 6, md: 2 }}>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Brand"
+              value={brandFilter}
+              onChange={(e) => {
+                setBrandFilter(e.target.value);
+                setPage(0);
+              }}
+            >
+              <MenuItem value="All">All Brands</MenuItem>
 
+              {[
+                ...new Set(
+                  inventoryData
+                    .map((item) => item.brand?.trim())
+                    .filter(Boolean),
+                ),
+              ]
+                .sort()
+                .map((brand) => (
+                  <MenuItem key={brand} value={brand}>
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <Box
+                        sx={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: "50%",
+                          bgcolor: brandColorMap[brand] || "#9e9e9e",
+                          flexShrink: 0,
+                        }}
+                      />
+                      {brand}
+                    </Stack>
+                  </MenuItem>
+                ))}
+            </TextField>
+          </Grid>
           {(searchQuery ||
             categoryFilter !== "All" ||
-            statusFilter !== "All") && (
-            <Grid item xs={12}>
+            statusFilter !== "All" ||
+            brandFilter !== "All") && (
+            <Grid size={12}>
               <Button
                 startIcon={<FilterListOff />}
                 onClick={handleResetFilters}
@@ -788,9 +1360,8 @@ export default function Inventory({ mode, user }) {
             </Grid>
           )}
         </Grid>
+
         <Box sx={{ overflowX: "auto" }}>
-          {" "}
-          {/* Added horizontal scroll for table */}
           <Table size="small" sx={{ minWidth: 650 }}>
             <TableHead
               sx={{
@@ -798,7 +1369,6 @@ export default function Inventory({ mode, user }) {
               }}
             >
               <TableRow>
-                {/* SELECT ALL CHECKBOX COLUMN HEADER */}
                 {canModify && isSelectionEnabled && (
                   <TableCell padding="checkbox">
                     <Checkbox
@@ -818,11 +1388,8 @@ export default function Inventory({ mode, user }) {
                 )}
                 <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
                 <TableCell sx={{ fontWeight: "bold" }}>Item Name</TableCell>
-
-                {/* NEW HEADERS: Brand & Supplier */}
                 <TableCell sx={{ fontWeight: "bold" }}>Brand</TableCell>
                 <TableCell sx={{ fontWeight: "bold" }}>Supplier</TableCell>
-
                 <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
                 <TableCell sx={{ fontWeight: "bold" }}>Unit</TableCell>
                 {canViewPrice && (
@@ -836,8 +1403,6 @@ export default function Inventory({ mode, user }) {
                 >
                   Quantity
                 </TableCell>
-
-                {/* MIN STOCK HEADER — only visible when showMinStock is true */}
                 {showMinStock && (
                   <TableCell
                     align="right"
@@ -850,29 +1415,22 @@ export default function Inventory({ mode, user }) {
                     Min Stock
                   </TableCell>
                 )}
-
                 {isEditingQty && (
                   <TableCell align="center" sx={{ fontWeight: "bold" }}>
                     Adjustment
                   </TableCell>
                 )}
-
-                {/* STATUS COLUMN HEADER — no toggle, always shows bar */}
                 <TableCell
                   align="center"
                   sx={{ fontWeight: "bold", minWidth: "160px" }}
                 >
                   Status
                 </TableCell>
-
-                {/* NEW HEADER: Remarks — only visible when showRemarks is true */}
                 {showRemarks && (
-                  <TableCell sx={{ fontWeight: "bold", minWidth: "150px" }}>
+                  <TableCell sx={{ fontWeight: "bold", minWidth: "220px" }}>
                     Remarks
                   </TableCell>
                 )}
-
-                {/* ACTION COLUMN VISIBLE ONLY TO ADMIN/PRODUCTION */}
                 {canViewActionColumn && (
                   <TableCell align="right" sx={{ fontWeight: "bold" }}>
                     Action
@@ -880,266 +1438,58 @@ export default function Inventory({ mode, user }) {
                 )}
               </TableRow>
             </TableHead>
+
             <TableBody>
-              {paginatedData.map((row) => {
-                const currentMinStock = row.min_stock ?? row.minStock ?? 0;
-                return (
-                  <TableRow
-                    key={row.id}
-                    hover
-                    selected={selectedIds.includes(row.id)}
-                  >
-                    {/* SELECTION ROW CHECKBOX */}
-                    {canModify && isSelectionEnabled && (
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={selectedIds.includes(row.id)}
-                          onChange={() => handleSelectRow(row.id)}
-                        />
-                      </TableCell>
-                    )}
-                    <TableCell>#{String(row.id).split(":")[0]}</TableCell>
-                    <TableCell
-                      sx={{
-                        maxWidth: "200px",
-                        whiteSpace: "normal",
-                        wordBreak: "break-word",
-                      }}
-                    >
-                      <Typography variant="body2" fontWeight="bold">
-                        {row.name}
-                      </Typography>
-                    </TableCell>
-
-                    {/* NEW CELL DATA: Brand & Supplier */}
-                    <TableCell>{row.brand || "—"}</TableCell>
-                    <TableCell>{row.supplier || "—"}</TableCell>
-
-                    <TableCell>
-                      <Chip
-                        label={row.category}
-                        size="small"
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>{row.uom}</TableCell>
-                    {canViewPrice && (
-                      <TableCell align="right">
-                        ₱
-                        {Number(row.price).toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                        })}
-                      </TableCell>
-                    )}
-                    <TableCell align="right" sx={{ pr: 2 }}>
-                      <TextField
-                        type="number"
-                        variant={isEditingQty ? "outlined" : "standard"}
-                        size="small"
-                        disabled={
-                          !isEditingQty ||
-                          (row.movement !== "" && row.movement !== null)
-                        }
-                        value={row.quantity}
-                        onKeyDown={(e) => {
-                          if (e.key === "." || e.key === "e")
-                            e.preventDefault();
-                        }}
-                        onChange={(e) => {
-                          let val = e.target.value;
-                          // Capped quantity input parsing at 9,999,999
-                          if (val !== "" && parseFloat(val) > 9999999) {
-                            val = "9999999";
-                          }
-                          handleQuantityChangeLocal(row.id, val);
-                        }}
-                        InputProps={{
-                          disableUnderline: true,
-                          sx: {
-                            fontWeight: "bold",
-                            display: "flex",
-                            justifyContent: "flex-end",
-                            minWidth: "100px",
-                            "& input": {
-                              textAlign: "right",
-                              paddingRight: "8px",
-                              flexGrow: 1,
-                              width: `${Math.max(4, String(row.quantity).length) * 0.5}ch`,
-                            },
-                          },
-                        }}
-                      />
-                    </TableCell>
-
-                    {/* MIN STOCK CELL — only visible when showMinStock is true */}
-                    {showMinStock && (
-                      <TableCell align="right" sx={{ pr: 2 }}>
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontWeight: "bold",
-                            color:
-                              row.quantity <= currentMinStock
-                                ? "#ef7d14"
-                                : "text.secondary",
-                          }}
-                        >
-                          {currentMinStock}
-                        </Typography>
-                      </TableCell>
-                    )}
-
-                    {/* Adjustment Input (Stock In/Out Functionality) */}
-                    {isEditingQty && (
-                      <TableCell align="center">
-                        <TextField
-                          placeholder="+/-"
-                          label={
-                            parseFloat(row.movement) > 0
-                              ? "Stock In"
-                              : parseFloat(row.movement) < 0
-                                ? "Stock Out"
-                                : "Adjustment"
-                          }
-                          size="small"
-                          disabled={(() => {
-                            const original = originalData.find(
-                              (o) => o.id === row.id,
-                            );
-                            return (
-                              original &&
-                              row.quantity !== original.quantity &&
-                              (row.movement === "" || row.movement === null)
-                            );
-                          })()}
-                          value={row.movement || ""}
-                          onKeyDown={(e) => {
-                            if (e.key === "." || e.key === "e")
-                              e.preventDefault();
-                          }}
-                          onChange={(e) => {
-                            let val = e.target.value;
-                            // Safe check if a numeric string boundary exceeds upper limits
-                            if (val !== "" && val !== "-" && val !== "+") {
-                              const parsed = parseFloat(val);
-                              if (parsed > 9999999) val = "9999999";
-                              if (parsed < -9999999) val = "-9999999";
-                            }
-                            handleMovementChange(row.id, val);
-                          }}
-                          sx={{
-                            "& .MuiOutlinedInput-root": {
-                              "& fieldset": {
-                                borderColor:
-                                  parseFloat(row.movement) > 0
-                                    ? "#2ecc71"
-                                    : parseFloat(row.movement) < 0
-                                      ? "#e74c3c"
-                                      : "rgba(255, 255, 255, 0.23)",
-                              },
-                              "&:hover fieldset": {
-                                borderColor:
-                                  parseFloat(row.movement) > 0
-                                    ? "#2ecc71"
-                                    : parseFloat(row.movement) < 0
-                                      ? "#e74c3c"
-                                      : "rgba(255, 255, 255, 0.5)",
-                              },
-                              "&.Mui-focused fieldset": {
-                                borderColor:
-                                  parseFloat(row.movement) > 0
-                                    ? "#2ecc71"
-                                    : parseFloat(row.movement) < 0
-                                      ? "#e74c3c"
-                                      : "#f39c12",
-                              },
-                            },
-                            "& .MuiInputLabel-root": {
-                              color:
-                                parseFloat(row.movement) > 0
-                                  ? "#2ecc71"
-                                  : parseFloat(row.movement) < 0
-                                    ? "#e74c3c"
-                                    : "text.secondary",
-                            },
-                            "& .MuiInputLabel-root.Mui-focused": {
-                              color:
-                                parseFloat(row.movement) > 0
-                                  ? "#2ecc71"
-                                  : parseFloat(row.movement) < 0
-                                    ? "#e74c3c"
-                                    : "#f39c12",
-                            },
-                          }}
-                          InputProps={{
-                            sx: {
-                              fontSize: "0.9rem",
-                              width: "120px",
+              {groupByBrand
+                ? groupedPaginatedData.map(({ brand, items }) => {
+                    const headerColor =
+                      brandColorMap[brand] || (isDark ? "#1a2744" : "#1565c0");
+                    const textColor = getContrastText(headerColor);
+                    return (
+                      <React.Fragment key={brand}>
+                        <TableRow>
+                          <TableCell
+                            colSpan={totalColumns}
+                            sx={{
+                              bgcolor: headerColor,
+                              color: textColor,
                               fontWeight: "bold",
-                              color: "text.primary",
-                            },
-                          }}
-                        />
-                      </TableCell>
-                    )}
-
-                    {/* STATUS CELL — always renders bar chart view */}
-                    <TableCell align="center">{renderStatusBar(row)}</TableCell>
-
-                    {/* NEW CELL DATA: Remarks — only visible when showRemarks is true */}
-                    {showRemarks && (
-                      <TableCell
-                        sx={{
-                          maxWidth: "250px",
-                          whiteSpace: "normal",
-                          wordBreak: "break-word",
-                          color: "text.secondary",
-                          fontSize: "0.85rem",
-                        }}
-                      >
-                        {row.remarks || "—"}
-                      </TableCell>
-                    )}
-
-                    {/* ACTION BUTTONS RESTRICTED TO ADMIN/PRODUCTION */}
-                    {canViewActionColumn && (
-                      <TableCell align="right">
-                        <Stack
-                          direction="row"
-                          spacing={1}
-                          justifyContent="flex-end"
-                        >
-                          <IconButton
-                            size="small"
-                            color="info"
-                            onClick={() => {
-                              setSelectedItem({
-                                ...row,
-                                id: String(row.id).split(":")[0],
-                              });
-                              setOpenEditModal(true);
+                              fontSize: "0.85rem",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.08em",
+                              py: 1,
+                              px: 2,
+                              borderBottom: "none",
                             }}
                           >
-                            <Edit fontSize="inherit" />
-                          </IconButton>
-                        </Stack>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                );
-              })}
+                            <Stack
+                              direction="row"
+                              alignItems="center"
+                              spacing={1}
+                            >
+                              <Box
+                                sx={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: "50%",
+                                  bgcolor: textColor,
+                                  opacity: 0.6,
+                                }}
+                              />
+                              {brand} ({items.length})
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                        {items.map((row) => renderRow(row, headerColor))}
+                      </React.Fragment>
+                    );
+                  })
+                : paginatedData.map((row) => renderRow(row))}
+
               {paginatedData.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={
-                      7 + // Binago mula 5 para isama ang 3 bagong columns (Brand, Supplier, Remarks) minus yung kailangang alignments
-                      (canModify && isSelectionEnabled ? 1 : 0) +
-                      (canViewPrice ? 1 : 0) +
-                      (isEditingQty ? 1 : 0) +
-                      (showRemarks ? 1 : 0) +
-                      (showMinStock ? 1 : 0) +
-                      (canViewActionColumn ? 1 : 0)
-                    }
+                    colSpan={totalColumns}
                     align="center"
                     sx={{ py: 3 }}
                   >
@@ -1150,6 +1500,7 @@ export default function Inventory({ mode, user }) {
             </TableBody>
           </Table>
         </Box>
+
         <TablePagination
           rowsPerPageOptions={[10, 20, 50]}
           component="div"
@@ -1163,7 +1514,7 @@ export default function Inventory({ mode, user }) {
 
       <AddInventoryModal
         open={openAddModal}
-        userLevel={user?.user_level} // Use user_level from the user object
+        userLevel={user?.user_level}
         handleClose={() => setOpenAddModal(false)}
         onSaveSuccess={() => {
           fetchInventory();
@@ -1178,6 +1529,7 @@ export default function Inventory({ mode, user }) {
           showMessage("Updated!", "info");
         }}
         itemData={selectedItem}
+        userLevel={user?.user_level}
       />
       <PrintInventoryModal
         open={openPrintModal}
@@ -1188,6 +1540,14 @@ export default function Inventory({ mode, user }) {
             ? inventoryData.filter((item) => selectedIds.includes(item.id))
             : inventoryData
         }
+      />
+      <BrandModal
+        open={openBrandModal}
+        handleClose={() => {
+          setOpenBrandModal(false);
+          fetchBrands();
+        }}
+        mode={mode}
       />
 
       <Snackbar

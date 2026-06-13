@@ -7,7 +7,6 @@ import {
   Button,
   TextField,
   Stack,
-  MenuItem,
   CircularProgress,
   Typography,
 } from "@mui/material";
@@ -20,14 +19,11 @@ export default function EditSupplierModal({
   mode,
 }) {
   const [form, setForm] = useState({
-    item_id: "",
     supplier_name: "",
     address: "",
     contact_no: "",
     other_details: "",
   });
-  const [inventoryItems, setInventoryItems] = useState([]);
-  const [loadingItems, setLoadingItems] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -35,7 +31,6 @@ export default function EditSupplierModal({
   useEffect(() => {
     if (supplierData) {
       setForm({
-        item_id: supplierData.item_id ?? "",
         supplier_name: supplierData.supplier_name ?? "",
         address: supplierData.address ?? "",
         contact_no: supplierData.contact_no ?? "",
@@ -44,24 +39,6 @@ export default function EditSupplierModal({
       setErrors({});
     }
   }, [supplierData]);
-
-  // Fetch inventory items for the item_id dropdown
-  useEffect(() => {
-    if (!open) return;
-    const fetchItems = async () => {
-      try {
-        setLoadingItems(true);
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/inventory`);
-        const data = await res.json();
-        setInventoryItems(data);
-      } catch (e) {
-        console.error("Failed to load inventory items", e);
-      } finally {
-        setLoadingItems(false);
-      }
-    };
-    fetchItems();
-  }, [open]);
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -84,7 +61,6 @@ export default function EditSupplierModal({
     try {
       setSaving(true);
       const payload = {
-        item_id: form.item_id || null,
         supplier_name: form.supplier_name.trim(),
         address: form.address.trim() || null,
         contact_no: form.contact_no.trim() || null,
@@ -143,29 +119,6 @@ export default function EditSupplierModal({
             helperText={errors.supplier_name}
             inputProps={{ maxLength: 100 }}
           />
-
-          {/* LINKED INVENTORY ITEM */}
-          <TextField
-            select
-            label="Linked Inventory Item (Optional)"
-            size="small"
-            fullWidth
-            value={form.item_id}
-            onChange={(e) => handleChange("item_id", e.target.value)}
-            disabled={loadingItems}
-            InputProps={{
-              endAdornment: loadingItems ? (
-                <CircularProgress size={16} sx={{ mr: 2 }} />
-              ) : null,
-            }}
-          >
-            <MenuItem value="">— None —</MenuItem>
-            {inventoryItems.map((item) => (
-              <MenuItem key={item.item_id} value={item.item_id}>
-                #{item.item_id} — {item.name}
-              </MenuItem>
-            ))}
-          </TextField>
 
           {/* CONTACT NO */}
           <TextField

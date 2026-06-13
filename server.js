@@ -238,7 +238,18 @@ app.get("/api/inventory", async (req, res) => {
       `SELECT i.*, 
         (SELECT old_quantity FROM inventory_ledger l 
          WHERE l.item_id = i.item_id 
-         ORDER BY recorded_at DESC LIMIT 1) as prev_qty
+         ORDER BY recorded_at DESC LIMIT 1) as prev_qty,
+        -- Fetch latest remark for each item from inventory_remarks
+        (SELECT ir.remarks FROM inventory_remarks ir 
+         WHERE ir.item_id = i.item_id 
+         ORDER BY ir.created_at DESC LIMIT 1) as remarks,
+        (SELECT ir.created_at FROM inventory_remarks ir 
+         WHERE ir.item_id = i.item_id 
+         ORDER BY ir.created_at DESC LIMIT 1) as remarks_created_at,
+        -- Fetch who added the latest remark
+        (SELECT ir.added_by FROM inventory_remarks ir 
+         WHERE ir.item_id = i.item_id 
+         ORDER BY ir.created_at DESC LIMIT 1) as remarks_added_by
        FROM inventory i ORDER BY i.item_id DESC`,
     );
     const mappedData = result.rows.map((item) => ({
@@ -250,6 +261,9 @@ app.get("/api/inventory", async (req, res) => {
       previousQuantity: item.prev_qty !== null ? item.prev_qty : item.quantity,
       price: item.price || 0,
       minStock: item.minimum_stock || 10,
+      // Map brand and supplier as plain text fields from the table
+      brand: item.brand || "",
+      supplier: item.supplier || "",
       status:
         item.quantity === 0
           ? "Out of Stock"
@@ -258,9 +272,14 @@ app.get("/api/inventory", async (req, res) => {
             : "In Stock",
       date: item.created_at,
       lastUpdated: item.updated_at,
+      // Remarks from inventory_remarks table
+      remarks: item.remarks || "",
+      remarks_created_at: item.remarks_created_at || null,
+      remarks_added_by: item.remarks_added_by || null,
     }));
     res.json(mappedData);
   } catch (err) {
+    console.error("Fetch inventory error:", err);
     res.status(500).json({ error: "Fetch failed" });
   }
 });
@@ -271,11 +290,36 @@ app.post("/api/inventory/bulk-add", async (req, res) => {
   try {
     await client.query("BEGIN");
     for (const item of items) {
+      // Resolve brand name from brand_id if provided, otherwise use brand text directly
+      let brandName = item.brand || "";
+      if (item.brand_id) {
+        const brandRes = await client.query(
+          "SELECT brand_name FROM brand WHERE brand_id = $1",
+          [item.brand_id],
+        );
+        brandName = brandRes.rows[0]?.brand_name || "";
+      }
+
+      // Resolve supplier name from supplier_id if provided
+      let supplierName = item.supplier || "";
+      if (item.supplier_id) {
+        const supplierRes = await client.query(
+          "SELECT supplier_name FROM supplier WHERE supplier_id = $1",
+          [item.supplier_id],
+        );
+        supplierName = supplierRes.rows[0]?.supplier_name || "";
+      }
+
       const result = await client.query(
-        "INSERT INTO inventory (item_name, category, unit, quantity, price, minimum_stock, created_at) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE) RETURNING item_id",
+        `INSERT INTO inventory 
+          (item_name, category, brand, supplier, unit, quantity, price, minimum_stock, created_at) 
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_DATE) 
+          RETURNING item_id`,
         [
           item.name,
           item.category,
+          brandName,
+          supplierName,
           item.uom,
           item.quantity || 0,
           item.price || 0,
@@ -294,6 +338,7 @@ app.post("/api/inventory/bulk-add", async (req, res) => {
     res.status(201).json({ message: "Bulk add success" });
   } catch (err) {
     await client.query("ROLLBACK");
+    console.error("Bulk add error:", err);
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
@@ -342,9 +387,24 @@ app.patch("/api/inventory/bulk", async (req, res) => {
             const adjValue = parseInt(adjustment);
             if (adjValue > 0) {
               logMessage = `Stock In: ${itemName} ${oldQty} + ${adjValue} = ${newQty}`;
+              // --- CLEAR REMARKS ONLY ON STOCK IN (quantity increased) ---
+              await client.query(
+                `DELETE FROM inventory_remarks WHERE item_id = $1`,
+                [id],
+              );
             } else if (adjValue < 0) {
               logMessage = `Stock Out: ${itemName} ${oldQty} - ${Math.abs(adjValue)} = ${newQty}`;
+              // Stock Out — remarks remain
             }
+          } else {
+            // Direct qty edit: clear remarks only if quantity increased
+            if (newQty > oldQty) {
+              await client.query(
+                `DELETE FROM inventory_remarks WHERE item_id = $1`,
+                [id],
+              );
+            }
+            // If quantity decreased via direct edit, remarks remain
           }
 
           await logActivity(req, "UPDATE", "inventory", id, logMessage);
@@ -365,7 +425,17 @@ app.patch("/api/inventory/bulk", async (req, res) => {
 
 app.patch("/api/inventory/:id", async (req, res) => {
   const id = cleanId(req.params.id);
-  const { name, category, uom, quantity, price, minStock } = req.body;
+  const {
+    name,
+    category,
+    uom,
+    quantity,
+    price,
+    minStock,
+    brand_id,
+    supplier_id,
+  } = req.body;
+
   try {
     // GET OLD QUANTITY FOR LEDGER
     const oldData = await pool.query(
@@ -382,13 +452,45 @@ app.patch("/api/inventory/:id", async (req, res) => {
       );
     }
 
+    // Resolve brand name from brand_id if provided
+    let brandName = req.body.brand || "";
+    if (brand_id) {
+      const brandRes = await pool.query(
+        "SELECT brand_name FROM brand WHERE brand_id = $1",
+        [brand_id],
+      );
+      brandName = brandRes.rows[0]?.brand_name || "";
+    }
+
+    // Resolve supplier name from supplier_id if provided
+    let supplierName = req.body.supplier || "";
+    if (supplier_id) {
+      const supplierRes = await pool.query(
+        "SELECT supplier_name FROM supplier WHERE supplier_id = $1",
+        [supplier_id],
+      );
+      supplierName = supplierRes.rows[0]?.supplier_name || "";
+    }
+
     await pool.query(
       `UPDATE inventory SET 
-        item_name=$1, category=$2, unit=$3, quantity=$4, price=$5, minimum_stock=$6, 
+        item_name=$1, category=$2, unit=$3, quantity=$4, price=$5, minimum_stock=$6,
+        brand=$7, supplier=$8,
         updated_at = CASE WHEN quantity != $4 THEN now() ELSE updated_at END
-        WHERE item_id=$7`,
-      [name, category, uom, quantity, price, minStock, id],
+        WHERE item_id=$9`,
+      [
+        name,
+        category,
+        uom,
+        quantity,
+        price,
+        minStock,
+        brandName,
+        supplierName,
+        id,
+      ],
     );
+
     await logActivity(
       req,
       "UPDATE",
@@ -398,6 +500,7 @@ app.patch("/api/inventory/:id", async (req, res) => {
     );
     res.json({ message: "Item updated" });
   } catch (err) {
+    console.error("Update inventory error:", err);
     res.status(500).json({ error: "Update failed" });
   }
 });
@@ -422,276 +525,104 @@ app.delete("/api/inventory/:id", async (req, res) => {
     );
     res.json({ message: "Deleted" });
   } catch (err) {
+    console.error("Delete inventory error:", err);
     res.status(500).json({ error: "Delete failed" });
   }
 });
 
 // ==========================================
-// 2. PURCHASE ORDER ENDPOINTS
+// INVENTORY REMARKS ENDPOINTS
 // ==========================================
 
-app.get("/api/purchase-orders", async (req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT * FROM purchase_order ORDER BY po_id DESC",
-    );
-    res.json(
-      result.rows.map((po) => ({
-        id: po.po_id,
-        poNo: po.po_number,
-        customer: po.customer_name,
-        email: po.email,
-        contact: po.contact,
-        company: po.company,
-        address: po.address,
-        totalPrice: po.total_price,
-        status: po.status,
-        remarks: po.remarks,
-        date: po.delivery_date,
-        statusDate: po.status_date,
-        createdAt: po.created_at,
-      })),
-    );
-  } catch (err) {
-    console.error("Fetch PO Error:", err);
-    res.status(500).json({ error: "Fetch failed" });
+// POST — Upsert remark; replaces existing remark for the item (one remark per item)
+app.post("/api/inventory/:id/remarks", async (req, res) => {
+  const id = cleanId(req.params.id);
+  const { remarks } = req.body;
+
+  if (!remarks || !remarks.trim()) {
+    return res.status(400).json({ error: "Remarks cannot be empty" });
   }
-});
-
-app.post("/api/purchase-orders", async (req, res) => {
-  const {
-    po_number,
-    customer_name,
-    email,
-    contact,
-    company,
-    address,
-    total_price,
-    status,
-    remarks,
-    delivery_date,
-    items,
-  } = req.body;
-
-  const client = await pool.connect();
 
   try {
-    await client.query("BEGIN");
-
-    const poResult = await client.query(
-      `INSERT INTO purchase_order (
-        po_number, customer_name, email, contact, company, 
-        address, total_price, status, remarks, delivery_date, status_date, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_DATE, CURRENT_DATE) 
-      RETURNING po_id`,
-      [
-        po_number,
-        customer_name,
-        email,
-        contact,
-        company,
-        address,
-        total_price,
-        status || "Pending",
-        remarks || "",
-        delivery_date,
-      ],
+    // Check item exists
+    const itemInfo = await pool.query(
+      "SELECT item_name FROM inventory WHERE item_id = $1",
+      [id],
     );
-
-    const newPoId = poResult.rows[0].po_id;
-
-    const itemInsertQuery = `
-      INSERT INTO item_order (
-        po_id, po_number, item_id, item_name, category, unit, quantity, price
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    `;
-
-    for (const item of items) {
-      await client.query(itemInsertQuery, [
-        newPoId,
-        po_number,
-        cleanId(item.id),
-        item.name,
-        item.category,
-        item.uom || item.unit,
-        item.qty || item.quantity,
-        item.price,
-      ]);
+    if (itemInfo.rows.length === 0) {
+      return res.status(404).json({ error: "Item not found" });
     }
+    const itemName = itemInfo.rows[0].item_name;
+
+    // Get the username from session for added_by
+    const addedBy =
+      req.session?.user?.username || req.session?.user?.name || "Unknown";
+
+    // --- UPSERT: delete existing remark then insert new one ---
+    await pool.query("DELETE FROM inventory_remarks WHERE item_id = $1", [id]);
+
+    const result = await pool.query(
+      `INSERT INTO inventory_remarks (item_id, remarks, added_by, created_at)
+       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+       RETURNING *`,
+      [id, remarks.trim(), addedBy],
+    );
 
     await logActivity(
       req,
       "INSERT",
-      "purchase_order",
-      newPoId,
-      `Created PO #${po_number} for ${customer_name}`,
-    );
-    await client.query("COMMIT");
-    res
-      .status(201)
-      .json({ message: "Purchase Order created successfully", po_id: newPoId });
-  } catch (err) {
-    await client.query("ROLLBACK");
-    console.error("PO Creation Error:", err);
-    if (err.code === "23505") {
-      return res.status(400).json({ error: "PO Number already exists." });
-    }
-    res.status(500).json({ error: "Failed to create order." });
-  } finally {
-    client.release();
-  }
-});
-
-app.put("/api/purchase-orders/:id", async (req, res) => {
-  const id = cleanId(req.params.id);
-  const {
-    customer_name,
-    email,
-    contact,
-    company,
-    address,
-    total_price,
-    status,
-    items,
-  } = req.body;
-
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
-    await client.query(
-      `UPDATE purchase_order SET 
-          customer_name=$1, email=$2, contact=$3, company=$4, address=$5, 
-          total_price=$6, status=$7, status_date=CURRENT_DATE 
-        WHERE po_id=$8`,
-      [
-        customer_name,
-        email,
-        contact,
-        company,
-        address,
-        total_price,
-        status,
-        id,
-      ],
-    );
-
-    await client.query("DELETE FROM item_order WHERE po_id = $1", [id]);
-
-    const poNumRes = await client.query(
-      "SELECT po_number FROM purchase_order WHERE po_id = $1",
-      [id],
-    );
-    const po_number = poNumRes.rows[0].po_number;
-
-    const itemInsertQuery = `
-      INSERT INTO item_order (po_id, po_number, item_id, item_name, category, unit, quantity, price) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    `;
-
-    for (const item of items) {
-      await client.query(itemInsertQuery, [
-        id,
-        po_number,
-        cleanId(item.id),
-        item.name,
-        item.category,
-        item.unit || item.uom,
-        item.qty || item.quantity,
-        item.price,
-      ]);
-    }
-
-    await logActivity(
-      req,
-      "UPDATE",
-      "purchase_order",
+      "inventory_remarks",
       id,
-      `Updated details for PO #${po_number}`,
+      `Added remark for item: ${itemName} by ${addedBy}`,
     );
-    await client.query("COMMIT");
-    res.json({ message: "Purchase Order updated successfully" });
+
+    res.status(201).json(result.rows[0]);
   } catch (err) {
-    await client.query("ROLLBACK");
-    console.error("Update Error:", err);
-    res.status(500).json({ error: "Failed to update order" });
-  } finally {
-    client.release();
+    console.error("Save remark error:", err);
+    res.status(500).json({ error: "Failed to save remark" });
   }
 });
 
-app.get("/api/purchase-orders/:id/items", async (req, res) => {
+// GET — Fetch all remarks for an inventory item
+app.get("/api/inventory/:id/remarks", async (req, res) => {
   const id = cleanId(req.params.id);
   try {
     const result = await pool.query(
-      "SELECT item_id, item_name as name, category, unit, quantity, price FROM item_order WHERE po_id = $1",
+      `SELECT * FROM inventory_remarks WHERE item_id = $1 ORDER BY created_at DESC`,
       [id],
     );
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch items" });
+    console.error("Fetch remarks error:", err);
+    res.status(500).json({ error: "Failed to fetch remarks" });
   }
 });
 
-app.patch("/api/purchase-orders/:id/status", async (req, res) => {
+app.delete("/api/inventory/:id/remarks", async (req, res) => {
   const id = cleanId(req.params.id);
-  const { status, remarks } = req.body;
   try {
-    await pool.query(
-      "UPDATE purchase_order SET status = $1, remarks = $2, status_date = CURRENT_DATE WHERE po_id = $3",
-      [status, remarks || "", id],
-    );
-    await logActivity(
-      req,
-      "FINALIZE", // Changed from "UPDATE" to "FINALIZE"
-      "purchase_order",
-      id,
-      `Changed status to ${status}`,
-    );
-    res.json({ message: "Status updated" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.delete("/api/purchase-orders/:id", async (req, res) => {
-  const id = cleanId(req.params.id);
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
-    // Get PO Number for activity log before deletion
-    const poRes = await client.query(
-      "SELECT po_number FROM purchase_order WHERE po_id = $1",
+    const info = await pool.query(
+      "SELECT name FROM inventory WHERE item_id = $1",
       [id],
     );
-    if (poRes.rows.length === 0) {
-      return res.status(404).json({ error: "Purchase Order not found" });
+    if (info.rows.length === 0) {
+      return res.status(404).json({ error: "Item not found" });
     }
-    const po_number = poRes.rows[0].po_number;
+    const itemName = info.rows[0].name;
 
-    // Delete related items first due to foreign key constraints
-    await client.query("DELETE FROM item_order WHERE po_id = $1", [id]);
-
-    // Delete the PO
-    await client.query("DELETE FROM purchase_order WHERE po_id = $1", [id]);
+    await pool.query("DELETE FROM inventory_remarks WHERE item_id = $1", [id]);
 
     await logActivity(
       req,
       "DELETE",
-      "purchase_order",
+      "inventory_remarks",
       id,
-      `Deleted PO #${po_number}`,
+      `Cleared remark for item: ${itemName}`,
     );
-
-    await client.query("COMMIT");
-    res.json({ message: "Purchase Order deleted successfully" });
+    res.json({ message: "Remark cleared successfully" });
   } catch (err) {
-    await client.query("ROLLBACK");
-    console.error("Delete PO Error:", err);
-    res.status(500).json({ error: "Failed to delete order" });
-  } finally {
-    client.release();
+    console.error("Delete inventory remark error:", err);
+    res.status(500).json({ error: "Failed to clear remark" });
   }
 });
 
@@ -705,52 +636,55 @@ app.get("/api/raw-materials", async (req, res) => {
       `SELECT r.*, 
         (SELECT old_qty_value FROM raw_materials_ledger l 
          WHERE l.material_id = r.material_id 
-         ORDER BY recorded_at DESC LIMIT 1) as prev_qty
+         ORDER BY recorded_at DESC LIMIT 1) as prev_qty,
+        (SELECT rmr.remarks FROM raw_materials_remarks rmr
+         WHERE rmr.material_id = r.material_id
+         ORDER BY rmr.created_at DESC LIMIT 1) as latest_remark,
+        (SELECT rmr.added_by FROM raw_materials_remarks rmr
+         WHERE rmr.material_id = r.material_id
+         ORDER BY rmr.created_at DESC LIMIT 1) as remarks_added_by,
+        (SELECT rmr.created_at FROM raw_materials_remarks rmr
+         WHERE rmr.material_id = r.material_id
+         ORDER BY rmr.created_at DESC LIMIT 1) as remarks_created_at
        FROM raw_materials r ORDER BY r.material_id DESC`,
     );
     const mappedData = result.rows.map((m) => ({
-      id: m.material_id,
-      name: m.material_name,
-      category: m.category,
-      measurementValue: parseFloat(m.base_value),
-      measurementUnit: m.base_unit,
-      packaging: m.qty_unit,
-      quantity: parseFloat(m.qty_value),
-      previousQuantity:
-        m.prev_qty !== null ? parseFloat(m.prev_qty) : parseFloat(m.qty_value),
-      minStock: parseFloat(m.minimum_stock),
+      material_id: m.material_id,
+      material_name: m.material_name ?? "",
+      category: m.category ?? "",
+      unit: m.unit ?? "",
+      qty_: parseFloat(m.qty_) || 0,
+      previousQty:
+        m.prev_qty !== null && m.prev_qty !== undefined
+          ? parseFloat(m.prev_qty)
+          : parseFloat(m.qty_) || 0,
+      minimum_stock: parseFloat(m.minimum_stock) || 0,
+      remarks: m.latest_remark || "",
+      remarks_added_by: m.remarks_added_by || "",
+      remarks_created_at: m.remarks_created_at || null,
       createdAt: m.created_at,
       updated_at: m.updated_at,
     }));
     res.json(mappedData);
   } catch (err) {
+    console.error("Raw materials fetch error:", err);
     res.status(500).json({ error: "Raw materials fetch failed" });
   }
 });
 
 app.post("/api/raw-materials", async (req, res) => {
-  const {
-    name,
-    category,
-    measurementValue,
-    measurementUnit,
-    packaging,
-    quantity,
-    minStock,
-  } = req.body;
+  const { material_name, category, unit, qty_, minimum_stock } = req.body;
   try {
     const result = await pool.query(
       `INSERT INTO raw_materials 
-        (material_name, category, base_value, base_unit, qty_unit, qty_value, minimum_stock) 
-        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        (material_name, category, unit, qty_, minimum_stock) 
+        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [
-        name,
+        material_name,
         category,
-        measurementValue,
-        measurementUnit,
-        packaging,
-        quantity,
-        minStock,
+        unit,
+        parseFloat(qty_) || 0,
+        parseFloat(minimum_stock) || 0,
       ],
     );
     await logActivity(
@@ -758,7 +692,7 @@ app.post("/api/raw-materials", async (req, res) => {
       "INSERT",
       "raw_materials",
       result.rows[0].material_id,
-      `Added raw material: ${name}`,
+      `Added raw material: ${material_name}`,
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -774,25 +708,22 @@ app.post("/api/raw-materials/bulk-add", async (req, res) => {
     for (const item of items) {
       const result = await pool.query(
         `INSERT INTO raw_materials 
-            (material_name, category, base_value, base_unit, qty_unit, qty_value, minimum_stock) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+          (material_name, category, unit, qty_, minimum_stock) 
+          VALUES ($1, $2, $3, $4, $5) RETURNING *`,
         [
-          item.name,
+          item.material_name,
           item.category,
-          item.measurementValue,
-          item.measurementUnit,
-          item.packaging,
-          item.quantity,
-          item.minStock,
+          item.unit,
+          parseFloat(item.qty_) || 0,
+          parseFloat(item.minimum_stock) || 0,
         ],
       );
-
       await logActivity(
         req,
         "INSERT",
         "raw_materials",
         result.rows[0].material_id,
-        `Bulk added material: ${item.name}`,
+        `Bulk added material: ${item.material_name}`,
       );
       results.push(result.rows[0]);
     }
@@ -805,28 +736,26 @@ app.post("/api/raw-materials/bulk-add", async (req, res) => {
   }
 });
 
-// --- UPDATED BULK UPDATE ENDPOINT (With Selective Logging) ---
+// --- BULK UPDATE ENDPOINT ---
 app.patch("/api/raw-materials/bulk", async (req, res) => {
   const { items } = req.body;
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     for (const item of items) {
-      // CLEAN ID HERE to handle "36:1" issues
-      const cleanedItemId = cleanId(item.id);
+      const cleanedItemId = cleanId(item.material_id);
 
       const currentRes = await client.query(
-        "SELECT material_name, qty_value FROM raw_materials WHERE material_id = $1",
+        "SELECT material_name, qty_ FROM raw_materials WHERE material_id = $1",
         [cleanedItemId],
       );
 
       if (currentRes.rows.length > 0) {
         const materialName = currentRes.rows[0].material_name;
-        const oldQty = Math.floor(currentRes.rows[0].qty_value);
-        const newQty = Math.floor(item.quantity);
+        const oldQty = Math.floor(currentRes.rows[0].qty_);
+        const newQty = Math.floor(item.qty_);
 
         if (oldQty !== newQty) {
-          // KEY FIX: Determine if this was a manual Update or a Stock Adjustment
           let actionType = "UPDATE";
           let description = `Update Quantity ${materialName} ${oldQty} to ${newQty}`;
 
@@ -838,14 +767,22 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
 
           await client.query(
             `INSERT INTO raw_materials_ledger (material_id, old_qty_value, new_qty_value, change_amount)
-                VALUES ($1, $2, $3, $4)`,
+             VALUES ($1, $2, $3, $4)`,
             [cleanedItemId, oldQty, newQty, newQty - oldQty],
           );
 
           await client.query(
-            "UPDATE raw_materials SET qty_value = $1, updated_at = now() WHERE material_id = $2",
+            "UPDATE raw_materials SET qty_ = $1, updated_at = now() WHERE material_id = $2",
             [newQty, cleanedItemId],
           );
+
+          // AUTO-CLEAR REMARKS ONLY WHEN QUANTITY IS ADDED (increased)
+          if (newQty > oldQty) {
+            await client.query(
+              "DELETE FROM raw_materials_remarks WHERE material_id = $1",
+              [cleanedItemId],
+            );
+          }
 
           await logActivity(
             req,
@@ -861,7 +798,7 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
     res.json({ message: "Bulk update successful" });
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error("Bulk update error:", err); // Log the actual error to your terminal
+    console.error("Bulk update error:", err);
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
@@ -870,56 +807,44 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
 
 app.put("/api/raw-materials/:id", async (req, res) => {
   const id = cleanId(req.params.id);
-  const {
-    name,
-    category,
-    measurementValue,
-    measurementUnit,
-    packaging,
-    quantity,
-    minStock,
-  } = req.body;
+  const { material_name, category, unit, qty_, minimum_stock } = req.body;
   try {
     const currentRes = await pool.query(
-      "SELECT qty_value FROM raw_materials WHERE material_id = $1",
+      "SELECT qty_ FROM raw_materials WHERE material_id = $1",
       [id],
     );
-    const oldQty = currentRes.rows[0]?.qty_value || 0;
+    const oldQty = parseFloat(currentRes.rows[0]?.qty_ || 0);
+    const newQty = parseFloat(qty_);
 
-    if (oldQty !== quantity) {
+    if (oldQty !== newQty) {
       await pool.query(
         `INSERT INTO raw_materials_ledger (material_id, old_qty_value, new_qty_value, change_amount)
-            VALUES ($1, $2, $3, $4)`,
-        [id, oldQty, quantity, quantity - oldQty],
+         VALUES ($1, $2, $3, $4)`,
+        [id, oldQty, newQty, newQty - oldQty],
       );
+
+      // AUTO-CLEAR REMARKS ONLY WHEN QUANTITY IS ADDED (increased)
+      if (newQty > oldQty) {
+        await pool.query(
+          "DELETE FROM raw_materials_remarks WHERE material_id = $1",
+          [id],
+        );
+      }
     }
 
     await pool.query(
       `UPDATE raw_materials SET 
-        material_name=$1, category=$2, base_value=$3, base_unit=$4, 
-        qty_unit=$5, qty_value=$6, minimum_stock=$7,
-        updated_at = CASE 
-          WHEN qty_value != $6 THEN now() 
-          ELSE updated_at 
-        END
-        WHERE material_id=$8`,
-      [
-        name,
-        category,
-        measurementValue,
-        measurementUnit,
-        packaging,
-        quantity,
-        minStock,
-        id,
-      ],
+        material_name=$1, category=$2, unit=$3, qty_=$4, minimum_stock=$5,
+        updated_at = CASE WHEN qty_ != $4 THEN now() ELSE updated_at END
+       WHERE material_id=$6`,
+      [material_name, category, unit, newQty, minimum_stock, id],
     );
     await logActivity(
       req,
       "UPDATE",
       "raw_materials",
       id,
-      `Updated raw material: ${name}`,
+      `Updated raw material: ${material_name}`,
     );
     res.json({ message: "Raw material updated" });
   } catch (err) {
@@ -935,9 +860,7 @@ app.delete("/api/raw-materials/:id", async (req, res) => {
       [id],
     );
     const name = info.rows[0]?.material_name || "Unknown Material";
-
     await pool.query("DELETE FROM raw_materials WHERE material_id = $1", [id]);
-
     await logActivity(
       req,
       "DELETE",
@@ -951,6 +874,103 @@ app.delete("/api/raw-materials/:id", async (req, res) => {
   }
 });
 
+// ==========================================
+// RAW MATERIAL REMARKS ENDPOINTS
+// ==========================================
+
+// POST — Upsert remark
+app.post("/api/raw-materials/:id/remarks", async (req, res) => {
+  const id = cleanId(req.params.id);
+  const { remarks } = req.body;
+
+  if (!remarks || !remarks.trim()) {
+    return res.status(400).json({ error: "Remarks cannot be empty" });
+  }
+
+  try {
+    const matInfo = await pool.query(
+      "SELECT material_name FROM raw_materials WHERE material_id = $1",
+      [id],
+    );
+    if (matInfo.rows.length === 0) {
+      return res.status(404).json({ error: "Material not found" });
+    }
+    const matName = matInfo.rows[0].material_name;
+    const addedBy =
+      req.session?.user?.name || req.session?.user?.username || "Unknown";
+
+    await pool.query(
+      "DELETE FROM raw_materials_remarks WHERE material_id = $1",
+      [id],
+    );
+
+    const result = await pool.query(
+      `INSERT INTO raw_materials_remarks (material_id, remarks, added_by, created_at)
+       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+       RETURNING *`,
+      [id, remarks.trim(), addedBy],
+    );
+
+    await logActivity(
+      req,
+      "INSERT",
+      "raw_materials_remarks",
+      id,
+      `Added remark for material: ${matName} by ${addedBy}`,
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error("Save raw material remark error:", err);
+    res.status(500).json({ error: "Failed to save remark" });
+  }
+});
+
+// GET — Fetch all remarks for a raw material
+app.get("/api/raw-materials/:id/remarks", async (req, res) => {
+  const id = cleanId(req.params.id);
+  try {
+    const result = await pool.query(
+      `SELECT * FROM raw_materials_remarks WHERE material_id = $1 ORDER BY created_at DESC`,
+      [id],
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Fetch raw material remarks error:", err);
+    res.status(500).json({ error: "Failed to fetch remarks" });
+  }
+});
+
+// DELETE — Manually clear remark for a raw material
+app.delete("/api/raw-materials/:id/remarks", async (req, res) => {
+  const id = cleanId(req.params.id);
+  try {
+    const matInfo = await pool.query(
+      "SELECT material_name FROM raw_materials WHERE material_id = $1",
+      [id],
+    );
+    if (matInfo.rows.length === 0) {
+      return res.status(404).json({ error: "Material not found" });
+    }
+    const matName = matInfo.rows[0].material_name;
+
+    await pool.query(
+      "DELETE FROM raw_materials_remarks WHERE material_id = $1",
+      [id],
+    );
+
+    await logActivity(
+      req,
+      "DELETE",
+      "raw_materials_remarks",
+      id,
+      `Cleared remark for material: ${matName}`,
+    );
+    res.json({ message: "Remark cleared successfully" });
+  } catch (err) {
+    console.error("Delete raw material remark error:", err);
+    res.status(500).json({ error: "Failed to clear remark" });
+  }
+});
 // ==========================================
 // 4. USER MANAGEMENT ENDPOINTS
 // ==========================================
@@ -1211,25 +1231,18 @@ app.post(
   },
 );
 
-// ==========================================
-// 7. SUPPLIER ENDPOINTS
-// ==========================================
-
-// GET ALL SUPPLIERS — joins inventory to include item_name
+// GET ALL SUPPLIERS
 app.get("/api/suppliers", async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT 
-        s.supplier_id,
-        s.item_id,
-        i.item_name,
-        s.supplier_name,
-        s.address,
-        s.contact_no,
-        s.other_details
-       FROM supplier s
-       LEFT JOIN inventory i ON s.item_id = i.item_id
-       ORDER BY s.supplier_id DESC`,
+        supplier_id,
+        supplier_name,
+        address,
+        contact_no,
+        other_details
+       FROM supplier
+       ORDER BY supplier_id DESC`,
     );
     res.json(result.rows);
   } catch (err) {
@@ -1244,16 +1257,13 @@ app.get("/api/suppliers/:id", async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT 
-        s.supplier_id,
-        s.item_id,
-        i.item_name,
-        s.supplier_name,
-        s.address,
-        s.contact_no,
-        s.other_details
-       FROM supplier s
-       LEFT JOIN inventory i ON s.item_id = i.item_id
-       WHERE s.supplier_id = $1`,
+        supplier_id,
+        supplier_name,
+        address,
+        contact_no,
+        other_details
+       FROM supplier
+       WHERE supplier_id = $1`,
       [id],
     );
     if (result.rows.length === 0) {
@@ -1268,8 +1278,7 @@ app.get("/api/suppliers/:id", async (req, res) => {
 
 // CREATE SUPPLIER
 app.post("/api/suppliers", async (req, res) => {
-  const { item_id, supplier_name, address, contact_no, other_details } =
-    req.body;
+  const { supplier_name, address, contact_no, other_details } = req.body;
 
   if (!supplier_name || !supplier_name.trim()) {
     return res.status(400).json({ error: "Supplier name is required" });
@@ -1277,11 +1286,10 @@ app.post("/api/suppliers", async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO supplier (item_id, supplier_name, address, contact_no, other_details)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO supplier (supplier_name, address, contact_no, other_details)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
       [
-        item_id || null,
         supplier_name.trim(),
         address?.trim() || null,
         contact_no?.trim() || null,
@@ -1307,8 +1315,7 @@ app.post("/api/suppliers", async (req, res) => {
 // UPDATE SUPPLIER
 app.put("/api/suppliers/:id", async (req, res) => {
   const { id } = req.params;
-  const { item_id, supplier_name, address, contact_no, other_details } =
-    req.body;
+  const { supplier_name, address, contact_no, other_details } = req.body;
 
   if (!supplier_name || !supplier_name.trim()) {
     return res.status(400).json({ error: "Supplier name is required" });
@@ -1326,15 +1333,13 @@ app.put("/api/suppliers/:id", async (req, res) => {
 
     const result = await pool.query(
       `UPDATE supplier SET
-        item_id = $1,
-        supplier_name = $2,
-        address = $3,
-        contact_no = $4,
-        other_details = $5
-       WHERE supplier_id = $6
+        supplier_name = $1,
+        address = $2,
+        contact_no = $3,
+        other_details = $4
+       WHERE supplier_id = $5
        RETURNING *`,
       [
-        item_id || null,
         supplier_name.trim(),
         address?.trim() || null,
         contact_no?.trim() || null,
@@ -1386,6 +1391,158 @@ app.delete("/api/suppliers/:id", async (req, res) => {
   } catch (err) {
     console.error("Delete supplier error:", err);
     res.status(500).json({ error: "Failed to delete supplier" });
+  }
+});
+
+// ==========================================
+// 8. BRAND ENDPOINTS
+// ==========================================
+
+// GET ALL BRANDS
+app.get("/api/brands", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT brand_id, brand_name, brand_color FROM brand ORDER BY brand_id DESC`,
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Fetch brands error:", err);
+    res.status(500).json({ error: "Failed to fetch brands" });
+  }
+});
+
+// GET SINGLE BRAND BY ID
+app.get("/api/brands/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      `SELECT brand_id, brand_name, brand_color FROM brand WHERE brand_id = $1`,
+      [id],
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Brand not found" });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Fetch brand error:", err);
+    res.status(500).json({ error: "Failed to fetch brand" });
+  }
+});
+
+// CREATE BRAND
+app.post("/api/brands", async (req, res) => {
+  const { brand_name, brand_color } = req.body;
+
+  if (!brand_name || !brand_name.trim()) {
+    return res.status(400).json({ error: "Brand name is required" });
+  }
+  if (brand_name.trim().length > 40) {
+    return res
+      .status(400)
+      .json({ error: "Brand name must be 40 characters or less" });
+  }
+
+  const color =
+    brand_color && /^#[0-9A-Fa-f]{6}$/.test(brand_color)
+      ? brand_color
+      : "#1565c0";
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO brand (brand_name, brand_color) VALUES ($1, $2) RETURNING *`,
+      [brand_name.trim(), color],
+    );
+
+    await logActivity(
+      req,
+      "INSERT",
+      "brand",
+      result.rows[0].brand_id,
+      `Added new brand: ${brand_name.trim()}`,
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error("Create brand error:", err);
+    res.status(500).json({ error: "Failed to create brand" });
+  }
+});
+
+// UPDATE BRAND
+app.put("/api/brands/:id", async (req, res) => {
+  const { id } = req.params;
+  const { brand_name, brand_color } = req.body;
+
+  if (!brand_name || !brand_name.trim()) {
+    return res.status(400).json({ error: "Brand name is required" });
+  }
+  if (brand_name.trim().length > 40) {
+    return res
+      .status(400)
+      .json({ error: "Brand name must be 40 characters or less" });
+  }
+
+  const color =
+    brand_color && /^#[0-9A-Fa-f]{6}$/.test(brand_color)
+      ? brand_color
+      : "#1565c0";
+
+  try {
+    const existing = await pool.query(
+      "SELECT brand_name FROM brand WHERE brand_id = $1",
+      [id],
+    );
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: "Brand not found" });
+    }
+
+    const result = await pool.query(
+      `UPDATE brand SET brand_name = $1, brand_color = $2 WHERE brand_id = $3 RETURNING *`,
+      [brand_name.trim(), color, id],
+    );
+
+    await logActivity(
+      req,
+      "UPDATE",
+      "brand",
+      id,
+      `Updated brand: ${brand_name.trim()}`,
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Update brand error:", err);
+    res.status(500).json({ error: "Failed to update brand" });
+  }
+});
+
+// DELETE BRAND
+app.delete("/api/brands/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const info = await pool.query(
+      "SELECT brand_name FROM brand WHERE brand_id = $1",
+      [id],
+    );
+    if (info.rows.length === 0) {
+      return res.status(404).json({ error: "Brand not found" });
+    }
+    const brandName = info.rows[0].brand_name;
+
+    await pool.query("DELETE FROM brand WHERE brand_id = $1", [id]);
+
+    await logActivity(
+      req,
+      "DELETE",
+      "brand",
+      id,
+      `Deleted brand: ${brandName}`,
+    );
+
+    res.json({ message: "Brand deleted successfully" });
+  } catch (err) {
+    console.error("Delete brand error:", err);
+    res.status(500).json({ error: "Failed to delete brand" });
   }
 });
 

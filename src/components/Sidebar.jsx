@@ -83,18 +83,6 @@ export default function Sidebar({
       path: "/suppliers",
     },
 
-    // Purchase Order restricted for user level 3 and 4
-    // ...(![3, "3", 4, "4"].includes(user?.user_level)
-    //   ? [
-    //       {
-    //         text: "Purchase Order",
-    //         icon: <ShoppingCart />,
-    //         path: "/purchase-order",
-    //       },
-    //     ]
-    //   : []),
-
-    // User Management is now restricted to Admin only
     ...(isAdmin
       ? [
           {

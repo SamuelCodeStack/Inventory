@@ -19,7 +19,6 @@ import { CleaningServices } from "@mui/icons-material";
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
 import Inventory from "./components/Inventory.jsx";
-import PurchaseOrder from "./components/PurchaseOrder.jsx";
 import UserManagement from "./components/UserManagement.jsx";
 import Auth from "./components/Auth.jsx";
 import RawMaterials from "./components/RawMaterials.jsx";

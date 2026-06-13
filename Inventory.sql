@@ -1,4 +1,5 @@
 
+
 CREATE TABLE inventory (
     item_id SERIAL PRIMARY KEY,
     item_name VARCHAR(100) NOT NULL,
@@ -15,16 +16,12 @@ CREATE TABLE inventory (
 
 CREATE TABLE brand (
     brand_id SERIAL PRIMARY KEY,
-    -- Naka-reference sa inventory table (siguraduhing umiiral na ito)
-    item_id INTEGER REFERENCES inventory(item_id) ON DELETE CASCADE,
    	brand_name VARCHAR(40) NOT NULL,
-	set_color VARCHAR(50) 
+	brand_color VARCHAR(7) DEFAULT '#1565c0'
 );
 
 CREATE TABLE supplier (
     supplier_id SERIAL PRIMARY KEY,
-    -- Naka-reference sa inventory table (siguraduhing umiiral na ito)
-    item_id INTEGER REFERENCES inventory(item_id) ON DELETE CASCADE,
     supplier_name VARCHAR(100) NOT NULL,
     address TEXT,                           -- Binago sa TEXT para sa mahabang address
     contact_no VARCHAR(50),                 -- Sapat na ang 50 para sa phone/mobile numbers
@@ -37,7 +34,6 @@ CREATE TABLE inventory_remarks (
     item_id INTEGER REFERENCES inventory(item_id) ON DELETE CASCADE,
     remarks TEXT,                           -- Binago sa TEXT para hindi mag-error sa mahabang remarks
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- Ginawang TIMESTAMPTZ para sa eksaktong log ng oras
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE inventory_ledger (
@@ -54,10 +50,8 @@ CREATE TABLE raw_materials (
     material_id SERIAL PRIMARY KEY,
     material_name VARCHAR(100) NOT NULL,
     category VARCHAR(15),
-    base_value NUMERIC(12, 2) ,
-    base_unit VARCHAR(15), 
-    qty_value INTEGER DEFAULT 0,
-    qty_unit VARCHAR(15) NOT NULL, 
+	unit VARCHAR(15),
+    qty_ INTEGER DEFAULT 0,
 	minimum_stock INTEGER DEFAULT 10,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
@@ -70,6 +64,15 @@ CREATE TABLE raw_materials_ledger (
     new_qty_value INTEGER DEFAULT 0,
     change_amount INTEGER DEFAULT 0,
     recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE raw_materials_remarks (
+    rm_id SERIAL PRIMARY KEY,
+    -- Naka-reference sa inventory table
+     material_id INTEGER REFERENCES raw_materials(material_id) ON DELETE CASCADE,
+    remarks TEXT,                           -- Binago sa TEXT para hindi mag-error sa mahabang remarks
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- Ginawang TIMESTAMPTZ para sa eksaktong log ng oras
+	added_by VARCHAR(100)
 );
 
 CREATE TABLE purchase_order(

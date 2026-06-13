@@ -23,7 +23,7 @@ export default function EditInventoryModal({
   onSaveSuccess,
   mode,
   itemData,
-  userLevel, // Added userLevel prop to hide price for Production
+  userLevel,
 }) {
   const [formData, setFormData] = useState({
     name: "",
@@ -31,13 +31,40 @@ export default function EditInventoryModal({
     uom: "Pieces",
     minStock: 10,
     price: 0,
-    brand: "",
+    brand_id: "",
     supplier_id: "",
   });
+
+  // Brands list fetched from the server for the dropdown
+  const [brands, setBrands] = useState([]);
+  const [loadingBrands, setLoadingBrands] = useState(false);
 
   // Suppliers list fetched from the server for the dropdown
   const [suppliers, setSuppliers] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
+
+  // Fetch brands when modal opens
+  useEffect(() => {
+    if (!open) return;
+    const fetchBrands = async () => {
+      try {
+        setLoadingBrands(true);
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/brands`, {
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setBrands(Array.isArray(data) ? data : []);
+        }
+      } catch (e) {
+        console.error("Failed to fetch brands:", e);
+        setBrands([]);
+      } finally {
+        setLoadingBrands(false);
+      }
+    };
+    fetchBrands();
+  }, [open]);
 
   // Fetch suppliers when modal opens
   useEffect(() => {
@@ -50,10 +77,11 @@ export default function EditInventoryModal({
         });
         if (res.ok) {
           const data = await res.json();
-          setSuppliers(data);
+          setSuppliers(Array.isArray(data) ? data : []);
         }
       } catch (e) {
         console.error("Failed to fetch suppliers:", e);
+        setSuppliers([]);
       } finally {
         setLoadingSuppliers(false);
       }
@@ -62,19 +90,47 @@ export default function EditInventoryModal({
   }, [open]);
 
   // Pre-fill form when itemData changes
+  // --- FIX: brand is stored as plain text in inventory, so match brand name to brand list to get brand_id ---
   useEffect(() => {
-    if (itemData) {
+    if (itemData && brands.length > 0) {
+      // Match the stored brand text to a brand_id from the brands list
+      const matchedBrand = brands.find(
+        (b) =>
+          b.brand_name?.toLowerCase().trim() ===
+          itemData.brand?.toLowerCase().trim(),
+      );
+
+      // Match the stored supplier text to a supplier_id from the suppliers list
+      const matchedSupplier = suppliers.find(
+        (s) =>
+          s.supplier_name?.toLowerCase().trim() ===
+          itemData.supplier?.toLowerCase().trim(),
+      );
+
       setFormData({
         name: itemData.name || "",
         category: itemData.category || "Plastic",
         uom: itemData.uom || "Pieces",
         minStock: itemData.minStock || 10,
         price: itemData.price || 0,
-        brand: itemData.brand || "",
-        supplier_id: itemData.supplier_id || "",
+        // Use matched brand_id if found, else fall back to empty
+        brand_id: matchedBrand ? matchedBrand.brand_id : "",
+        // Use matched supplier_id if found, else fall back to empty
+        supplier_id: matchedSupplier ? matchedSupplier.supplier_id : "",
+      });
+    } else if (itemData && brands.length === 0) {
+      // Brands not loaded yet — set everything except brand/supplier
+      setFormData({
+        name: itemData.name || "",
+        category: itemData.category || "Plastic",
+        uom: itemData.uom || "Pieces",
+        minStock: itemData.minStock || 10,
+        price: itemData.price || 0,
+        brand_id: "",
+        supplier_id: "",
       });
     }
-  }, [itemData]);
+  }, [itemData, brands, suppliers]);
 
   // Logic to hide price for user level 3 (Production)
   const isProduction =
@@ -88,14 +144,14 @@ export default function EditInventoryModal({
     formData.uom === (itemData.uom || "Pieces") &&
     formData.minStock === (itemData.minStock || 10) &&
     formData.price === (itemData.price || 0) &&
-    formData.brand === (itemData.brand || "") &&
+    formData.brand_id === (itemData.brand_id || "") &&
     formData.supplier_id === (itemData.supplier_id || "");
 
   const handleChange = (e) => {
     const { name, value } = e.target;
 
     let updatedValue = value;
-    if (name === "name" || name === "brand") {
+    if (name === "name") {
       updatedValue = value.slice(0, 100); // VARCHAR(100)
     } else if (name === "minStock") {
       updatedValue = Math.max(0, parseInt(value, 10) || 0); // INTEGER >= 0
@@ -113,7 +169,7 @@ export default function EditInventoryModal({
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          credentials: "include", // Required to send session cookies for activity logs
+          credentials: "include",
           body: JSON.stringify({
             ...formData,
             quantity: itemData.quantity,
@@ -199,22 +255,34 @@ export default function EditInventoryModal({
             </TextField>
           </Grid>
 
-          {/* BRAND */}
-          <Grid item xs={12}>
+          {/* BRAND DROPDOWN — populated from /brands, same layout as supplier */}
+          <Grid item xs={formData.category === "Trading" ? 6 : 12}>
             <TextField
+              select
               fullWidth
               label="Brand"
-              name="brand"
-              placeholder="e.g. Samsung, Nike..."
-              value={formData.brand}
-              inputProps={{ maxLength: 100 }}
+              name="brand_id"
+              value={formData.brand_id}
               onChange={handleChange}
-            />
+              disabled={loadingBrands}
+              InputProps={{
+                endAdornment: loadingBrands ? (
+                  <CircularProgress size={16} sx={{ mr: 2 }} />
+                ) : null,
+              }}
+            >
+              <MenuItem value="">— None —</MenuItem>
+              {brands.map((b) => (
+                <MenuItem key={b.brand_id} value={b.brand_id}>
+                  {b.brand_name}
+                </MenuItem>
+              ))}
+            </TextField>
           </Grid>
 
           {/* SUPPLIER DROPDOWN — only visible when category is Trading */}
           {formData.category === "Trading" && (
-            <Grid item xs={12}>
+            <Grid item xs={6}>
               <TextField
                 select
                 fullWidth

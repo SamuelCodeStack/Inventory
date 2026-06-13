@@ -10,16 +10,18 @@ import {
   Grid,
   Box,
   IconButton,
-  Typography,
   Divider,
   Stack,
-  FormControlLabel,
-  Checkbox,
 } from "@mui/material";
 import { Close, Delete, AddCircle, Save } from "@mui/icons-material";
 
-const BASE_UNITS = ["KG", "ML", "L", "M", "CM", "GRAMS"];
-const PACKAGING_OPTIONS = [
+const UNIT_OPTIONS = [
+  "KG",
+  "Grams",
+  "ML",
+  "L",
+  "M",
+  "CM",
   "Sacks",
   "Bottles",
   "Rolls",
@@ -31,7 +33,6 @@ const PACKAGING_OPTIONS = [
   "Pail",
 ];
 
-// --- CATEGORY OPTIONS ---
 const CATEGORIES = ["Paper", "Plastic", "Injection", "Trading"];
 
 export default function AddRawMaterialModal({
@@ -41,36 +42,32 @@ export default function AddRawMaterialModal({
   mode,
 }) {
   const emptyRow = {
-    name: "",
+    material_name: "",
     category: "Paper",
-    hasMeasurement: false,
-    measurementValue: "",
-    measurementUnit: "KG",
-    packaging: "Sacks",
-    quantity: "",
-    minStock: "",
+    unit: "KG",
+    qty_: "",
+    minimum_stock: "",
   };
 
   const [items, setItems] = useState([{ ...emptyRow }]);
   const [loading, setLoading] = useState(false);
-  // State added to store existing raw material names fetched from backend records
   const [existingNames, setExistingNames] = useState([]);
 
-  // Fetch data rows from raw-materials table on initial mount sequences to cross-validate strings
   useEffect(() => {
     if (open) {
       const fetchExistingRawMaterials = async () => {
         try {
           const response = await fetch(
             `${import.meta.env.VITE_API_URL}/raw-materials`,
-            {
-              credentials: "include",
-            },
+            { credentials: "include" },
           );
           if (response.ok) {
             const data = await response.json();
-            const names = data.map((item) => item.name.trim().toLowerCase());
-            setExistingNames(names);
+            setExistingNames(
+              data
+                .filter((item) => item.material_name)
+                .map((item) => item.material_name.trim().toLowerCase()),
+            );
           }
         } catch (error) {
           console.error("Failed to fetch existing raw material names:", error);
@@ -80,7 +77,6 @@ export default function AddRawMaterialModal({
     }
   }, [open]);
 
-  // Evaluates input criteria case-insensitively across local state allocations and cloud registries
   const checkDuplicateName = (nameValue, currentIndex) => {
     const cleanName = nameValue.trim().toLowerCase();
     if (!cleanName) return { exists: false, message: "" };
@@ -94,7 +90,8 @@ export default function AddRawMaterialModal({
 
     const duplicateInFormIndex = items.findIndex(
       (item, idx) =>
-        idx !== currentIndex && item.name.trim().toLowerCase() === cleanName,
+        idx !== currentIndex &&
+        item.material_name.trim().toLowerCase() === cleanName,
     );
     if (duplicateInFormIndex !== -1) {
       return {
@@ -106,26 +103,20 @@ export default function AddRawMaterialModal({
     return { exists: false, message: "" };
   };
 
-  // --- VALIDATION LOGIC ---
   const isInvalid = items.some(
     (item, index) =>
-      !item.name.trim() ||
-      item.name.length > 100 ||
-      item.category.length > 15 ||
-      (item.hasMeasurement && item.measurementUnit.length > 15) ||
-      item.packaging.length > 15 ||
-      (item.hasMeasurement && !item.measurementValue) ||
-      !item.quantity ||
-      !item.minStock ||
-      checkDuplicateName(item.name, index).exists,
+      !item.material_name.trim() ||
+      item.material_name.length > 100 ||
+      !item.unit ||
+      !item.qty_ ||
+      !item.minimum_stock ||
+      checkDuplicateName(item.material_name, index).exists,
   );
 
   const addRow = () => setItems([...items, { ...emptyRow }]);
 
   const removeRow = (index) => {
-    if (items.length > 1) {
-      setItems(items.filter((_, i) => i !== index));
-    }
+    if (items.length > 1) setItems(items.filter((_, i) => i !== index));
   };
 
   const handleChange = (index, field, value) => {
@@ -141,24 +132,19 @@ export default function AddRawMaterialModal({
         `${import.meta.env.VITE_API_URL}/raw-materials/bulk-add`,
         {
           method: "POST",
-          credentials: "include", // Required to send session cookies for activity logs
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             items: items.map((item) => ({
-              ...item,
-              measurementValue: item.hasMeasurement
-                ? parseFloat(item.measurementValue) || 0
-                : null,
-              measurementUnit: item.hasMeasurement
-                ? item.measurementUnit
-                : null,
-              quantity: parseFloat(item.quantity) || 0,
-              minStock: parseFloat(item.minStock) || 0,
+              material_name: item.material_name,
+              category: item.category,
+              unit: item.unit,
+              qty_: parseFloat(item.qty_) || 0,
+              minimum_stock: parseFloat(item.minimum_stock) || 0,
             })),
           }),
         },
       );
-
       if (response.ok) {
         onSaveSuccess();
         handleReset();
@@ -180,13 +166,8 @@ export default function AddRawMaterialModal({
       open={open}
       onClose={handleReset}
       fullWidth
-      maxWidth="md" // Increased to md to better fit the bulk layout
-      PaperProps={{
-        sx: {
-          borderRadius: 3,
-          backgroundImage: "none",
-        },
-      }}
+      maxWidth="md"
+      PaperProps={{ sx: { borderRadius: 3, backgroundImage: "none" } }}
     >
       <DialogTitle
         sx={{
@@ -205,25 +186,31 @@ export default function AddRawMaterialModal({
       <DialogContent dividers sx={{ maxHeight: "70vh" }}>
         <Stack spacing={4} divider={<Divider />}>
           {items.map((item, index) => {
-            const validationStatus = checkDuplicateName(item.name, index);
+            const validationStatus = checkDuplicateName(
+              item.material_name,
+              index,
+            );
             return (
               <Box key={index} sx={{ pt: index === 0 ? 0 : 2 }}>
                 <Grid container spacing={2} alignItems="flex-start">
-                  {/* Identity Block - Top Field Focus Group */}
+                  {/* Material Name */}
                   <Grid item xs={12} md={8}>
                     <TextField
                       fullWidth
                       label="Material Name"
-                      value={item.name}
+                      value={item.material_name}
                       inputProps={{ maxLength: 100 }}
-                      error={item.name.length > 100 || validationStatus.exists}
+                      error={
+                        item.material_name.length > 100 ||
+                        validationStatus.exists
+                      }
                       helperText={
-                        item.name.length > 100
+                        item.material_name.length > 100
                           ? "Maximum 100 characters"
                           : validationStatus.message
                       }
                       onChange={(e) =>
-                        handleChange(index, "name", e.target.value)
+                        handleChange(index, "material_name", e.target.value)
                       }
                       size="small"
                       placeholder="e.g. Lubricant Oil"
@@ -231,6 +218,7 @@ export default function AddRawMaterialModal({
                     />
                   </Grid>
 
+                  {/* Category */}
                   <Grid item xs={12} md={4}>
                     <TextField
                       select
@@ -250,19 +238,19 @@ export default function AddRawMaterialModal({
                     </TextField>
                   </Grid>
 
-                  {/* Logistics & Structural Attributes Row */}
+                  {/* Unit */}
                   <Grid item xs={12} md={4}>
                     <TextField
                       select
                       fullWidth
-                      label="Packaging"
-                      value={item.packaging}
+                      label="Unit"
+                      value={item.unit}
                       onChange={(e) =>
-                        handleChange(index, "packaging", e.target.value)
+                        handleChange(index, "unit", e.target.value)
                       }
                       size="small"
                     >
-                      {PACKAGING_OPTIONS.map((u) => (
+                      {UNIT_OPTIONS.map((u) => (
                         <MenuItem key={u} value={u}>
                           {u}
                         </MenuItem>
@@ -270,32 +258,35 @@ export default function AddRawMaterialModal({
                     </TextField>
                   </Grid>
 
+                  {/* Initial Quantity */}
                   <Grid item xs={6} md={4}>
                     <TextField
                       fullWidth
                       type="number"
                       label="Initial Stock Quantity"
-                      value={item.quantity}
+                      value={item.qty_}
                       onChange={(e) =>
-                        handleChange(index, "quantity", e.target.value)
+                        handleChange(index, "qty_", e.target.value)
                       }
                       size="small"
                     />
                   </Grid>
 
+                  {/* Min Stock */}
                   <Grid item xs={6} md={items.length > 1 ? 3 : 4}>
                     <TextField
                       fullWidth
                       type="number"
                       label="Low Stock Alert Threshold"
-                      value={item.minStock}
+                      value={item.minimum_stock}
                       onChange={(e) =>
-                        handleChange(index, "minStock", e.target.value)
+                        handleChange(index, "minimum_stock", e.target.value)
                       }
                       size="small"
                     />
                   </Grid>
 
+                  {/* Remove row button */}
                   {items.length > 1 && (
                     <Grid
                       item
@@ -311,74 +302,6 @@ export default function AddRawMaterialModal({
                         <Delete fontSize="small" />
                       </IconButton>
                     </Grid>
-                  )}
-
-                  {/* Toggle Measurement Controls */}
-                  <Grid item xs={12} sx={{ mt: -0.5 }}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={item.hasMeasurement}
-                          onChange={(e) =>
-                            handleChange(
-                              index,
-                              "hasMeasurement",
-                              e.target.checked,
-                            )
-                          }
-                          size="small"
-                        />
-                      }
-                      label={
-                        <Typography variant="body2">
-                          Requires Measurement Specs
-                        </Typography>
-                      }
-                    />
-                  </Grid>
-
-                  {/* Measurement Conditional Sub-fields */}
-                  {item.hasMeasurement && (
-                    <>
-                      <Grid item xs={6} md={3}>
-                        <TextField
-                          fullWidth
-                          type="number"
-                          label="Measurement Value"
-                          value={item.measurementValue}
-                          onChange={(e) =>
-                            handleChange(
-                              index,
-                              "measurementValue",
-                              e.target.value,
-                            )
-                          }
-                          size="small"
-                        />
-                      </Grid>
-                      <Grid item xs={6} md={3}>
-                        <TextField
-                          select
-                          fullWidth
-                          label="Unit"
-                          value={item.measurementUnit}
-                          onChange={(e) =>
-                            handleChange(
-                              index,
-                              "measurementUnit",
-                              e.target.value,
-                            )
-                          }
-                          size="small"
-                        >
-                          {BASE_UNITS.map((u) => (
-                            <MenuItem key={u} value={u}>
-                              {u}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                      </Grid>
-                    </>
                   )}
                 </Grid>
               </Box>

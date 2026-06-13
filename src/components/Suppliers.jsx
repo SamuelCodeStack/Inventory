@@ -76,7 +76,6 @@ export default function Suppliers({ mode, user }) {
 
   // --- FILTER STATES ---
   const [searchQuery, setSearchQuery] = useState("");
-  const [linkedFilter, setLinkedFilter] = useState("All"); // Filter: All | Linked | Unlinked
 
   // --- PAGINATION STATES ---
   const [page, setPage] = useState(0);
@@ -124,12 +123,7 @@ export default function Suppliers({ mode, user }) {
       s.contact_no?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.address?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesLinked =
-      linkedFilter === "All" ||
-      (linkedFilter === "Linked" && s.item_id) ||
-      (linkedFilter === "Unlinked" && !s.item_id);
-
-    return matchesSearch && matchesLinked;
+    return matchesSearch;
   });
 
   const paginatedSuppliers = filteredSuppliers.slice(
@@ -139,7 +133,6 @@ export default function Suppliers({ mode, user }) {
 
   const handleResetFilters = () => {
     setSearchQuery("");
-    setLinkedFilter("All");
     setPage(0);
   };
 
@@ -148,23 +141,6 @@ export default function Suppliers({ mode, user }) {
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
-  };
-
-  // --- DELETE SINGLE ---
-  const handleDelete = async (id) => {
-    if (!window.confirm(`Delete supplier #${id}?`)) return;
-    try {
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/suppliers/${id}`,
-        { method: "DELETE", credentials: "include" },
-      );
-      if (res.ok) {
-        showSnackbar("Supplier deleted successfully", "success");
-        fetchSuppliers();
-      }
-    } catch (e) {
-      showSnackbar("Delete failed", "error");
-    }
   };
 
   // --- BULK DELETE ---
@@ -404,26 +380,8 @@ export default function Suppliers({ mode, user }) {
             />
           </Grid>
 
-          <Grid item xs={6} md={2.5}>
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label="Linked Item"
-              value={linkedFilter}
-              onChange={(e) => {
-                setLinkedFilter(e.target.value);
-                setPage(0);
-              }}
-            >
-              <MenuItem value="All">All Suppliers</MenuItem>
-              <MenuItem value="Linked">Linked to Item</MenuItem>
-              <MenuItem value="Unlinked">Not Linked</MenuItem>
-            </TextField>
-          </Grid>
-
           {/* RESET FILTERS BUTTON — only shows when filters are active */}
-          {(searchQuery || linkedFilter !== "All") && (
+          {searchQuery && (
             <Grid item xs={12}>
               <Button
                 startIcon={<FilterListOff />}
@@ -469,9 +427,6 @@ export default function Suppliers({ mode, user }) {
                     <TableCell sx={{ fontWeight: "bold" }}>
                       Supplier Name
                     </TableCell>
-                    <TableCell sx={{ fontWeight: "bold" }}>
-                      Linked Item
-                    </TableCell>
                     <TableCell sx={{ fontWeight: "bold" }}>Address</TableCell>
                     <TableCell sx={{ fontWeight: "bold" }}>
                       Contact No.
@@ -514,11 +469,6 @@ export default function Suppliers({ mode, user }) {
                       >
                         <Typography variant="body2" fontWeight="bold">
                           {row.supplier_name}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" color="text.secondary">
-                          {row.item_name || "—"}
                         </Typography>
                       </TableCell>
                       <TableCell
@@ -577,7 +527,7 @@ export default function Suppliers({ mode, user }) {
                     <TableRow>
                       <TableCell
                         colSpan={
-                          7 +
+                          5 +
                           (canModify && isSelectionEnabled ? 1 : 0) +
                           (canViewActionColumn ? 1 : 0)
                         }

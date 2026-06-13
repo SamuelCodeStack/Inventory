@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-
 import {
   Box,
   Typography,
@@ -22,127 +21,95 @@ import {
   TablePagination,
   Grid,
   Checkbox,
-  LinearProgress,
   Menu,
   Divider,
   ListItemIcon,
   ListItemText,
   Tooltip,
+  Collapse,
 } from "@mui/material";
-
 import {
   Add,
   Edit,
   Delete,
   Search,
   Print,
-  FilterListOff,
   Save,
-  RestartAlt,
   EditNote,
   Undo,
   CheckBox as CheckBoxIcon,
   CheckBoxOutlineBlank,
   KeyboardArrowDown,
   KeyboardArrowUp,
-  BarChart,
   Notes,
   VisibilityOff,
-  Straighten, // Icon for Min Stock Level
+  Straighten,
+  AddComment,
+  Send,
+  Cancel,
 } from "@mui/icons-material";
-
-// --- MODAL IMPORTS ---
-
 import AddRawMaterialModal from "./AddRawMaterialModal";
-
 import EditRawMaterialModal from "./EditRawMaterialModal";
-
 import PrintRawMaterialModal from "./PrintRawMaterialModal";
 
 export default function RawMaterials({ mode, userLevel }) {
   const [materials, setMaterials] = useState([]);
-
   const [originalData, setOriginalData] = useState([]);
-
   const [loading, setLoading] = useState(true);
-
   const [isEditingQty, setIsEditingQty] = useState(false);
-
   const [selectedIds, setSelectedIds] = useState([]);
-
   const [enableCheckboxes, setEnableCheckboxes] = useState(false);
 
-  // --- DROPDOWN MENU STATE ---
   const [anchorEl, setAnchorEl] = useState(null);
   const isMenuOpen = Boolean(anchorEl);
   const handleMenuOpen = (e) => setAnchorEl(e.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);
 
-  // --- STATUS VIEW TOGGLE: 'badge' | 'bar' ---
-  const [statusView, setStatusView] = useState("badge");
-
-  // --- REMARKS COLUMN VISIBILITY TOGGLE ---
   const [showRemarks, setShowRemarks] = useState(false);
-
-  // --- MIN STOCK COLUMN VISIBILITY TOGGLE ---
   const [showMinStock, setShowMinStock] = useState(false);
 
-  // --- PERMISSION CHECKS ---
+  const [activeRemarkRowId, setActiveRemarkRowId] = useState(null);
+  const [remarkInputValue, setRemarkInputValue] = useState("");
+  const [savingRemark, setSavingRemark] = useState(false);
+  const [deletingRemarkId, setDeletingRemarkId] = useState(null);
 
   const canPrint = [0, "0", 1, "1", 2, "2", 3, "3", 4, "4"].includes(userLevel);
-
   const canAction = [0, "0", 1, "1", 2, "2", 3, "3"].includes(userLevel);
 
-  // --- FILTER STATES ---
-
   const [searchQuery, setSearchQuery] = useState("");
-
   const [categoryFilter, setCategoryFilter] = useState("All");
-
   const [statusFilter, setStatusFilter] = useState("All");
-
-  // --- PAGINATION STATES ---
+  const [unitFilter, setUnitFilter] = useState("All");
 
   const [page, setPage] = useState(0);
-
-  const [rowsPerPage, setRowsPerPage] = useState(20);
-
-  // Modal States
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   const [openAddModal, setOpenAddModal] = useState(false);
-
   const [openEditModal, setOpenEditModal] = useState(false);
-
   const [openPrintModal, setOpenPrintModal] = useState(false);
-
   const [selectedItem, setSelectedItem] = useState(null);
 
   const [snackbar, setSnackbar] = useState({
     open: false,
-
     message: "",
-
     severity: "success",
   });
-
   const isDark = mode === "dark";
 
   const fetchMaterials = async () => {
     try {
       setLoading(true);
-
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/raw-materials`,
+        { credentials: "include" },
       );
-
       const data = await response.json();
-
-      const initializedData = data.map((item) => ({ ...item, adjustment: "" }));
-
+      const initializedData = data.map((item) => ({
+        ...item,
+        adjustment: "",
+      }));
       setMaterials(initializedData);
-
       setOriginalData(JSON.parse(JSON.stringify(initializedData)));
-
       setSelectedIds([]);
     } catch (error) {
       showSnackbar("Failed to load raw materials", "error");
@@ -155,113 +122,75 @@ export default function RawMaterials({ mode, userLevel }) {
     fetchMaterials();
   }, []);
 
-  const handleQuantityChangeLocal = (id, newQuantity) => {
+  // Use material_id as the identifier throughout
+  const handleQuantityChangeLocal = (material_id, newQuantity) => {
     const qty = Math.max(0, parseInt(newQuantity) || 0);
-
     setMaterials((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          return { ...item, quantity: qty, adjustment: "" };
-        }
-
-        return item;
-      }),
+      prev.map((item) =>
+        item.material_id === material_id
+          ? { ...item, qty_: qty, adjustment: "" }
+          : item,
+      ),
     );
   };
 
-  const handleAdjustmentChange = (id, value) => {
+  const handleAdjustmentChange = (material_id, value) => {
     if (value !== "" && value !== "-" && !/^-?\d+$/.test(value)) return;
-
     setMaterials((prev) =>
       prev.map((item) => {
-        if (item.id === id) {
-          const original = originalData.find((o) => o.id === id);
-
+        if (item.material_id === material_id) {
+          const original = originalData.find(
+            (o) => o.material_id === material_id,
+          );
           const adjValue = parseInt(value) || 0;
-
-          const calculatedQty = Math.max(0, original.quantity + adjValue);
-
-          return {
-            ...item,
-
-            adjustment: value,
-
-            quantity: calculatedQty,
-          };
+          const calculatedQty = Math.max(0, (original?.qty_ ?? 0) + adjValue);
+          return { ...item, adjustment: value, qty_: calculatedQty };
         }
-
         return item;
       }),
-    );
-  };
-
-  const handleRemarksChange = (id, value) => {
-    setMaterials((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, remarks: value } : item)),
     );
   };
 
   const hasChanges = materials.some((item) => {
-    const original = originalData.find((o) => o.id === item.id);
-
-    return (
-      original &&
-      (item.quantity !== original.quantity ||
-        (item.remarks || "") !== (original.remarks || ""))
+    const original = originalData.find(
+      (o) => o.material_id === item.material_id,
     );
+    return original && item.qty_ !== original.qty_;
   });
 
   const handleDiscard = () => {
     setMaterials(JSON.parse(JSON.stringify(originalData)));
-
     setIsEditingQty(false);
-
     showSnackbar("Changes discarded", "info");
   };
 
   const handleBulkSave = async () => {
     const updates = materials
-
       .filter((item) => {
-        const original = originalData.find((o) => o.id === item.id);
-
-        return (
-          original &&
-          (item.quantity !== original.quantity ||
-            (item.remarks || "") !== (original.remarks || ""))
+        const original = originalData.find(
+          (o) => o.material_id === item.material_id,
         );
+        return original && item.qty_ !== original.qty_;
       })
-
       .map((item) => ({
-        id: item.id,
-
-        quantity: item.quantity,
-
+        material_id: item.material_id,
+        qty_: item.qty_,
         adjustment: item.adjustment,
-
-        remarks: item.remarks || "",
       }));
 
     try {
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/raw-materials/bulk`,
-
         {
           method: "PATCH",
-
           credentials: "include",
-
           headers: { "Content-Type": "application/json" },
-
           body: JSON.stringify({ items: updates }),
         },
       );
-
       if (response.ok) {
         showSnackbar("Quantities updated successfully!", "success");
-
         setIsEditingQty(false);
-
         fetchMaterials();
       }
     } catch (error) {
@@ -270,36 +199,34 @@ export default function RawMaterials({ mode, userLevel }) {
   };
 
   const getStatus = (item) => {
-    const currentVal = item.quantity;
-
-    if (currentVal <= 0) return { label: "Out of Stock", color: "error" };
-
-    if (currentVal <= item.minStock)
-      return { label: "Low Stock", color: "warning" };
-
+    const qty = item.qty_ ?? 0;
+    const minStock = item.minimum_stock ?? 0;
+    if (qty <= 0) return { label: "Out of Stock", color: "error" };
+    if (qty <= minStock) return { label: "Low Stock", color: "warning" };
     return { label: "In Stock", color: "success" };
   };
 
-  // --- STATUS BAR RENDERER ---
-  // Calculates a percentage from quantity vs minStock and renders a colored progress bar
-  const renderStatusBar = (row) => {
-    const minStock = row.minStock ?? 0;
-    const qty = row.quantity ?? 0;
+  const getStatusColor = (row) => {
+    const qty = row.qty_ ?? 0;
+    const minStock = row.minimum_stock ?? 0;
+    if (qty <= 0) return "#e74c3c";
+    if (qty <= minStock) return "#f39c12";
+    return null;
+  };
 
+  const renderStatusBar = (row) => {
+    const minStock = row.minimum_stock ?? 0;
+    const qty = row.qty_ ?? 0;
     const barColor =
       qty <= 0 ? "#e74c3c" : qty <= minStock ? "#f39c12" : "#2ecc71";
-
     const bgColor =
       qty <= 0
         ? "rgba(231, 76, 60, 0.15)"
         : qty <= minStock
           ? "rgba(241, 145, 73, 0.15)"
           : "rgba(46, 204, 113, 0.15)";
-
     const statusLabel =
       qty <= 0 ? "Out of Stock" : qty <= minStock ? "Low Stock" : "In Stock";
-
-    // Calculate percentage: cap at 100%, use minStock * 2 as "full" threshold
     const maxRef = minStock > 0 ? minStock * 2 : 100;
     const pct = qty <= 0 ? 0 : Math.min(Math.round((qty / maxRef) * 100), 100);
 
@@ -349,49 +276,107 @@ export default function RawMaterials({ mode, userLevel }) {
     );
   };
 
+  const handleToggleRemarkInput = (rowId, currentRemark = "") => {
+    if (activeRemarkRowId === rowId) {
+      setActiveRemarkRowId(null);
+      setRemarkInputValue("");
+    } else {
+      setActiveRemarkRowId(rowId);
+      setRemarkInputValue(currentRemark);
+    }
+  };
+
+  const handleSaveRemark = async (material_id) => {
+    if (!remarkInputValue.trim()) {
+      showSnackbar("Remarks cannot be empty", "warning");
+      return;
+    }
+    try {
+      setSavingRemark(true);
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/raw-materials/${material_id}/remarks`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ remarks: remarkInputValue.trim() }),
+        },
+      );
+      if (res.ok) {
+        showSnackbar("Remark saved successfully", "success");
+        setActiveRemarkRowId(null);
+        setRemarkInputValue("");
+        fetchMaterials();
+      } else {
+        showSnackbar("Failed to save remark", "error");
+      }
+    } catch (e) {
+      showSnackbar("Network error saving remark", "error");
+    } finally {
+      setSavingRemark(false);
+    }
+  };
+
+  const handleDeleteRemark = async (material_id) => {
+    if (!window.confirm("Clear this remark?")) return;
+    try {
+      setDeletingRemarkId(material_id);
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/raw-materials/${material_id}/remarks`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        },
+      );
+      if (res.ok) {
+        showSnackbar("Remark cleared", "info");
+        fetchMaterials();
+      } else {
+        showSnackbar("Failed to clear remark", "error");
+      }
+    } catch (e) {
+      showSnackbar("Network error clearing remark", "error");
+    } finally {
+      setDeletingRemarkId(null);
+    }
+  };
+
+  // Derive unique units from loaded data for the filter dropdown
+  const unitOptions = [
+    "All",
+    ...[...new Set(materials.map((m) => m.unit).filter(Boolean))].sort((a, b) =>
+      a.localeCompare(b),
+    ),
+  ];
+
   const filteredMaterials = materials.filter((m) => {
     const statusObj = getStatus(m);
-
+    const name = m.material_name ?? "";
+    const id = String(m.material_id ?? "");
     const matchesSearch =
-      m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      String(m.id).includes(searchQuery);
-
+      name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      id.includes(searchQuery);
     const matchesCategory =
       categoryFilter === "All" || m.category === categoryFilter;
-
     const matchesStatus =
       statusFilter === "All" || statusObj.label === statusFilter;
-
-    return matchesSearch && matchesCategory && matchesStatus;
+    const matchesUnit = unitFilter === "All" || m.unit === unitFilter;
+    return matchesSearch && matchesCategory && matchesStatus && matchesUnit;
   });
 
   const paginatedMaterials = filteredMaterials.slice(
     page * rowsPerPage,
-
     page * rowsPerPage + rowsPerPage,
   );
 
-  const handleResetFilters = () => {
-    setSearchQuery("");
-
-    setCategoryFilter("All");
-
-    setStatusFilter("All");
-
-    setPage(0);
-  };
-
   const handleChangePage = (event, newPage) => setPage(newPage);
-
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
-
     setPage(0);
   };
 
-  const showSnackbar = (message, severity = "success") => {
+  const showSnackbar = (message, severity = "success") =>
     setSnackbar({ open: true, message, severity });
-  };
 
   const handleBulkDelete = async () => {
     if (
@@ -400,31 +385,23 @@ export default function RawMaterials({ mode, userLevel }) {
       )
     )
       return;
-
     try {
       let successCount = 0;
-
       for (const id of selectedIds) {
         const response = await fetch(
           `${import.meta.env.VITE_API_URL}/raw-materials/${id}`,
-
           {
             method: "DELETE",
-
             credentials: "include",
           },
         );
-
         if (response.ok) successCount++;
       }
-
       if (successCount > 0) {
         showSnackbar(
           `${successCount} material(s) deleted successfully`,
-
           "info",
         );
-
         fetchMaterials();
       }
     } catch (error) {
@@ -434,50 +411,42 @@ export default function RawMaterials({ mode, userLevel }) {
 
   const handleSelectAll = (event) => {
     if (event.target.checked) {
-      const idsOnPage = paginatedMaterials.map((m) => m.id);
-
+      const idsOnPage = paginatedMaterials.map((m) => m.material_id);
       setSelectedIds((prev) => [...new Set([...prev, ...idsOnPage])]);
     } else {
-      const idsOnPage = paginatedMaterials.map((m) => m.id);
-
+      const idsOnPage = paginatedMaterials.map((m) => m.material_id);
       setSelectedIds((prev) => prev.filter((id) => !idsOnPage.includes(id)));
     }
   };
 
-  const handleSelectOne = (id) => {
+  const handleSelectOne = (material_id) => {
     setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+      prev.includes(material_id)
+        ? prev.filter((item) => item !== material_id)
+        : [...prev, material_id],
     );
   };
 
   const isAllSelectedOnPage =
     paginatedMaterials.length > 0 &&
-    paginatedMaterials.every((m) => selectedIds.includes(m.id));
+    paginatedMaterials.every((m) => selectedIds.includes(m.material_id));
 
   return (
     <Box
       sx={{
         p: { xs: 2, sm: 4 },
-
         mt: 8,
-
         bgcolor: "background.default",
-
         minHeight: "100vh",
       }}
     >
       <Box
         sx={{
           display: "flex",
-
           flexDirection: { xs: "column", sm: "row" },
-
           justifyContent: "space-between",
-
           mb: 3,
-
           alignItems: { xs: "flex-start", sm: "center" },
-
           gap: 2,
         }}
       >
@@ -485,14 +454,12 @@ export default function RawMaterials({ mode, userLevel }) {
           <Typography variant="h5" fontWeight="bold">
             Raw Materials
           </Typography>
-
           <Typography variant="body2" color="text.secondary">
             Dynamic unit tracking for chemicals & supplies
           </Typography>
         </Box>
 
         <Stack direction="row" spacing={1.5} alignItems="center">
-          {/* BULK DELETE BUTTON - VISIBLE WHEN ITEMS ARE CHECKED */}
           {selectedIds.length > 0 &&
             !isEditingQty &&
             canAction &&
@@ -517,7 +484,6 @@ export default function RawMaterials({ mode, userLevel }) {
               >
                 Discard
               </Button>
-
               <Button
                 variant="contained"
                 color="success"
@@ -529,7 +495,6 @@ export default function RawMaterials({ mode, userLevel }) {
             </>
           )}
 
-          {/* --- GROUPED ACTIONS DROPDOWN BUTTON --- */}
           <Button
             variant="outlined"
             onClick={handleMenuOpen}
@@ -558,6 +523,7 @@ export default function RawMaterials({ mode, userLevel }) {
             anchorEl={anchorEl}
             open={isMenuOpen}
             onClose={handleMenuClose}
+            disableScrollLock
             PaperProps={{
               elevation: 3,
               sx: {
@@ -579,7 +545,6 @@ export default function RawMaterials({ mode, userLevel }) {
             transformOrigin={{ horizontal: "right", vertical: "top" }}
             anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
           >
-            {/* PRINT */}
             {canPrint && (
               <MenuItem
                 onClick={() => {
@@ -594,7 +559,6 @@ export default function RawMaterials({ mode, userLevel }) {
               </MenuItem>
             )}
 
-            {/* VIEW REMARKS TOGGLE — shows/hides the Remarks column */}
             <MenuItem
               onClick={() => {
                 setShowRemarks((prev) => !prev);
@@ -614,7 +578,6 @@ export default function RawMaterials({ mode, userLevel }) {
               </ListItemText>
             </MenuItem>
 
-            {/* MIN STOCK TOGGLE — shows/hides the Min Stock column next to Quantity */}
             <MenuItem
               onClick={() => {
                 setShowMinStock((prev) => !prev);
@@ -630,7 +593,6 @@ export default function RawMaterials({ mode, userLevel }) {
               </ListItemText>
             </MenuItem>
 
-            {/* SELECT ROWS */}
             {canAction && !isEditingQty && (
               <MenuItem
                 onClick={() => {
@@ -656,7 +618,6 @@ export default function RawMaterials({ mode, userLevel }) {
 
             {canAction && <Divider sx={{ my: 0.5 }} />}
 
-            {/* EDIT QTY */}
             {canAction &&
               (!hasChanges || !isEditingQty) &&
               (isEditingQty ? (
@@ -686,14 +647,13 @@ export default function RawMaterials({ mode, userLevel }) {
                 </MenuItem>
               ))}
 
-            {/* ADD MATERIAL */}
             {canAction && (
               <MenuItem
                 onClick={() => {
                   setOpenAddModal(true);
                   handleMenuClose();
                 }}
-                disabled={isEditingQty} // Disable button add when edit qty is on to prevent conflicts
+                disabled={isEditingQty}
                 sx={{
                   bgcolor: "primary.main",
                   color: "#fff",
@@ -712,8 +672,9 @@ export default function RawMaterials({ mode, userLevel }) {
       </Box>
 
       <TableContainer component={Paper} sx={{ borderRadius: 3, p: 2 }}>
+        {/* FILTER BAR */}
         <Grid container spacing={2} sx={{ mb: 3 }} alignItems="center">
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 5 }}>
             <TextField
               fullWidth
               size="small"
@@ -729,43 +690,59 @@ export default function RawMaterials({ mode, userLevel }) {
               }}
             />
           </Grid>
-
-          <Grid item xs={6} md={2.5}>
+          <Grid size={{ xs: 6, md: 2 }}>
             <TextField
               select
               fullWidth
               size="small"
               label="Category"
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setPage(0);
+              }}
             >
               <MenuItem value="All">All Categories</MenuItem>
-
               <MenuItem value="Plastic">Plastic</MenuItem>
-
               <MenuItem value="Injection">Injection</MenuItem>
-
               <MenuItem value="Paper">Paper</MenuItem>
-
               <MenuItem value="Trading">Trading</MenuItem>
             </TextField>
           </Grid>
-
-          <Grid item xs={6} md={2.5}>
+          <Grid size={{ xs: 6, md: 2 }}>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Unit"
+              value={unitFilter}
+              onChange={(e) => {
+                setUnitFilter(e.target.value);
+                setPage(0);
+              }}
+            >
+              {unitOptions.map((u) => (
+                <MenuItem key={u} value={u}>
+                  {u === "All" ? "All Units" : u}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 6, md: 2 }}>
             <TextField
               select
               fullWidth
               size="small"
               label="Status"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(0);
+              }}
             >
               <MenuItem value="All">All Status</MenuItem>
-
               <MenuItem value="In Stock">In Stock</MenuItem>
-
               <MenuItem value="Low Stock">Low Stock</MenuItem>
-
               <MenuItem value="Out of Stock">Out of Stock</MenuItem>
             </TextField>
           </Grid>
@@ -793,18 +770,13 @@ export default function RawMaterials({ mode, userLevel }) {
                       />
                     </TableCell>
                   )}
-
                   <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
-
                   <TableCell sx={{ fontWeight: "bold" }}>
                     Material Name
                   </TableCell>
-
                   <TableCell sx={{ fontWeight: "bold" }}>Category</TableCell>
-
+                  <TableCell sx={{ fontWeight: "bold" }}>Unit</TableCell>
                   <TableCell sx={{ fontWeight: "bold" }}>Quantity</TableCell>
-
-                  {/* MIN STOCK HEADER — only visible when showMinStock is true */}
                   {showMinStock && (
                     <TableCell
                       align="right"
@@ -817,79 +789,22 @@ export default function RawMaterials({ mode, userLevel }) {
                       Min Stock
                     </TableCell>
                   )}
-
                   {isEditingQty && (
                     <TableCell sx={{ fontWeight: "bold" }}>
                       Adjustment
                     </TableCell>
                   )}
-
-                  {/* STATUS COLUMN HEADER WITH VIEW TOGGLE BUTTON */}
                   <TableCell
                     align="center"
                     sx={{ fontWeight: "bold", minWidth: "160px" }}
                   >
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 1,
-                      }}
-                    >
-                      Status
-                      <Tooltip
-                        title={
-                          statusView === "badge"
-                            ? "Switch to bar chart view"
-                            : "Switch to badge view"
-                        }
-                      >
-                        <IconButton
-                          size="small"
-                          onClick={() =>
-                            setStatusView((v) =>
-                              v === "badge" ? "bar" : "badge",
-                            )
-                          }
-                          sx={{
-                            p: 0.4,
-                            borderRadius: 1,
-                            border: "1px solid",
-                            borderColor:
-                              statusView === "bar" ? "primary.main" : "divider",
-                            color:
-                              statusView === "bar"
-                                ? "primary.main"
-                                : "text.secondary",
-                            bgcolor:
-                              statusView === "bar"
-                                ? isDark
-                                  ? "rgba(25,118,210,0.12)"
-                                  : "rgba(25,118,210,0.08)"
-                                : "transparent",
-                            "&:hover": {
-                              borderColor: "primary.main",
-                              color: "primary.main",
-                              bgcolor: isDark
-                                ? "rgba(25,118,210,0.12)"
-                                : "rgba(25,118,210,0.08)",
-                            },
-                          }}
-                        >
-                          <BarChart sx={{ fontSize: 15 }} />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
+                    Status
                   </TableCell>
-
-                  {/* REMARKS HEADER — only visible when showRemarks is true */}
                   {showRemarks && (
-                    <TableCell sx={{ fontWeight: "bold", minWidth: "150px" }}>
+                    <TableCell sx={{ fontWeight: "bold", minWidth: "220px" }}>
                       Remarks
                     </TableCell>
                   )}
-
                   {canAction && (
                     <TableCell align="right" sx={{ fontWeight: "bold" }}>
                       Actions
@@ -900,38 +815,31 @@ export default function RawMaterials({ mode, userLevel }) {
 
               <TableBody>
                 {paginatedMaterials.map((row) => {
-                  const status = getStatus(row);
-
-                  const barPercentage =
-                    row.quantity <= 0
-                      ? 0
-                      : row.minStock === 0
-                        ? 100
-                        : Math.min(
-                            Math.round(
-                              (row.quantity / (row.minStock * 2)) * 100,
-                            ),
-
-                            100,
-                          );
-
-                  let barColor = "#2ecc71";
-
-                  if (row.quantity <= 0) barColor = "#e74c3c";
-                  else if (row.quantity <= row.minStock) barColor = "#f39c12";
+                  const statusColor = getStatusColor(row);
+                  const isRemarkOpen = activeRemarkRowId === row.material_id;
 
                   return (
-                    <TableRow key={row.id} hover>
+                    <TableRow key={row.material_id} hover>
                       {canAction && !isEditingQty && enableCheckboxes && (
                         <TableCell padding="checkbox">
                           <Checkbox
-                            checked={selectedIds.includes(row.id)}
-                            onChange={() => handleSelectOne(row.id)}
+                            checked={selectedIds.includes(row.material_id)}
+                            onChange={() => handleSelectOne(row.material_id)}
                           />
                         </TableCell>
                       )}
 
-                      <TableCell>#{row.id}</TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: statusColor || "text.primary",
+                            fontWeight: statusColor ? "600" : "400",
+                          }}
+                        >
+                          #{row.material_id}
+                        </Typography>
+                      </TableCell>
 
                       <TableCell
                         sx={{
@@ -940,14 +848,30 @@ export default function RawMaterials({ mode, userLevel }) {
                           wordBreak: "break-word",
                         }}
                       >
-                        <Typography variant="body2" fontWeight="600">
-                          {row.name}
+                        <Typography
+                          variant="body2"
+                          fontWeight="600"
+                          sx={{ color: statusColor || "text.primary" }}
+                        >
+                          {row.material_name}
                         </Typography>
                       </TableCell>
 
                       <TableCell>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography
+                          variant="body2"
+                          sx={{ color: statusColor || "text.secondary" }}
+                        >
                           {row.category}
+                        </Typography>
+                      </TableCell>
+
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          sx={{ color: statusColor || "text.secondary" }}
+                        >
+                          {row.unit || "—"}
                         </Typography>
                       </TableCell>
 
@@ -960,38 +884,39 @@ export default function RawMaterials({ mode, userLevel }) {
                             !isEditingQty ||
                             (row.adjustment !== "" && row.adjustment !== null)
                           }
-                          value={row.quantity}
+                          value={row.qty_ ?? 0}
                           onKeyDown={(e) => {
                             if (e.key === "." || e.key === "e")
                               e.preventDefault();
                           }}
                           onChange={(e) => {
                             let val = e.target.value;
-                            if (val !== "" && parseFloat(val) > 9999999) {
+                            if (val !== "" && parseFloat(val) > 9999999)
                               val = "9999999";
-                            }
-                            handleQuantityChangeLocal(row.id, val);
+                            handleQuantityChangeLocal(row.material_id, val);
                           }}
-                          InputProps={{
-                            disableUnderline: true,
-
-                            sx: {
-                              fontWeight: "bold",
-                              display: "flex",
-                              justifyContent: "flex-end",
-                              minWidth: "100px",
-                              "& input": {
-                                textAlign: "right",
-                                paddingRight: "8px",
-                                flexGrow: 1,
-                                width: `${Math.max(4, String(row.quantity).length) * 0.5}ch`,
+                          slotProps={{
+                            input: {
+                              disableUnderline: true,
+                              sx: {
+                                fontWeight: "bold",
+                                display: "flex",
+                                justifyContent: "flex-end",
+                                minWidth: "100px",
+                                color: statusColor || "text.primary",
+                                "& input": {
+                                  textAlign: "right",
+                                  paddingRight: "8px",
+                                  flexGrow: 1,
+                                  color: statusColor || "inherit",
+                                  width: `${Math.max(4, String(row.qty_ ?? 0).length) * 0.5}ch`,
+                                },
                               },
                             },
                           }}
                         />
                       </TableCell>
 
-                      {/* MIN STOCK CELL — only visible when showMinStock is true */}
                       {showMinStock && (
                         <TableCell align="right" sx={{ pr: 2 }}>
                           <Typography
@@ -999,12 +924,12 @@ export default function RawMaterials({ mode, userLevel }) {
                             sx={{
                               fontWeight: "bold",
                               color:
-                                row.quantity <= (row.minStock ?? 0)
+                                (row.qty_ ?? 0) <= (row.minimum_stock ?? 0)
                                   ? "primary.main"
                                   : "text.secondary",
                             }}
                           >
-                            {row.minStock ?? 0}
+                            {row.minimum_stock ?? 0}
                           </Typography>
                         </TableCell>
                       )}
@@ -1027,98 +952,214 @@ export default function RawMaterials({ mode, userLevel }) {
                                 if (parsed > 9999999) val = "9999999";
                                 if (parsed < -9999999) val = "-9999999";
                               }
-                              handleAdjustmentChange(row.id, val);
+                              handleAdjustmentChange(row.material_id, val);
                             }}
                             sx={{ width: "120px" }}
                           />
                         </TableCell>
                       )}
 
-                      {/* STATUS CELL — toggles between badge and bar view */}
                       <TableCell align="center">
-                        {statusView === "bar" ? (
-                          renderStatusBar(row)
-                        ) : (
-                          <Box
-                            sx={{
-                              display: "inline-block",
-
-                              px: 1.5,
-
-                              py: 0.5,
-
-                              borderRadius: 1,
-
-                              fontSize: "0.75rem",
-
-                              fontWeight: "bold",
-
-                              bgcolor:
-                                status.color === "success"
-                                  ? "rgba(46, 204, 113, 0.15)"
-                                  : status.color === "warning"
-                                    ? "rgba(241, 145, 73, 0.15)"
-                                    : "rgba(231, 76, 60, 0.15)",
-
-                              color: barColor,
-                            }}
-                          >
-                            {status.label}
-                          </Box>
-                        )}
+                        {renderStatusBar(row)}
                       </TableCell>
 
-                      {/* Remarks Column — only visible when showRemarks is true */}
                       {showRemarks && (
-                        <TableCell sx={{ minWidth: "180px" }}>
-                          {isEditingQty ? (
-                            <TextField
-                              size="small"
-                              fullWidth
-                              placeholder="Add remarks..."
-                              value={row.remarks || ""}
-                              onChange={(e) =>
-                                handleRemarksChange(row.id, e.target.value)
-                              }
-                              inputProps={{ maxLength: 200 }}
-                            />
-                          ) : (
-                            <Typography
-                              variant="body2"
-                              color={
-                                row.remarks ? "text.primary" : "text.disabled"
-                              }
-                              sx={{
-                                fontStyle: row.remarks ? "normal" : "italic",
-                                maxWidth: "200px",
-                                whiteSpace: "normal",
-                                wordBreak: "break-word",
-                              }}
-                            >
-                              {row.remarks || "—"}
-                            </Typography>
-                          )}
+                        <TableCell sx={{ minWidth: "220px", py: 0.5 }}>
+                          <Box>
+                            {row.remarks && !isRemarkOpen ? (
+                              <Box>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: "text.primary",
+                                    fontSize: "0.8rem",
+                                    maxWidth: "200px",
+                                    whiteSpace: "normal",
+                                    wordBreak: "break-word",
+                                  }}
+                                >
+                                  {row.remarks}
+                                </Typography>
+                                {row.remarks_added_by && (
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      color: "text.disabled",
+                                      fontSize: "0.7rem",
+                                      display: "block",
+                                      mt: 0.2,
+                                    }}
+                                  >
+                                    — {row.remarks_added_by}
+                                    {row.remarks_created_at
+                                      ? `, ${new Date(row.remarks_created_at).toLocaleDateString()}`
+                                      : ""}
+                                  </Typography>
+                                )}
+                              </Box>
+                            ) : (
+                              !isRemarkOpen && (
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: "text.disabled",
+                                    fontStyle: "italic",
+                                    fontSize: "0.8rem",
+                                  }}
+                                >
+                                  —
+                                </Typography>
+                              )
+                            )}
+
+                            <Collapse in={isRemarkOpen} unmountOnExit>
+                              <Stack
+                                direction="row"
+                                spacing={0.5}
+                                alignItems="center"
+                                sx={{ mt: 0.5 }}
+                              >
+                                <TextField
+                                  size="small"
+                                  fullWidth
+                                  autoFocus
+                                  placeholder="Add a remark..."
+                                  value={remarkInputValue}
+                                  onChange={(e) =>
+                                    setRemarkInputValue(e.target.value)
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && !e.shiftKey) {
+                                      e.preventDefault();
+                                      handleSaveRemark(row.material_id);
+                                    }
+                                    if (e.key === "Escape") {
+                                      setActiveRemarkRowId(null);
+                                      setRemarkInputValue("");
+                                    }
+                                  }}
+                                  inputProps={{ maxLength: 500 }}
+                                  sx={{ fontSize: "0.8rem" }}
+                                />
+                                <Tooltip title="Save remark">
+                                  <span>
+                                    <IconButton
+                                      size="small"
+                                      color="success"
+                                      onClick={() =>
+                                        handleSaveRemark(row.material_id)
+                                      }
+                                      disabled={savingRemark}
+                                    >
+                                      <Send fontSize="inherit" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                                <Tooltip title="Cancel">
+                                  <IconButton
+                                    size="small"
+                                    color="inherit"
+                                    onClick={() => {
+                                      setActiveRemarkRowId(null);
+                                      setRemarkInputValue("");
+                                    }}
+                                  >
+                                    <Cancel fontSize="inherit" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Stack>
+                            </Collapse>
+                          </Box>
                         </TableCell>
                       )}
 
                       {canAction && (
                         <TableCell align="right">
-                          <IconButton
-                            size="small"
-                            color="info"
-                            onClick={() => {
-                              setSelectedItem(row);
-
-                              setOpenEditModal(true);
-                            }}
+                          <Stack
+                            direction="row"
+                            spacing={0.5}
+                            justifyContent="flex-end"
                           >
-                            <Edit fontSize="inherit" />
-                          </IconButton>
+                            {showRemarks && canAction && (
+                              <>
+                                <Tooltip
+                                  title={
+                                    isRemarkOpen
+                                      ? "Cancel"
+                                      : row.remarks
+                                        ? "Edit remark"
+                                        : "Add remark"
+                                  }
+                                >
+                                  <IconButton
+                                    size="small"
+                                    onClick={() =>
+                                      handleToggleRemarkInput(
+                                        row.material_id,
+                                        row.remarks,
+                                      )
+                                    }
+                                    sx={{
+                                      color: isRemarkOpen
+                                        ? "error.main"
+                                        : "primary.main",
+                                    }}
+                                  >
+                                    {isRemarkOpen ? (
+                                      <Cancel fontSize="inherit" />
+                                    ) : (
+                                      <AddComment fontSize="inherit" />
+                                    )}
+                                  </IconButton>
+                                </Tooltip>
+                                {row.remarks && !isRemarkOpen && (
+                                  <Tooltip title="Clear remark">
+                                    <span>
+                                      <IconButton
+                                        size="small"
+                                        color="error"
+                                        onClick={() =>
+                                          handleDeleteRemark(row.material_id)
+                                        }
+                                        disabled={
+                                          deletingRemarkId === row.material_id
+                                        }
+                                      >
+                                        <Delete fontSize="inherit" />
+                                      </IconButton>
+                                    </span>
+                                  </Tooltip>
+                                )}
+                              </>
+                            )}
+                            <IconButton
+                              size="small"
+                              color="info"
+                              onClick={() => {
+                                setSelectedItem(row);
+                                setOpenEditModal(true);
+                              }}
+                            >
+                              <Edit fontSize="inherit" />
+                            </IconButton>
+                          </Stack>
                         </TableCell>
                       )}
                     </TableRow>
                   );
                 })}
+
+                {paginatedMaterials.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={99}
+                      align="center"
+                      sx={{ py: 4, color: "text.secondary" }}
+                    >
+                      No materials match your filters.
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
 
@@ -1129,6 +1170,7 @@ export default function RawMaterials({ mode, userLevel }) {
               page={page}
               onPageChange={handleChangePage}
               onRowsPerPageChange={handleChangeRowsPerPage}
+              rowsPerPageOptions={[10, 25, 50, 100]}
             />
           </>
         )}
@@ -1146,7 +1188,7 @@ export default function RawMaterials({ mode, userLevel }) {
         handleClose={() => setOpenPrintModal(false)}
         materialsData={
           enableCheckboxes && selectedIds.length > 0
-            ? materials.filter((m) => selectedIds.includes(m.id))
+            ? materials.filter((m) => selectedIds.includes(m.material_id))
             : materials
         }
       />
@@ -1156,7 +1198,6 @@ export default function RawMaterials({ mode, userLevel }) {
           open={openEditModal}
           handleClose={() => {
             setOpenEditModal(false);
-
             setSelectedItem(null);
           }}
           itemData={selectedItem}

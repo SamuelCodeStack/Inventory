@@ -29,13 +29,15 @@ export default function AddInventoryModal({
     quantity: "",
     price: String(userLevel) === "3" ? "0.00" : "",
     minStock: "",
-    brand: "",
+    brand_id: "",
     supplier_id: "",
   };
   const [items, setItems] = useState([emptyRow]);
   const [loading, setLoading] = useState(false);
   // State added to store existing inventory item names fetched from the server
   const [existingNames, setExistingNames] = useState([]);
+  // Brands list fetched from the server for the dropdown
+  const [brands, setBrands] = useState([]);
   // Suppliers list fetched from the server for the dropdown
   const [suppliers, setSuppliers] = useState([]);
 
@@ -62,6 +64,28 @@ export default function AddInventoryModal({
     }
   }, [open]);
 
+  // Fetch brands for the brand dropdown
+  useEffect(() => {
+    if (open) {
+      const fetchBrands = async () => {
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_API_URL}/brands`,
+            { credentials: "include" },
+          );
+          if (response.ok) {
+            const data = await response.json();
+            setBrands(Array.isArray(data) ? data : []);
+          }
+        } catch (error) {
+          console.error("Failed to fetch brands:", error);
+          setBrands([]);
+        }
+      };
+      fetchBrands();
+    }
+  }, [open]);
+
   // Fetch suppliers for the supplier dropdown
   useEffect(() => {
     if (open) {
@@ -73,10 +97,11 @@ export default function AddInventoryModal({
           );
           if (response.ok) {
             const data = await response.json();
-            setSuppliers(data);
+            setSuppliers(Array.isArray(data) ? data : []);
           }
         } catch (error) {
           console.error("Failed to fetch suppliers:", error);
+          setSuppliers([]);
         }
       };
       fetchSuppliers();
@@ -136,7 +161,7 @@ export default function AddInventoryModal({
     const newItems = [...items];
 
     // Validate and clean values based on datatype limits
-    if (field === "name" || field === "brand") {
+    if (field === "name") {
       newItems[index][field] = value.slice(0, 100); // VARCHAR(100)
     } else if (field === "quantity" || field === "minStock") {
       if (value === "") {
@@ -283,7 +308,7 @@ export default function AddInventoryModal({
 
                   {/* --- ROW 2: BRAND + SUPPLIER — SUPPLIER only visible when category is Trading --- */}
 
-                  {/* BRAND */}
+                  {/* BRAND DROPDOWN — populated from /brands */}
                   <Grid item xs={12} md={item.category === "Trading" ? 6 : 12}>
                     <Typography
                       variant="caption"
@@ -293,18 +318,25 @@ export default function AddInventoryModal({
                       BRAND
                     </Typography>
                     <TextField
+                      select
                       fullWidth
                       size="small"
-                      placeholder="e.g. Samsung, Nike..."
-                      value={item.brand}
-                      inputProps={{ maxLength: 100 }}
+                      value={item.brand_id}
                       onChange={(e) =>
-                        handleChange(index, "brand", e.target.value)
+                        handleChange(index, "brand_id", e.target.value)
                       }
-                    />
+                      SelectProps={{ displayEmpty: true }}
+                    >
+                      <MenuItem value="">— None —</MenuItem>
+                      {brands.map((b) => (
+                        <MenuItem key={b.brand_id} value={b.brand_id}>
+                          {b.brand_name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
                   </Grid>
 
-                  {/* SUPPLIER — only visible when category is Trading */}
+                  {/* SUPPLIER DROPDOWN — only visible when category is Trading */}
                   {item.category === "Trading" && (
                     <Grid item xs={12} md={6}>
                       <Typography
@@ -326,9 +358,7 @@ export default function AddInventoryModal({
                         onChange={(e) =>
                           handleChange(index, "supplier_id", e.target.value)
                         }
-                        SelectProps={{
-                          displayEmpty: true,
-                        }}
+                        SelectProps={{ displayEmpty: true }}
                       >
                         <MenuItem value="">— None —</MenuItem>
                         {suppliers.map((s) => (
