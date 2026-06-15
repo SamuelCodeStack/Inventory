@@ -423,6 +423,51 @@ app.patch("/api/inventory/bulk", async (req, res) => {
   }
 });
 
+// ==========================================
+// INVENTORY LEDGER ENDPOINT
+// ==========================================
+// ⚠️ Place this BEFORE app.get("/api/inventory/:id", ...)
+// otherwise Express treats "ledger" as an :id param
+
+app.get("/api/inventory/ledger", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT 
+        l.printinv_id,
+        l.item_id,
+        l.old_quantity,
+        l.new_quantity,
+        l.change_amount,
+        l.recorded_at,
+        i.item_name,
+        i.category,
+        i.unit,
+        i.price
+       FROM inventory_ledger l
+       JOIN inventory i ON l.item_id = i.item_id
+       ORDER BY l.recorded_at DESC`,
+    );
+
+    const mappedData = result.rows.map((row) => ({
+      id: row.printinv_id,
+      itemId: row.item_id,
+      name: row.item_name || "Unnamed",
+      category: row.category || "General",
+      uom: row.unit || "pcs",
+      price: row.price || 0,
+      previousQuantity: row.old_quantity,
+      quantity: row.new_quantity,
+      adjustment: row.change_amount, // signed: +100 or -50
+      transactionDate: row.recorded_at,
+    }));
+
+    res.json(mappedData);
+  } catch (err) {
+    console.error("Fetch ledger error:", err);
+    res.status(500).json({ error: "Fetch failed" });
+  }
+});
+
 app.patch("/api/inventory/:id", async (req, res) => {
   const id = cleanId(req.params.id);
   const {
@@ -802,6 +847,48 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
+  }
+});
+
+// ==========================================
+// RAW MATERIALS LEDGER ENDPOINT
+// ⚠️ Must be BEFORE app.put/delete("/api/raw-materials/:id")
+// so Express does not treat "ledger" as an :id param
+// ==========================================
+app.get("/api/raw-materials/ledger", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+        l.ledger_id,
+        l.material_id,
+        l.old_qty_value,
+        l.new_qty_value,
+        l.change_amount,
+        l.recorded_at,
+        r.material_name,
+        r.category,
+        r.unit
+       FROM raw_materials_ledger l
+       JOIN raw_materials r ON l.material_id = r.material_id
+       ORDER BY l.recorded_at DESC`,
+    );
+
+    const mappedData = result.rows.map((row) => ({
+      id: row.ledger_id,
+      material_id: row.material_id,
+      material_name: row.material_name || "Unnamed",
+      category: row.category || "General",
+      unit: row.unit || "",
+      old_qty: row.old_qty_value,
+      new_qty: row.new_qty_value,
+      adjustment: row.change_amount, // signed: +100 stock in, -50 stock out
+      transactionDate: row.recorded_at,
+    }));
+
+    res.json(mappedData);
+  } catch (err) {
+    console.error("Fetch raw materials ledger error:", err);
+    res.status(500).json({ error: "Fetch failed" });
   }
 });
 

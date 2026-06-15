@@ -84,6 +84,9 @@ export default function Inventory({ mode, user }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [isSelectionEnabled, setIsSelectionEnabled] = useState(false);
 
+  // ── Ledger data for print modal ──
+  const [ledgerData, setLedgerData] = useState([]);
+
   const [groupByBrand, setGroupByBrand] = useState(false);
   const [brandColorMap, setBrandColorMap] = useState({});
 
@@ -174,6 +177,22 @@ export default function Inventory({ mode, user }) {
     }
   };
 
+  // ── Fetch ledger then open print modal ──
+  const handleOpenPrint = async () => {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/inventory/ledger`,
+      );
+      const data = await res.json();
+      setLedgerData(data);
+    } catch (err) {
+      console.error("Failed to load ledger:", err);
+      showMessage("Failed to load transaction log", "error");
+    }
+    setOpenPrintModal(true);
+    handleMenuClose();
+  };
+
   useEffect(() => {
     fetchInventory();
     fetchBrands();
@@ -196,8 +215,7 @@ export default function Inventory({ mode, user }) {
     const groups = {};
     data.forEach((item) => {
       const brandKey = item.brand?.trim();
-      if (!brandKey) return; // Laktawan ang item kapag walang brand o empty string
-
+      if (!brandKey) return;
       if (!groups[brandKey]) groups[brandKey] = [];
       groups[brandKey].push(item);
     });
@@ -620,10 +638,6 @@ export default function Inventory({ mode, user }) {
         )}
 
         <TableCell align="right" sx={{ pr: 2 }}>
-          {/*
-            FIX: disableUnderline moved from InputProps → slotProps.input
-            to prevent React "unknown DOM prop" warning in MUI v6.
-          */}
           <TextField
             type="number"
             variant={isEditingQty ? "outlined" : "standard"}
@@ -1047,11 +1061,6 @@ export default function Inventory({ mode, user }) {
             Actions
           </Button>
 
-          {/*
-            FIX: Added disableScrollLock to Menu.
-            Without it, MUI sets aria-hidden="true" on #root when the menu opens,
-            which blocks focus from the sidebar nav links → accessibility warning.
-          */}
           <Menu
             anchorEl={anchorEl}
             open={isMenuOpen}
@@ -1079,12 +1088,8 @@ export default function Inventory({ mode, user }) {
             transformOrigin={{ horizontal: "right", vertical: "top" }}
             anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
           >
-            <MenuItem
-              onClick={() => {
-                setOpenPrintModal(true);
-                handleMenuClose();
-              }}
-            >
+            {/* Print — closes menu since it opens a modal */}
+            <MenuItem onClick={handleOpenPrint}>
               <ListItemIcon>
                 <Print fontSize="small" sx={{ color: "#ef7d14" }} />
               </ListItemIcon>
@@ -1092,10 +1097,7 @@ export default function Inventory({ mode, user }) {
             </MenuItem>
 
             <MenuItem
-              onClick={() => {
-                setShowRemarks((prev) => !prev);
-                handleMenuClose();
-              }}
+              onClick={() => setShowRemarks((prev) => !prev)}
               sx={{ color: showRemarks ? "#ef7d14" : "text.primary" }}
             >
               <ListItemIcon>
@@ -1111,10 +1113,7 @@ export default function Inventory({ mode, user }) {
             </MenuItem>
 
             <MenuItem
-              onClick={() => {
-                setShowMinStock((prev) => !prev);
-                handleMenuClose();
-              }}
+              onClick={() => setShowMinStock((prev) => !prev)}
               sx={{ color: showMinStock ? "#ef7d14" : "text.primary" }}
             >
               <ListItemIcon>
@@ -1126,10 +1125,7 @@ export default function Inventory({ mode, user }) {
             </MenuItem>
 
             <MenuItem
-              onClick={() => {
-                setGroupByBrand((prev) => !prev);
-                handleMenuClose();
-              }}
+              onClick={() => setGroupByBrand((prev) => !prev)}
               sx={{ color: groupByBrand ? "#ef7d14" : "text.primary" }}
             >
               <ListItemIcon>
@@ -1159,7 +1155,6 @@ export default function Inventory({ mode, user }) {
                 onClick={() => {
                   setIsSelectionEnabled(!isSelectionEnabled);
                   if (isSelectionEnabled) setSelectedIds([]);
-                  handleMenuClose();
                 }}
                 sx={{ color: isSelectionEnabled ? "#ef7d14" : "text.primary" }}
               >
@@ -1188,7 +1183,6 @@ export default function Inventory({ mode, user }) {
               <MenuItem
                 onClick={() => {
                   handleDiscard();
-                  handleMenuClose();
                 }}
                 sx={{ color: "error.main" }}
               >
@@ -1200,12 +1194,7 @@ export default function Inventory({ mode, user }) {
             )}
 
             {canModify && !isEditingQty && (
-              <MenuItem
-                onClick={() => {
-                  setIsEditingQty(true);
-                  handleMenuClose();
-                }}
-              >
+              <MenuItem onClick={() => setIsEditingQty(true)}>
                 <ListItemIcon>
                   <EditNote fontSize="small" sx={{ color: "#ef7d14" }} />
                 </ListItemIcon>
@@ -1241,11 +1230,6 @@ export default function Inventory({ mode, user }) {
         component={Paper}
         sx={{ borderRadius: 3, p: { xs: 1, sm: 2 } }}
       >
-        {/*
-          FIX: Grid v1 `item`, `xs`, `md` props replaced with Grid v2 `size` prop.
-          Old: <Grid item xs={12} md={6}>
-          New: <Grid size={{ xs: 12, md: 6 }}>
-        */}
         <Grid container spacing={2} sx={{ mb: 3, px: { xs: 1, sm: 0 } }}>
           <Grid size={{ xs: 12, md: 6 }}>
             <TextField
@@ -1316,7 +1300,6 @@ export default function Inventory({ mode, user }) {
               }}
             >
               <MenuItem value="All">All Brands</MenuItem>
-
               {[
                 ...new Set(
                   inventoryData
@@ -1531,16 +1514,18 @@ export default function Inventory({ mode, user }) {
         itemData={selectedItem}
         userLevel={user?.user_level}
       />
+
       <PrintInventoryModal
         open={openPrintModal}
         userLevel={user?.user_level}
         handleClose={() => setOpenPrintModal(false)}
         inventoryData={
           selectedIds.length > 0
-            ? inventoryData.filter((item) => selectedIds.includes(item.id))
-            : inventoryData
+            ? ledgerData.filter((tx) => selectedIds.includes(tx.itemId))
+            : ledgerData
         }
       />
+
       <BrandModal
         open={openBrandModal}
         handleClose={() => {

@@ -14,12 +14,11 @@ import {
   TableCell,
   TableBody,
   IconButton,
-  Paper,
-  MenuItem,
-  Stack,
   FormControlLabel,
   Checkbox,
   useTheme,
+  MenuItem,
+  Chip,
 } from "@mui/material";
 import { Close, Print, Download } from "@mui/icons-material";
 import { useReactToPrint } from "react-to-print";
@@ -28,36 +27,33 @@ import * as XLSX from "xlsx";
 export default function PrintRawMaterialModal({
   open,
   handleClose,
-  materialsData,
+  materialsData, // Each element = one ledger transaction record
 }) {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
 
-  // Filter States
-  const [filterType, setFilterType] = useState("day"); // day, week, month, year
+  const [filterType, setFilterType] = useState("day");
   const [selectedDate, setSelectedDate] = useState(
     new Date().toLocaleDateString("en-CA"),
   );
   const [printAll, setPrintAll] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const componentRef = useRef();
 
-  const categories = ["All", "Paper", "Plastic", "Injection", "Trading"];
+  const categories = [
+    "All",
+    ...new Set(materialsData.map((item) => item.category || "Uncategorized")),
+  ];
 
-  // Helper to get range text for the report header
   const getRangeLabel = () => {
-    if (printAll) return "Full Inventory";
+    if (printAll)
+      return `Full Transaction Log${selectedCategory !== "All" ? ` — ${selectedCategory}` : ""}`;
     const date = new Date(selectedDate);
-
-    if (filterType === "day") {
+    if (filterType === "day")
       return `Date: ${date.toLocaleDateString("en-US", { dateStyle: "long" })}`;
-    }
-    if (filterType === "month") {
+    if (filterType === "month")
       return `Month of: ${date.toLocaleString("default", { month: "long", year: "numeric" })}`;
-    }
-    if (filterType === "year") {
-      return `Year: ${date.getFullYear()}`;
-    }
+    if (filterType === "year") return `Year: ${date.getFullYear()}`;
     if (filterType === "week") {
       const tempDate = new Date(selectedDate);
       const first = tempDate.getDate() - tempDate.getDay();
@@ -68,39 +64,33 @@ export default function PrintRawMaterialModal({
       const lastday = new Date(
         new Date(selectedDate).setDate(last),
       ).toLocaleDateString();
-      return `Week: ${firstday} - ${lastday}`;
+      return `Week: ${firstday} – ${lastday}`;
     }
     return "";
   };
 
-  // Filter logic - Matches Inventory logic using latest update date
+  // ── Filter: each record is a ledger transaction ──
   const filteredData = materialsData.filter((item) => {
-    // Check Category first
-    const matchesCategory =
-      categoryFilter === "All" || item.category === categoryFilter;
-    if (!matchesCategory) return false;
-
+    if (selectedCategory !== "All" && item.category !== selectedCategory)
+      return false;
     if (printAll) return true;
 
-    // Check Date (Uses updatedAt if it exists, otherwise createdAt)
-    const dateToCompare = item.updated_at || item.createdAt;
+    const dateToCompare =
+      item.transactionDate || item.updated_at || item.createdAt;
     if (!dateToCompare) return false;
 
     const itemDate = new Date(dateToCompare);
     const targetDate = new Date(selectedDate);
 
-    if (filterType === "day") {
+    if (filterType === "day")
       return itemDate.toLocaleDateString("en-CA") === selectedDate;
-    }
-    if (filterType === "month") {
+    if (filterType === "month")
       return (
         itemDate.getMonth() === targetDate.getMonth() &&
         itemDate.getFullYear() === targetDate.getFullYear()
       );
-    }
-    if (filterType === "year") {
+    if (filterType === "year")
       return itemDate.getFullYear() === targetDate.getFullYear();
-    }
     if (filterType === "week") {
       const startOfWeek = new Date(targetDate);
       startOfWeek.setDate(targetDate.getDate() - targetDate.getDay());
@@ -113,66 +103,93 @@ export default function PrintRawMaterialModal({
     return false;
   });
 
+  // ── Determine movement type from change_amount (signed) ──
+  const getMovement = (row) => {
+    const adj = Number(row.adjustment ?? row.change_amount ?? 0);
+    if (adj > 0) return { type: "in", qty: adj };
+    if (adj < 0) return { type: "out", qty: Math.abs(adj) };
+    return { type: "neutral", qty: 0 };
+  };
+
+  const ROW_STYLE = {
+    in: {
+      bg: isDarkMode ? "#0d2b1a" : "#e8f5e9",
+      bgHover: isDarkMode ? "#0a3d1f" : "#c8e6c9",
+      border: isDarkMode ? "#2e7d32" : "#66bb6a",
+      chipBg: "#2e7d32",
+      label: "Stock In",
+      textColor: "#2e7d32",
+    },
+    out: {
+      bg: isDarkMode ? "#2b0d0d" : "#ffebee",
+      bgHover: isDarkMode ? "#3d0a0a" : "#ffcdd2",
+      border: isDarkMode ? "#c62828" : "#ef5350",
+      chipBg: "#c62828",
+      label: "Stock Out",
+      textColor: "#c62828",
+    },
+    neutral: {
+      bg: "transparent",
+      bgHover: isDarkMode ? "#2a2a2a" : "#fafafa",
+      border: "transparent",
+      chipBg: "#9e9e9e",
+      label: "No Change",
+      textColor: "text.secondary",
+    },
+  };
+
+  // ── Summary counts ──
+  const txCounts = filteredData.reduce(
+    (acc, row) => {
+      const { type, qty } = getMovement(row);
+      if (type === "in") {
+        acc.inCount++;
+        acc.inQty += qty;
+      }
+      if (type === "out") {
+        acc.outCount++;
+        acc.outQty += qty;
+      }
+      return acc;
+    },
+    { inCount: 0, inQty: 0, outCount: 0, outQty: 0 },
+  );
+
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
-    documentTitle: `Raw_Materials_Report_${new Date().toLocaleDateString()}`,
+    documentTitle: `RawMaterials_Transactions_${getRangeLabel().replace(/ /g, "_")}`,
     onAfterPrint: handleClose,
   });
 
   const handleExportExcel = () => {
-    const worksheetData = filteredData.map((row) => {
-      const diff = (row.quantity || 0) - (row.previousQuantity || 0);
-
-      // Clean up the measurement presentation string dynamically
-      const val =
-        row.measurementValue && Number(row.measurementValue) !== 0
-          ? row.measurementValue
-          : "";
-      const unit = row.measurementUnit || "";
-      const pkg = row.packaging || "";
-      const measurementString = `${val} ${unit} ${pkg}`
-        .replace(/\s+/g, " ")
-        .trim();
-
-      if (printAll) {
-        return {
-          "Material Name": row.name,
-          Category: row.category,
-          Measurement: measurementString,
-          Quantity: row.quantity,
-          Status:
-            row.quantity <= 0
-              ? "Out of Stock"
-              : row.quantity <= (row.minStock || 10)
-                ? "Low Stock"
-                : "In Stock",
-        };
-      } else {
-        return {
-          ID: row.id,
-          "Material Name": row.name,
-          Measurement: measurementString,
-          "Prev. Qty": row.previousQuantity,
-          Adjustment: diff > 0 ? `+${diff}` : `${diff}`,
-          "Current Qty": row.quantity,
-          "Last Updated": new Date(
-            row.updated_at || row.createdAt,
-          ).toLocaleDateString(),
-        };
-      }
+    const worksheetData = filteredData.map((row, idx) => {
+      const { type, qty } = getMovement(row);
+      const style = ROW_STYLE[type];
+      const txDate = row.transactionDate || row.updated_at || row.createdAt;
+      return {
+        "#": idx + 1,
+        "Material Name": row.material_name,
+        Category: row.category || "---",
+        Unit: row.unit || "---",
+        Movement: style.label,
+        "Qty Change": type === "out" ? -qty : qty,
+        "Stock After": Math.round(row.new_qty ?? row.qty_ ?? 0),
+        "Date / Time": txDate ? new Date(txDate).toLocaleString() : "---",
+      };
     });
 
     const worksheet = XLSX.utils.json_to_sheet(worksheetData);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Raw Materials Report");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Transaction Log");
     XLSX.writeFile(
       workbook,
-      `Raw_Materials_Report_${new Date().toLocaleDateString()}.xlsx`,
+      `RawMaterials_Transactions_${getRangeLabel().replace(/ /g, "_")}.xlsx`,
     );
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="md">
+    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="lg">
+      {/* ── Header ── */}
       <DialogTitle
         sx={{
           display: "flex",
@@ -180,11 +197,17 @@ export default function PrintRawMaterialModal({
           alignItems: "center",
           bgcolor: isDarkMode ? "background.paper" : "#f2994a",
           color: isDarkMode ? "text.primary" : "white",
+          py: 1.5,
         }}
       >
-        <Typography variant="h6" fontWeight="bold">
-          Print Raw Materials Report
-        </Typography>
+        <Box>
+          <Typography variant="h6" fontWeight="bold" lineHeight={1}>
+            Raw Materials Transaction Log
+          </Typography>
+          <Typography variant="caption" sx={{ opacity: 0.8 }}>
+            {getRangeLabel()}
+          </Typography>
+        </Box>
         <IconButton
           onClick={handleClose}
           size="small"
@@ -194,282 +217,360 @@ export default function PrintRawMaterialModal({
         </IconButton>
       </DialogTitle>
 
-      <DialogContent
-        sx={{ p: 0, bgcolor: isDarkMode ? "#121212" : "grey.100" }}
-      >
-        {/* Selection Controls */}
+      <DialogContent sx={{ p: 0, display: "flex", flexDirection: "column" }}>
+        {/* ── Filter Bar ── */}
         <Box
           sx={{
-            p: 3,
+            px: 3,
+            py: 2,
             bgcolor: "background.paper",
             borderBottom: "1px solid",
             borderColor: "divider",
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
+            flexWrap: "wrap",
           }}
         >
-          <Stack
-            direction="row"
-            spacing={2}
-            alignItems="center"
-            flexWrap="wrap"
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={printAll}
+                onChange={(e) => setPrintAll(e.target.checked)}
+                size="small"
+              />
+            }
+            label={<Typography variant="body2">All Records</Typography>}
+          />
+
+          <TextField
+            select
+            label="Category"
+            size="small"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            sx={{ width: 150 }}
           >
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={printAll}
-                  onChange={(e) => setPrintAll(e.target.checked)}
-                />
-              }
-              label="Print All"
-            />
+            {categories.map((cat) => (
+              <MenuItem key={cat} value={cat}>
+                {cat}
+              </MenuItem>
+            ))}
+          </TextField>
 
-            <TextField
-              select
-              label="Category"
+          {!printAll && (
+            <>
+              <TextField
+                select
+                label="Filter Range"
+                size="small"
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                sx={{ width: 150 }}
+              >
+                <MenuItem value="day">Specific Day</MenuItem>
+                <MenuItem value="week">Specific Week</MenuItem>
+                <MenuItem value="month">Specific Month</MenuItem>
+                <MenuItem value="year">Specific Year</MenuItem>
+              </TextField>
+
+              <TextField
+                type="date"
+                label="Reference Date"
+                size="small"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
+            </>
+          )}
+
+          {/* ── Summary chips ── */}
+          <Box
+            sx={{
+              ml: "auto",
+              display: "flex",
+              gap: 1,
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <Chip
               size="small"
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              sx={{ width: 130 }}
-            >
-              {categories.map((cat) => (
-                <MenuItem key={cat} value={cat}>
-                  {cat}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            {!printAll && (
-              <>
-                <TextField
-                  select
-                  label="Range"
-                  size="small"
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  sx={{ width: 130 }}
-                >
-                  <MenuItem value="day">Day</MenuItem>
-                  <MenuItem value="week">Week</MenuItem>
-                  <MenuItem value="month">Month</MenuItem>
-                  <MenuItem value="year">Year</MenuItem>
-                </TextField>
-
-                <TextField
-                  type="date"
-                  size="small"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                />
-              </>
-            )}
-
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ ml: "auto" }}
-            >
-              {filteredData.length} records found.
+              label={`▲ In: ${txCounts.inCount} tx / +${txCounts.inQty} qty`}
+              sx={{
+                bgcolor: "#2e7d32",
+                color: "#fff",
+                fontWeight: 600,
+                fontSize: 11,
+              }}
+            />
+            <Chip
+              size="small"
+              label={`▼ Out: ${txCounts.outCount} tx / −${txCounts.outQty} qty`}
+              sx={{
+                bgcolor: "#c62828",
+                color: "#fff",
+                fontWeight: 600,
+                fontSize: 11,
+              }}
+            />
+            <Typography variant="caption" color="text.secondary">
+              {filteredData.length} record{filteredData.length !== 1 ? "s" : ""}
             </Typography>
-          </Stack>
+          </Box>
         </Box>
 
-        {/* PRINT PREVIEW AREA */}
+        {/* ── Table (also print target) ── */}
         <Box
+          ref={componentRef}
           sx={{
-            p: 4,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            bgcolor: isDarkMode ? "#1e1e1e" : "grey.200",
+            overflowY: "auto",
+            flex: 1,
+            maxHeight: "60vh",
+            "@media print": {
+              maxHeight: "none",
+              overflow: "visible",
+              "& *": { color: "black !important" },
+            },
           }}
         >
-          <Paper
-            ref={componentRef}
-            elevation={4}
+          {/* Print-only company header */}
+          <Box
             sx={{
-              p: "15mm",
-              width: "210mm",
-              minHeight: "297mm",
-              bgcolor: "white",
-              color: "black",
-              borderRadius: 0,
-              "& .MuiTypography-root, & .MuiTableCell-root": { color: "black" },
+              display: "none",
               "@media print": {
-                boxShadow: "none",
-                margin: 0,
-                width: "100%",
-                height: "auto !important",
-                minHeight: "auto !important",
-                "& *": { color: "black !important" },
+                display: "block",
+                textAlign: "center",
+                py: 3,
+                px: 4,
               },
             }}
           >
             <Typography
-              variant="h4"
+              variant="h5"
               fontWeight="bold"
-              align="center"
               sx={{ color: "#1a237e !important" }}
             >
               KIMWIN CORPORATION
             </Typography>
             <Typography
-              variant="h6"
-              align="center"
-              sx={{ mb: 4, letterSpacing: 2, textTransform: "uppercase" }}
+              variant="subtitle1"
+              sx={{ letterSpacing: 2, textTransform: "uppercase", mb: 1 }}
             >
-              Raw Materials Inventory Report
+              Raw Materials Transaction Log
             </Typography>
-
             <Box
-              sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}
-            >
-              <Typography variant="body2">
-                <b>Scope:</b> {getRangeLabel()} | <b>Category:</b>{" "}
-                {categoryFilter}
-              </Typography>
-              <Typography variant="body2">
-                <b>Generated:</b> {new Date().toLocaleString()}
-              </Typography>
-            </Box>
-
-            <Table
-              size="small"
               sx={{
-                "& td, & th": { border: "1px solid black" },
-                bgcolor: "white",
+                display: "flex",
+                justifyContent: "space-between",
+                px: 2,
+                mb: 2,
               }}
             >
-              <TableHead>
-                <TableRow sx={{ bgcolor: "#f5f5f5" }}>
-                  {printAll ? (
-                    <>
-                      <TableCell sx={{ fontWeight: "bold" }}>
-                        Material Name
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: "bold" }}>
-                        Category
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                        Measurement
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                        Quantity
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: "bold" }}>Status</TableCell>
-                    </>
-                  ) : (
-                    <>
-                      <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
-                      <TableCell sx={{ fontWeight: "bold" }}>
-                        Material Name
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                        Measurement
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                        Prev. Qty
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                        Adjustment
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                        Current Qty
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: "bold" }}>
-                        Last Updated
-                      </TableCell>
-                    </>
-                  )}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredData.length > 0 ? (
-                  filteredData.map((row) => {
-                    const diff =
-                      (row.quantity || 0) - (row.previousQuantity || 0);
-
-                    // Clean up presentation string for print table layout
-                    const val =
-                      row.measurementValue && Number(row.measurementValue) !== 0
-                        ? row.measurementValue
-                        : "";
-                    const unit = row.measurementUnit || "";
-                    const pkg = row.packaging || "";
-                    const measurementString = `${val} ${unit} ${pkg}`
-                      .replace(/\s+/g, " ")
-                      .trim();
-
-                    return (
-                      <TableRow key={row.id}>
-                        {printAll ? (
-                          <>
-                            <TableCell sx={{ fontWeight: "bold" }}>
-                              {row.name}
-                            </TableCell>
-                            <TableCell>{row.category}</TableCell>
-                            <TableCell align="right">
-                              {measurementString}
-                            </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{ fontWeight: "bold" }}
-                            >
-                              {row.quantity}
-                            </TableCell>
-                            <TableCell>
-                              {row.quantity <= 0
-                                ? "Out of Stock"
-                                : row.quantity <= (row.minStock || 10)
-                                  ? "Low Stock"
-                                  : "In Stock"}
-                            </TableCell>
-                          </>
-                        ) : (
-                          <>
-                            <TableCell>#{row.id}</TableCell>
-                            <TableCell sx={{ fontWeight: "bold" }}>
-                              {row.name}
-                            </TableCell>
-                            <TableCell align="right">
-                              {measurementString}
-                            </TableCell>
-                            <TableCell align="right">
-                              {row.previousQuantity}
-                            </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{ fontWeight: "bold" }}
-                            >
-                              {diff > 0 ? `+${diff}` : diff}
-                            </TableCell>
-                            <TableCell align="right">{row.quantity}</TableCell>
-                            <TableCell>
-                              {new Date(
-                                row.updated_at || row.createdAt,
-                              ).toLocaleDateString()}
-                            </TableCell>
-                          </>
-                        )}
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={printAll ? 5 : 7}
-                      align="center"
-                      sx={{ py: 10 }}
-                    >
-                      No records found for the selected filters.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-
+              <Typography variant="body2">
+                <b>Report Scope:</b> {getRangeLabel()}
+              </Typography>
+              <Typography variant="body2">
+                <b>Generated On:</b> {new Date().toLocaleString()}
+              </Typography>
+            </Box>
+            {/* Print legend */}
             <Box
-              sx={{ mt: 10, display: "flex", justifyContent: "space-between" }}
+              sx={{ display: "flex", gap: 3, justifyContent: "center", mb: 2 }}
             >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Box
+                  sx={{
+                    width: 12,
+                    height: 12,
+                    bgcolor: "#c8e6c9",
+                    border: "1px solid #66bb6a",
+                    borderRadius: 0.5,
+                  }}
+                />
+                <Typography variant="caption">Stock In</Typography>
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Box
+                  sx={{
+                    width: 12,
+                    height: 12,
+                    bgcolor: "#ffcdd2",
+                    border: "1px solid #ef5350",
+                    borderRadius: 0.5,
+                  }}
+                />
+                <Typography variant="caption">Stock Out</Typography>
+              </Box>
+            </Box>
+          </Box>
+
+          <Table
+            size="small"
+            stickyHeader
+            sx={{
+              "& .MuiTableCell-stickyHeader": {
+                bgcolor: isDarkMode ? "#1e1e1e" : "#f5f5f5",
+              },
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700, width: 40 }}>#</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Material Name</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Unit</TableCell>
+                <TableCell
+                  align="center"
+                  sx={{ fontWeight: 700, minWidth: 100 }}
+                >
+                  Movement
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, minWidth: 90 }}>
+                  Qty Change
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, minWidth: 90 }}>
+                  Stock After
+                </TableCell>
+                <TableCell sx={{ fontWeight: 700, minWidth: 130 }}>
+                  Date / Time
+                </TableCell>
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {filteredData.length > 0 ? (
+                filteredData.map((row, idx) => {
+                  const { type, qty } = getMovement(row);
+                  const style = ROW_STYLE[type];
+                  const txDate =
+                    row.transactionDate || row.updated_at || row.createdAt;
+
+                  return (
+                    <TableRow
+                      key={`${row.id}-${idx}`}
+                      sx={{
+                        bgcolor: style.bg,
+                        borderLeft: `4px solid ${style.border}`,
+                        transition: "background 0.12s",
+                        "&:hover": { bgcolor: style.bgHover },
+                        "@media print": {
+                          bgcolor:
+                            type === "in"
+                              ? "#e8f5e9 !important"
+                              : type === "out"
+                                ? "#ffebee !important"
+                                : "transparent !important",
+                        },
+                      }}
+                    >
+                      <TableCell sx={{ color: "text.secondary", fontSize: 11 }}>
+                        {idx + 1}
+                      </TableCell>
+
+                      <TableCell sx={{ fontWeight: 600 }}>
+                        {row.material_name}
+                      </TableCell>
+
+                      <TableCell>{row.category || "—"}</TableCell>
+                      <TableCell>{row.unit || "—"}</TableCell>
+
+                      {/* Movement chip */}
+                      <TableCell align="center">
+                        <Chip
+                          label={style.label}
+                          size="small"
+                          sx={{
+                            bgcolor: style.chipBg,
+                            color: "#fff",
+                            fontWeight: 700,
+                            fontSize: 11,
+                            minWidth: 80,
+                          }}
+                        />
+                      </TableCell>
+
+                      {/* Qty change — signed, colored */}
+                      <TableCell align="right">
+                        <Typography
+                          variant="body2"
+                          fontWeight={700}
+                          sx={{
+                            color: style.textColor,
+                            fontFamily: "monospace",
+                            fontSize: 14,
+                          }}
+                        >
+                          {type === "in"
+                            ? `+${qty}`
+                            : type === "out"
+                              ? `−${qty}`
+                              : "—"}
+                        </Typography>
+                      </TableCell>
+
+                      {/* Stock after transaction */}
+                      <TableCell align="right" sx={{ fontWeight: 600 }}>
+                        {Math.round(row.new_qty ?? row.qty_ ?? 0)}
+                      </TableCell>
+
+                      {/* Date / Time */}
+                      <TableCell
+                        sx={{
+                          color: "text.secondary",
+                          fontSize: 12,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {txDate
+                          ? new Date(txDate).toLocaleString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })
+                          : "—"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      No transaction records found for the selected criteria.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+
+          {/* Print-only summary footer */}
+          <Box
+            sx={{
+              display: "none",
+              "@media print": { display: "block", px: 4, mt: 4 },
+            }}
+          >
+            <Box sx={{ display: "flex", gap: 4, mb: 6 }}>
+              <Typography variant="body2">
+                <b>Total Stock In:</b> {txCounts.inCount} transactions, +
+                {txCounts.inQty} units
+              </Typography>
+              <Typography variant="body2">
+                <b>Total Stock Out:</b> {txCounts.outCount} transactions, −
+                {txCounts.outQty} units
+              </Typography>
+              <Typography variant="body2">
+                <b>Net Movement:</b>{" "}
+                {txCounts.inQty - txCounts.outQty >= 0 ? "+" : ""}
+                {txCounts.inQty - txCounts.outQty} units
+              </Typography>
+            </Box>
+            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
               <Box sx={{ textAlign: "center" }}>
                 <Box
                   sx={{ width: 200, borderBottom: "1px solid black", mb: 1 }}
@@ -483,16 +584,18 @@ export default function PrintRawMaterialModal({
                 <Typography variant="caption">Authorized Signature</Typography>
               </Box>
             </Box>
-          </Paper>
+          </Box>
         </Box>
       </DialogContent>
 
+      {/* ── Footer Actions ── */}
       <DialogActions
         sx={{
           p: 2,
           bgcolor: "background.paper",
           borderTop: "1px solid",
           borderColor: "divider",
+          gap: 1,
         }}
       >
         <Button onClick={handleClose} color="inherit">
@@ -509,7 +612,6 @@ export default function PrintRawMaterialModal({
             px: 4,
             borderColor: "#f2994a",
             color: "#f2994a",
-            "& hover": { borderColor: "#d8853a", color: "#d8853a" },
           }}
         >
           Export Excel
@@ -524,10 +626,10 @@ export default function PrintRawMaterialModal({
             fontWeight: "bold",
             px: 4,
             bgcolor: "#f2994a",
-            "& hover": { bgcolor: "#d8853a" },
+            "&:hover": { bgcolor: "#d8853a" },
           }}
         >
-          Print Report
+          Print
         </Button>
       </DialogActions>
     </Dialog>

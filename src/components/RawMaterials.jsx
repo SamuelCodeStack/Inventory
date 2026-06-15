@@ -60,6 +60,9 @@ export default function RawMaterials({ mode, userLevel }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [enableCheckboxes, setEnableCheckboxes] = useState(false);
 
+  // ── Ledger data for print modal ──
+  const [ledgerData, setLedgerData] = useState([]);
+
   const [anchorEl, setAnchorEl] = useState(null);
   const isMenuOpen = Boolean(anchorEl);
   const handleMenuOpen = (e) => setAnchorEl(e.currentTarget);
@@ -118,11 +121,27 @@ export default function RawMaterials({ mode, userLevel }) {
     }
   };
 
+  // ── Fetch ledger then open print modal ──
+  const handleOpenPrint = async () => {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/raw-materials/ledger`,
+        { credentials: "include" },
+      );
+      const data = await res.json();
+      setLedgerData(data);
+    } catch (err) {
+      console.error("Failed to load raw materials ledger:", err);
+      showSnackbar("Failed to load transaction log", "error");
+    }
+    setOpenPrintModal(true);
+    handleMenuClose();
+  };
+
   useEffect(() => {
     fetchMaterials();
   }, []);
 
-  // Use material_id as the identifier throughout
   const handleQuantityChangeLocal = (material_id, newQuantity) => {
     const qty = Math.max(0, parseInt(newQuantity) || 0);
     setMaterials((prev) =>
@@ -323,10 +342,7 @@ export default function RawMaterials({ mode, userLevel }) {
       setDeletingRemarkId(material_id);
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/raw-materials/${material_id}/remarks`,
-        {
-          method: "DELETE",
-          credentials: "include",
-        },
+        { method: "DELETE", credentials: "include" },
       );
       if (res.ok) {
         showSnackbar("Remark cleared", "info");
@@ -341,7 +357,6 @@ export default function RawMaterials({ mode, userLevel }) {
     }
   };
 
-  // Derive unique units from loaded data for the filter dropdown
   const unitOptions = [
     "All",
     ...[...new Set(materials.map((m) => m.unit).filter(Boolean))].sort((a, b) =>
@@ -390,10 +405,7 @@ export default function RawMaterials({ mode, userLevel }) {
       for (const id of selectedIds) {
         const response = await fetch(
           `${import.meta.env.VITE_API_URL}/raw-materials/${id}`,
-          {
-            method: "DELETE",
-            credentials: "include",
-          },
+          { method: "DELETE", credentials: "include" },
         );
         if (response.ok) successCount++;
       }
@@ -546,12 +558,7 @@ export default function RawMaterials({ mode, userLevel }) {
             anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
           >
             {canPrint && (
-              <MenuItem
-                onClick={() => {
-                  setOpenPrintModal(true);
-                  handleMenuClose();
-                }}
-              >
+              <MenuItem onClick={handleOpenPrint}>
                 <ListItemIcon>
                   <Print fontSize="small" color="primary" />
                 </ListItemIcon>
@@ -560,10 +567,7 @@ export default function RawMaterials({ mode, userLevel }) {
             )}
 
             <MenuItem
-              onClick={() => {
-                setShowRemarks((prev) => !prev);
-                handleMenuClose();
-              }}
+              onClick={() => setShowRemarks((prev) => !prev)}
               sx={{ color: showRemarks ? "primary.main" : "text.primary" }}
             >
               <ListItemIcon>
@@ -579,10 +583,7 @@ export default function RawMaterials({ mode, userLevel }) {
             </MenuItem>
 
             <MenuItem
-              onClick={() => {
-                setShowMinStock((prev) => !prev);
-                handleMenuClose();
-              }}
+              onClick={() => setShowMinStock((prev) => !prev)}
               sx={{ color: showMinStock ? "primary.main" : "text.primary" }}
             >
               <ListItemIcon>
@@ -595,10 +596,7 @@ export default function RawMaterials({ mode, userLevel }) {
 
             {canAction && !isEditingQty && (
               <MenuItem
-                onClick={() => {
-                  setEnableCheckboxes(!enableCheckboxes);
-                  handleMenuClose();
-                }}
+                onClick={() => setEnableCheckboxes(!enableCheckboxes)}
                 sx={{
                   color: enableCheckboxes ? "primary.main" : "text.primary",
                 }}
@@ -622,10 +620,7 @@ export default function RawMaterials({ mode, userLevel }) {
               (!hasChanges || !isEditingQty) &&
               (isEditingQty ? (
                 <MenuItem
-                  onClick={() => {
-                    setIsEditingQty(false);
-                    handleMenuClose();
-                  }}
+                  onClick={() => setIsEditingQty(false)}
                   sx={{ color: "error.main" }}
                 >
                   <ListItemIcon>
@@ -634,12 +629,7 @@ export default function RawMaterials({ mode, userLevel }) {
                   <ListItemText>Cancel Edit</ListItemText>
                 </MenuItem>
               ) : (
-                <MenuItem
-                  onClick={() => {
-                    setIsEditingQty(true);
-                    handleMenuClose();
-                  }}
-                >
+                <MenuItem onClick={() => setIsEditingQty(true)}>
                   <ListItemIcon>
                     <EditNote fontSize="small" color="primary" />
                   </ListItemIcon>
@@ -1188,8 +1178,8 @@ export default function RawMaterials({ mode, userLevel }) {
         handleClose={() => setOpenPrintModal(false)}
         materialsData={
           enableCheckboxes && selectedIds.length > 0
-            ? materials.filter((m) => selectedIds.includes(m.material_id))
-            : materials
+            ? ledgerData.filter((tx) => selectedIds.includes(tx.material_id))
+            : ledgerData
         }
       />
 
