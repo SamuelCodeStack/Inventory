@@ -73,7 +73,6 @@ function fmtDate(d) {
   }
 }
 
-// Returns white or dark text depending on background brightness
 function getContrastText(hex) {
   if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return "#ffffff";
   const r = parseInt(hex.slice(1, 3), 16);
@@ -83,7 +82,6 @@ function getContrastText(hex) {
   return luminance > 0.55 ? "#1a1a2e" : "#ffffff";
 }
 
-// Returns rgba version of hex for subtle row tinting
 function hexToRgba(hex, alpha = 0.07) {
   if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) return "transparent";
   const r = parseInt(hex.slice(1, 3), 16);
@@ -252,7 +250,6 @@ function FinishedGoodsTable({ data, isDark, brandColorMap }) {
     });
   }, [data, search, brandFilter, catFilter, statusFilter]);
 
-  // group by brand, sorted
   const grouped = useMemo(() => {
     const g = {};
     filtered.forEach((x) => {
@@ -286,7 +283,6 @@ function FinishedGoodsTable({ data, isDark, brandColorMap }) {
 
   return (
     <Box>
-      {/* filters */}
       <Grid container spacing={1} sx={{ mb: 2 }} alignItems="center">
         <Grid item xs={12} sm={4}>
           <TextField
@@ -424,14 +420,12 @@ function FinishedGoodsTable({ data, isDark, brandColorMap }) {
               </TableRow>
             ) : (
               grouped.map(([brand, items]) => {
-                // Use brand color from map, fallback to blue
                 const headerColor =
                   brandColorMap[brand] || (isDark ? "#1a2744" : "#1565c0");
                 const textColor = getContrastText(headerColor);
 
                 return (
                   <React.Fragment key={brand}>
-                    {/* BRAND HEADER ROW — uses the brand's own color */}
                     <TableRow>
                       <TableCell
                         colSpan={9}
@@ -450,7 +444,6 @@ function FinishedGoodsTable({ data, isDark, brandColorMap }) {
                         <Box
                           sx={{ display: "flex", alignItems: "center", gap: 1 }}
                         >
-                          {/* small white/dark dot matching Inventory.jsx style */}
                           <Box
                             sx={{
                               width: 8,
@@ -475,7 +468,6 @@ function FinishedGoodsTable({ data, isDark, brandColorMap }) {
                       </TableCell>
                     </TableRow>
 
-                    {/* DATA ROWS — left border tinted with brand color */}
                     {items.map((row) => {
                       const qty = row.quantity ?? 0;
                       const minStock = row.min_stock ?? row.minStock ?? 0;
@@ -522,7 +514,6 @@ function FinishedGoodsTable({ data, isDark, brandColorMap }) {
                               {row.name}
                             </Typography>
                           </TableCell>
-                          {/* Brand cell — colored dot next to name */}
                           <TableCell sx={tdSx}>
                             {row.brand?.trim() ? (
                               <Box
@@ -1035,7 +1026,6 @@ function AllRemarksView({ fgData, rmData, brandColorMap }) {
             const minStock = item.min_stock ?? item.minStock ?? 0;
             const { label, barColor, bgColor } = getStatusInfo(qty, minStock);
             const isFG = item._type === "Finished Goods";
-            // Brand color for the card's left border accent
             const brandColor = item.brand?.trim()
               ? brandColorMap[item.brand.trim()] || null
               : null;
@@ -1047,7 +1037,6 @@ function AllRemarksView({ fgData, rmData, brandColorMap }) {
                   sx={{
                     p: 1.5,
                     borderRadius: 2,
-                    // Left border uses brand color if available
                     borderLeft: brandColor
                       ? `4px solid ${brandColor}`
                       : undefined,
@@ -1209,10 +1198,25 @@ export default function Dashboard({ mode }) {
         rmRes.json(),
         brandsRes.json(),
       ]);
-      setFgData(Array.isArray(fg) ? fg : []);
-      setRmData(Array.isArray(rm) ? rm : []);
 
-      // Build brand color map
+      setFgData(Array.isArray(fg) ? fg : []);
+
+      // ── Normalize raw materials field names to match the shared components ──
+      // The raw-materials API returns material_id, material_name, qty_, minimum_stock
+      // but the table components expect: id, name, quantity, min_stock
+      setRmData(
+        Array.isArray(rm)
+          ? rm.map((item) => ({
+              ...item,
+              id: item.material_id ?? item.id,
+              name: item.material_name ?? item.name,
+              quantity: item.qty_ ?? item.quantity ?? 0,
+              min_stock: item.minimum_stock ?? item.min_stock ?? 0,
+              unit: item.unit ?? item.uom,
+            }))
+          : [],
+      );
+
       if (Array.isArray(brands)) {
         const map = {};
         brands.forEach((b) => {
