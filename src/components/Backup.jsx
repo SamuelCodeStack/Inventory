@@ -22,21 +22,19 @@ export default function Backup({ mode }) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ type: "", message: "" });
 
-  // State to hold the custom backup directory path
   const [backupDir, setBackupDir] = useState(
     () =>
       localStorage.getItem("backup_directory") ||
       "C:/Users/Samuel/Desktop/Backup",
   );
 
-  // Sync state changes back to localStorage
   const handleDirChange = (e) => {
     const newPath = e.target.value;
     setBackupDir(newPath);
     localStorage.setItem("backup_directory", newPath);
   };
 
-  // --- 1. Export Action ---
+  // --- EXPORT ---
   const handleBackupExport = async () => {
     setLoading(true);
     setStatus({ type: "", message: "" });
@@ -46,9 +44,7 @@ export default function Backup({ mode }) {
         `${import.meta.env.VITE_API_URL}/backup/export`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ destinationPath: backupDir }),
         },
       );
@@ -75,7 +71,7 @@ export default function Backup({ mode }) {
     }
   };
 
-  // --- 2. Import Action ---
+  // --- IMPORT ---
   const handleBackupImport = async (event, targetTable) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -85,14 +81,14 @@ export default function Backup({ mode }) {
 
     const formData = new FormData();
     formData.append("backupFile", file);
-    formData.append("targetTable", targetTable); // Pass chosen destination table explicitly
+    formData.append("targetTable", targetTable);
 
     try {
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/backup/import`,
         {
           method: "POST",
-          body: formData, // Multi-part form boundary handled automatically
+          body: formData,
         },
       );
 
@@ -118,7 +114,7 @@ export default function Backup({ mode }) {
       });
     } finally {
       setLoading(false);
-      event.target.value = ""; // Reset file selection input footprint
+      event.target.value = "";
     }
   };
 
@@ -134,7 +130,7 @@ export default function Backup({ mode }) {
         boxSizing: "border-box",
       }}
     >
-      {/* Title Section */}
+      {/* Title */}
       <Box sx={{ mb: 4, textAlign: "center" }}>
         <Typography variant="h4" fontWeight={800} gutterBottom>
           System Data Management
@@ -145,7 +141,7 @@ export default function Backup({ mode }) {
         </Typography>
       </Box>
 
-      {/* Directory Configuration */}
+      {/* Directory input */}
       <Box sx={{ width: "100%", maxWidth: 600, mx: "auto", mb: 4 }}>
         <TextField
           fullWidth
@@ -158,14 +154,14 @@ export default function Backup({ mode }) {
         />
       </Box>
 
-      {/* Loading Progress Bar */}
+      {/* Loading bar */}
       {loading && (
         <Box sx={{ width: "100%", maxWidth: 600, mx: "auto", mb: 3 }}>
           <LinearProgress sx={{ borderRadius: 5, height: 8 }} />
         </Box>
       )}
 
-      {/* Status Notice Dialog boxes */}
+      {/* Status notice */}
       {status.message && (
         <Box
           sx={{
@@ -193,7 +189,7 @@ export default function Backup({ mode }) {
         </Box>
       )}
 
-      {/* Main Side-by-Side Card Layout Wrapper */}
+      {/* Cards */}
       <Box
         sx={{
           display: "flex",
@@ -206,7 +202,7 @@ export default function Backup({ mode }) {
           mx: "auto",
         }}
       >
-        {/* EXPORT CARD (Left Side) */}
+        {/* EXPORT CARD */}
         <Card
           sx={{
             flex: 1,
@@ -229,11 +225,9 @@ export default function Backup({ mode }) {
           >
             <Stack spacing={2} alignItems="center" textAlign="center">
               <FolderSpecial sx={{ fontSize: 60, color: "#ff9100" }} />
-
               <Typography variant="h6" fontWeight={700}>
                 Server Local CSV Export
               </Typography>
-
               <Typography
                 variant="body2"
                 color="text.secondary"
@@ -244,7 +238,6 @@ export default function Backup({ mode }) {
                   {backupDir}
                 </code>
               </Typography>
-
               <Box sx={{ width: "100%", pt: 1 }}>
                 <Typography
                   variant="caption"
@@ -252,8 +245,17 @@ export default function Backup({ mode }) {
                   color="text.disabled"
                   sx={{ mb: 1, textAlign: "left" }}
                 >
-                  • inventory ➔ Inventory.csv <br />• raw_materials ➔
-                  raw_materials.csv
+                  • inventory ➔ Inventory.csv
+                  <br />
+                  &nbsp;&nbsp;Columns: item_id, item_name, category, brand,
+                  supplier, unit, quantity, price, minimum_stock, created_at,
+                  updated_at
+                  <br />
+                  <br />
+                  • raw_materials ➔ raw_materials.csv
+                  <br />
+                  &nbsp;&nbsp;Columns: material_id, material_name, category,
+                  unit, qty, minimum_stock, created_at, updated_at
                 </Typography>
               </Box>
             </Stack>
@@ -277,7 +279,7 @@ export default function Backup({ mode }) {
           </CardContent>
         </Card>
 
-        {/* IMPORT/RESTORE CARD (Right Side) */}
+        {/* IMPORT CARD */}
         <Card
           sx={{
             flex: 1,
@@ -305,22 +307,18 @@ export default function Backup({ mode }) {
               sx={{ width: "100%" }}
             >
               <CloudUpload sx={{ fontSize: 60, color: "#2196f3" }} />
-
               <Typography variant="h6" fontWeight={700}>
                 Import System Database
               </Typography>
-
               <Typography variant="body2" color="text.secondary">
-                Select a table structured spreadsheet file to append or
-                overwrite target database contents.
+                Select a CSV file exported from this system to restore data into
+                the target table. The file must match the exact column
+                structure.
               </Typography>
-
               <Divider flexItem sx={{ my: 1 }} />
             </Stack>
 
-            {/* Split Action Buttons Container */}
             <Stack spacing={2} sx={{ pt: 2, width: "100%" }}>
-              {/* Inventory Upload Trigger Button */}
               <Button
                 variant="contained"
                 component="label"
@@ -342,7 +340,6 @@ export default function Backup({ mode }) {
                 />
               </Button>
 
-              {/* Raw Materials Upload Trigger Button */}
               <Button
                 variant="outlined"
                 component="label"

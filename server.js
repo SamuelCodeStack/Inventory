@@ -698,11 +698,11 @@ app.get("/api/raw-materials", async (req, res) => {
       material_name: m.material_name ?? "",
       category: m.category ?? "",
       unit: m.unit ?? "",
-      qty_: parseFloat(m.qty_) || 0,
+      qty_: parseFloat(m.quantity) || 0,
       previousQty:
         m.prev_qty !== null && m.prev_qty !== undefined
           ? parseFloat(m.prev_qty)
-          : parseFloat(m.qty_) || 0,
+          : parseFloat(m.quantity) || 0,
       minimum_stock: parseFloat(m.minimum_stock) || 0,
       remarks: m.latest_remark || "",
       remarks_added_by: m.remarks_added_by || "",
@@ -722,7 +722,7 @@ app.post("/api/raw-materials", async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO raw_materials 
-        (material_name, category, unit, qty_, minimum_stock) 
+        (material_name, category, unit, quantity, minimum_stock) 
         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [
         material_name,
@@ -753,7 +753,7 @@ app.post("/api/raw-materials/bulk-add", async (req, res) => {
     for (const item of items) {
       const result = await pool.query(
         `INSERT INTO raw_materials 
-          (material_name, category, unit, qty_, minimum_stock) 
+          (material_name, category, unit, quantity, minimum_stock) 
           VALUES ($1, $2, $3, $4, $5) RETURNING *`,
         [
           item.material_name,
@@ -791,13 +791,13 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
       const cleanedItemId = cleanId(item.material_id);
 
       const currentRes = await client.query(
-        "SELECT material_name, qty_ FROM raw_materials WHERE material_id = $1",
+        "SELECT material_name, quantity FROM raw_materials WHERE material_id = $1",
         [cleanedItemId],
       );
 
       if (currentRes.rows.length > 0) {
         const materialName = currentRes.rows[0].material_name;
-        const oldQty = Math.floor(currentRes.rows[0].qty_);
+        const oldQty = Math.floor(currentRes.rows[0].quantity);
         const newQty = Math.floor(item.qty_);
 
         if (oldQty !== newQty) {
@@ -817,7 +817,7 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
           );
 
           await client.query(
-            "UPDATE raw_materials SET qty_ = $1, updated_at = now() WHERE material_id = $2",
+            "UPDATE raw_materials SET quantity = $1, updated_at = now() WHERE material_id = $2",
             [newQty, cleanedItemId],
           );
 
@@ -897,10 +897,10 @@ app.put("/api/raw-materials/:id", async (req, res) => {
   const { material_name, category, unit, qty_, minimum_stock } = req.body;
   try {
     const currentRes = await pool.query(
-      "SELECT qty_ FROM raw_materials WHERE material_id = $1",
+      "SELECT quantity FROM raw_materials WHERE material_id = $1",
       [id],
     );
-    const oldQty = parseFloat(currentRes.rows[0]?.qty_ || 0);
+    const oldQty = parseFloat(currentRes.rows[0]?.quantity || 0);
     const newQty = parseFloat(qty_);
 
     if (oldQty !== newQty) {
@@ -921,8 +921,8 @@ app.put("/api/raw-materials/:id", async (req, res) => {
 
     await pool.query(
       `UPDATE raw_materials SET 
-        material_name=$1, category=$2, unit=$3, qty_=$4, minimum_stock=$5,
-        updated_at = CASE WHEN qty_ != $4 THEN now() ELSE updated_at END
+        material_name=$1, category=$2, unit=$3, quantity=$4, minimum_stock=$5,
+        updated_at = CASE WHEN quantity != $4 THEN now() ELSE updated_at END
        WHERE material_id=$6`,
       [material_name, category, unit, newQty, minimum_stock, id],
     );
@@ -961,103 +961,8 @@ app.delete("/api/raw-materials/:id", async (req, res) => {
   }
 });
 
-// ==========================================
-// RAW MATERIAL REMARKS ENDPOINTS
-// ==========================================
+// (Remarks endpoints unchanged — no qty_ references there)
 
-// POST — Upsert remark
-app.post("/api/raw-materials/:id/remarks", async (req, res) => {
-  const id = cleanId(req.params.id);
-  const { remarks } = req.body;
-
-  if (!remarks || !remarks.trim()) {
-    return res.status(400).json({ error: "Remarks cannot be empty" });
-  }
-
-  try {
-    const matInfo = await pool.query(
-      "SELECT material_name FROM raw_materials WHERE material_id = $1",
-      [id],
-    );
-    if (matInfo.rows.length === 0) {
-      return res.status(404).json({ error: "Material not found" });
-    }
-    const matName = matInfo.rows[0].material_name;
-    const addedBy =
-      req.session?.user?.name || req.session?.user?.username || "Unknown";
-
-    await pool.query(
-      "DELETE FROM raw_materials_remarks WHERE material_id = $1",
-      [id],
-    );
-
-    const result = await pool.query(
-      `INSERT INTO raw_materials_remarks (material_id, remarks, added_by, created_at)
-       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
-       RETURNING *`,
-      [id, remarks.trim(), addedBy],
-    );
-
-    await logActivity(
-      req,
-      "INSERT",
-      "raw_materials_remarks",
-      id,
-      `Added remark for material: ${matName} by ${addedBy}`,
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error("Save raw material remark error:", err);
-    res.status(500).json({ error: "Failed to save remark" });
-  }
-});
-
-// GET — Fetch all remarks for a raw material
-app.get("/api/raw-materials/:id/remarks", async (req, res) => {
-  const id = cleanId(req.params.id);
-  try {
-    const result = await pool.query(
-      `SELECT * FROM raw_materials_remarks WHERE material_id = $1 ORDER BY created_at DESC`,
-      [id],
-    );
-    res.json(result.rows);
-  } catch (err) {
-    console.error("Fetch raw material remarks error:", err);
-    res.status(500).json({ error: "Failed to fetch remarks" });
-  }
-});
-
-// DELETE — Manually clear remark for a raw material
-app.delete("/api/raw-materials/:id/remarks", async (req, res) => {
-  const id = cleanId(req.params.id);
-  try {
-    const matInfo = await pool.query(
-      "SELECT material_name FROM raw_materials WHERE material_id = $1",
-      [id],
-    );
-    if (matInfo.rows.length === 0) {
-      return res.status(404).json({ error: "Material not found" });
-    }
-    const matName = matInfo.rows[0].material_name;
-
-    await pool.query(
-      "DELETE FROM raw_materials_remarks WHERE material_id = $1",
-      [id],
-    );
-
-    await logActivity(
-      req,
-      "DELETE",
-      "raw_materials_remarks",
-      id,
-      `Cleared remark for material: ${matName}`,
-    );
-    res.json({ message: "Remark cleared successfully" });
-  } catch (err) {
-    console.error("Delete raw material remark error:", err);
-    res.status(500).json({ error: "Failed to clear remark" });
-  }
-});
 // ==========================================
 // 4. USER MANAGEMENT ENDPOINTS
 // ==========================================
@@ -1184,16 +1089,21 @@ app.post("/api/backup/export", async (req, res) => {
   const inventoryPath = `${backupDir.replace(/\\/g, "/")}/Inventory.csv`;
   const rawMaterialsPath = `${backupDir.replace(/\\/g, "/")}/raw_materials.csv`;
 
+  const client = await pool.connect();
   try {
+    // Force unambiguous ISO date formatting for this session,
+    // so exported CSV dates always round-trip correctly on import.
+    await client.query("SET datestyle = 'ISO, MDY';");
+
     // 1. Run Inventory Table Export
-    await pool.query(`
+    await client.query(`
       COPY (SELECT * FROM inventory) 
       TO '${inventoryPath}' 
       WITH CSV HEADER;
     `);
 
     // 2. Run Raw Materials Table Export
-    await pool.query(`
+    await client.query(`
       COPY (SELECT * FROM raw_materials) 
       TO '${rawMaterialsPath}' 
       WITH CSV HEADER;
@@ -1226,6 +1136,8 @@ app.post("/api/backup/export", async (req, res) => {
       error: "Export processing sequence failed.",
       message: err.message,
     });
+  } finally {
+    client.release();
   }
 });
 
@@ -1254,6 +1166,7 @@ app.post(
       });
     }
 
+    const client = await pool.connect();
     try {
       // Read the file header metadata row to verify file data entries match relations
       const fileContent = fs.readFileSync(uploadedFilePath, "utf8");
@@ -1280,17 +1193,40 @@ app.post(
         return column;
       });
 
+      // --- SCHEMA VALIDATION: confirm every CSV header actually exists on the table ---
+      const schemaRes = await client.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = $1`,
+        [targetTable],
+      );
+      const validColumns = new Set(schemaRes.rows.map((r) => r.column_name));
+
+      const unknownColumns = finalColumns.filter((c) => !validColumns.has(c));
+      if (unknownColumns.length > 0) {
+        if (fs.existsSync(uploadedFilePath)) fs.unlinkSync(uploadedFilePath);
+        return res.status(400).json({
+          error: "Column mismatch",
+          message: `The uploaded CSV has column(s) that don't exist on "${targetTable}": ${unknownColumns.join(
+            ", ",
+          )}. Valid columns are: ${[...validColumns].join(", ")}.`,
+        });
+      }
+
+      // Safe to interpolate now — every identifier is confirmed against information_schema
       const targetColumns = `(${finalColumns.join(", ")})`;
 
+      // Force the same unambiguous ISO date parsing used on export,
+      // on the SAME session that runs the COPY below.
+      await client.query("SET datestyle = 'ISO, MDY';");
+
       // Open execution query package transactions safely
-      await pool.query("BEGIN");
-      await pool.query(`TRUNCATE TABLE ${targetTable} CASCADE;`);
-      await pool.query(`
+      await client.query("BEGIN");
+      await client.query(`TRUNCATE TABLE ${targetTable} CASCADE;`);
+      await client.query(`
         COPY ${targetTable} ${targetColumns}
         FROM '${uploadedFilePath}' 
         WITH (FORMAT csv, HEADER true);
       `);
-      await pool.query("COMMIT");
+      await client.query("COMMIT");
 
       // Clear disk space footprint
       if (fs.existsSync(uploadedFilePath)) fs.unlinkSync(uploadedFilePath);
@@ -1307,13 +1243,15 @@ app.post(
         message: `Successfully synchronized system data table properties directly into ${targetTable}!`,
       });
     } catch (err) {
-      await pool.query("ROLLBACK");
+      await client.query("ROLLBACK");
       if (fs.existsSync(uploadedFilePath)) fs.unlinkSync(uploadedFilePath);
 
       console.error("❌ IMPORT PARSER ERROR:", err.message);
       res
         .status(400)
         .json({ error: "Data parser failed", message: err.message });
+    } finally {
+      client.release();
     }
   },
 );
