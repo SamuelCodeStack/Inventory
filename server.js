@@ -647,13 +647,13 @@ app.delete("/api/inventory/:id/remarks", async (req, res) => {
   const id = cleanId(req.params.id);
   try {
     const info = await pool.query(
-      "SELECT name FROM inventory WHERE item_id = $1",
+      "SELECT item_name FROM inventory WHERE item_id = $1",
       [id],
     );
     if (info.rows.length === 0) {
       return res.status(404).json({ error: "Item not found" });
     }
-    const itemName = info.rows[0].name;
+    const itemName = info.rows[0].item_name;
 
     await pool.query("DELETE FROM inventory_remarks WHERE item_id = $1", [id]);
 
