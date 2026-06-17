@@ -1093,7 +1093,7 @@ export default function Inventory({ mode, user }) {
               <ListItemIcon>
                 <Print fontSize="small" sx={{ color: "#ef7d14" }} />
               </ListItemIcon>
-              <ListItemText>Print</ListItemText>
+              <ListItemText>Item Logs</ListItemText>
             </MenuItem>
 
             <MenuItem

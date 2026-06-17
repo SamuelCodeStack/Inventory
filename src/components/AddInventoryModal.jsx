@@ -34,14 +34,11 @@ export default function AddInventoryModal({
   };
   const [items, setItems] = useState([emptyRow]);
   const [loading, setLoading] = useState(false);
-  // State added to store existing inventory item names fetched from the server
-  const [existingNames, setExistingNames] = useState([]);
-  // Brands list fetched from the server for the dropdown
+  const [existingItems, setExistingItems] = useState([]); // { name, category }[]
   const [brands, setBrands] = useState([]);
-  // Suppliers list fetched from the server for the dropdown
   const [suppliers, setSuppliers] = useState([]);
 
-  // Fetch existing inventory data to run accurate duplication checks
+  // Fetch existing inventory — store name + category pairs for combined validation
   useEffect(() => {
     if (open) {
       const fetchExistingInventory = async () => {
@@ -52,19 +49,21 @@ export default function AddInventoryModal({
           );
           if (response.ok) {
             const data = await response.json();
-            // Extract and clean names for case-insensitive validation lookups
-            const names = data.map((item) => item.name.trim().toLowerCase());
-            setExistingNames(names);
+            setExistingItems(
+              data.map((item) => ({
+                name: item.name?.trim().toLowerCase(),
+                category: item.category?.trim().toLowerCase(),
+              })),
+            );
           }
         } catch (error) {
-          console.error("Failed to fetch existing inventory names:", error);
+          console.error("Failed to fetch existing inventory:", error);
         }
       };
       fetchExistingInventory();
     }
   }, [open]);
 
-  // Fetch brands for the brand dropdown
   useEffect(() => {
     if (open) {
       const fetchBrands = async () => {
@@ -86,7 +85,6 @@ export default function AddInventoryModal({
     }
   }, [open]);
 
-  // Fetch suppliers for the supplier dropdown
   useEffect(() => {
     if (open) {
       const fetchSuppliers = async () => {
@@ -108,36 +106,40 @@ export default function AddInventoryModal({
     }
   }, [open]);
 
-  // Helper logic to verify if a specified name already exists within the database or form rows
-  const checkDuplicateName = (nameValue, currentIndex) => {
+  // Validate: duplicate = same name AND same category (in DB or within the form)
+  const checkDuplicate = (nameValue, categoryValue, currentIndex) => {
     const cleanName = nameValue.trim().toLowerCase();
-    if (!cleanName) return { exists: false, message: "" };
+    const cleanCat = categoryValue.trim().toLowerCase();
+    if (!cleanName || !cleanCat) return { exists: false, message: "" };
 
-    // 1. Check database registry conflict boundaries
-    if (existingNames.includes(cleanName)) {
+    // Check against DB records
+    const existsInDB = existingItems.some(
+      (item) => item.name === cleanName && item.category === cleanCat,
+    );
+    if (existsInDB) {
       return {
         exists: true,
-        message: `"${nameValue.trim()}" already exists in system records.`,
+        message: `"${nameValue.trim()}" in ${categoryValue} already exists in system records.`,
       };
     }
 
-    // 2. Check staged multi-row batch form duplication bounds
+    // Check within form rows
     const duplicateInFormIndex = items.findIndex(
       (item, idx) =>
-        idx !== currentIndex && item.name.trim().toLowerCase() === cleanName,
+        idx !== currentIndex &&
+        item.name.trim().toLowerCase() === cleanName &&
+        item.category.trim().toLowerCase() === cleanCat,
     );
     if (duplicateInFormIndex !== -1) {
       return {
         exists: true,
-        message: `"${nameValue.trim()}" is duplicated in row ${duplicateInFormIndex + 1}.`,
+        message: `"${nameValue.trim()}" in ${categoryValue} is duplicated in row ${duplicateInFormIndex + 1}.`,
       };
     }
 
     return { exists: false, message: "" };
   };
 
-  // --- VALIDATION LOGIC ---
-  // Returns true if ANY field in ANY row is empty or contains duplicate validation conflicts
   const isInvalid = items.some(
     (item, index) =>
       !item.name.trim() ||
@@ -146,7 +148,7 @@ export default function AddInventoryModal({
       item.quantity === "" ||
       item.price === "" ||
       item.minStock === "" ||
-      checkDuplicateName(item.name, index).exists,
+      checkDuplicate(item.name, item.category || "", index).exists,
   );
 
   const addRow = () => setItems([...items, { ...emptyRow }]);
@@ -160,9 +162,8 @@ export default function AddInventoryModal({
   const handleChange = (index, field, value) => {
     const newItems = [...items];
 
-    // Validate and clean values based on datatype limits
     if (field === "name") {
-      newItems[index][field] = value.slice(0, 100); // VARCHAR(100)
+      newItems[index][field] = value.slice(0, 100);
     } else if (field === "quantity" || field === "minStock") {
       if (value === "") {
         newItems[index][field] = "";
@@ -176,7 +177,6 @@ export default function AddInventoryModal({
       if (value === "") {
         newItems[index][field] = "";
       } else {
-        // Prevent negative values for DECIMAL(12,2)
         newItems[index][field] = parseFloat(value) < 0 ? "0" : value;
       }
     } else {
@@ -194,7 +194,7 @@ export default function AddInventoryModal({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include", // Required to send session cookies for activity logs
+          credentials: "include",
           body: JSON.stringify({ items }),
         },
       );
@@ -246,12 +246,14 @@ export default function AddInventoryModal({
 
         <Stack spacing={4} divider={<Divider />}>
           {items.map((item, index) => {
-            const validationStatus = checkDuplicateName(item.name, index);
+            const validationStatus = checkDuplicate(
+              item.name,
+              item.category || "",
+              index,
+            );
             return (
               <Box key={index}>
                 <Grid container spacing={2} alignItems="flex-end">
-                  {/* --- ROW 1: ITEM NAME + CATEGORY --- */}
-
                   {/* ITEM NAME */}
                   <Grid item xs={12} md={8}>
                     <Typography
@@ -266,12 +268,9 @@ export default function AddInventoryModal({
                       size="small"
                       placeholder="Enter item name..."
                       value={item.name}
-                      error={
-                        (!item.name && item.name !== "") ||
-                        validationStatus.exists
-                      }
+                      error={validationStatus.exists}
                       helperText={validationStatus.message}
-                      inputProps={{ maxLength: 100 }} // VARCHAR(100) limit
+                      inputProps={{ maxLength: 100 }}
                       onChange={(e) =>
                         handleChange(index, "name", e.target.value)
                       }
@@ -293,7 +292,7 @@ export default function AddInventoryModal({
                       fullWidth
                       size="small"
                       value={item.category}
-                      error={!item.category}
+                      error={!item.category || validationStatus.exists}
                       onChange={(e) =>
                         handleChange(index, "category", e.target.value)
                       }
@@ -306,9 +305,7 @@ export default function AddInventoryModal({
                     </TextField>
                   </Grid>
 
-                  {/* --- ROW 2: BRAND + SUPPLIER — SUPPLIER only visible when category is Trading --- */}
-
-                  {/* BRAND DROPDOWN — populated from /brands */}
+                  {/* BRAND DROPDOWN */}
                   <Grid item xs={12} md={item.category === "Trading" ? 6 : 12}>
                     <Typography
                       variant="caption"
@@ -336,7 +333,7 @@ export default function AddInventoryModal({
                     </TextField>
                   </Grid>
 
-                  {/* SUPPLIER DROPDOWN — only visible when category is Trading */}
+                  {/* SUPPLIER DROPDOWN — only for Trading */}
                   {item.category === "Trading" && (
                     <Grid item xs={12} md={6}>
                       <Typography
@@ -369,8 +366,6 @@ export default function AddInventoryModal({
                       </TextField>
                     </Grid>
                   )}
-
-                  {/* --- ROW 3: UNIT + PRICE + QTY + MIN + DELETE --- */}
 
                   {/* UNIT */}
                   <Grid item xs={6} md={3}>
@@ -420,7 +415,7 @@ export default function AddInventoryModal({
                         placeholder="0.00"
                         value={item.price}
                         error={item.price === ""}
-                        inputProps={{ min: 0, step: "0.01" }} // DECIMAL limit rules
+                        inputProps={{ min: 0, step: "0.01" }}
                         onChange={(e) =>
                           handleChange(index, "price", e.target.value)
                         }
@@ -443,7 +438,7 @@ export default function AddInventoryModal({
                       size="small"
                       value={item.quantity}
                       error={item.quantity === ""}
-                      inputProps={{ min: 0, step: "1" }} // INTEGER rules
+                      inputProps={{ min: 0, step: "1" }}
                       onChange={(e) =>
                         handleChange(index, "quantity", e.target.value)
                       }
@@ -465,14 +460,14 @@ export default function AddInventoryModal({
                       size="small"
                       value={item.minStock}
                       error={item.minStock === ""}
-                      inputProps={{ min: 0, step: "1" }} // INTEGER rules
+                      inputProps={{ min: 0, step: "1" }}
                       onChange={(e) =>
                         handleChange(index, "minStock", e.target.value)
                       }
                     />
                   </Grid>
 
-                  {/* DELETE ROW BUTTON */}
+                  {/* DELETE ROW */}
                   {items.length > 1 && (
                     <Grid
                       item
@@ -520,7 +515,6 @@ export default function AddInventoryModal({
               variant="contained"
               startIcon={<Save />}
               onClick={handleSave}
-              // --- BUTTON IS DISABLED IF LOADING OR ANY FIELD IS EMPTY ---
               disabled={loading || isInvalid}
               sx={{
                 px: 5,

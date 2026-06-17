@@ -35,15 +35,38 @@ export default function EditInventoryModal({
     supplier_id: "",
   });
 
-  // Brands list fetched from the server for the dropdown
   const [brands, setBrands] = useState([]);
   const [loadingBrands, setLoadingBrands] = useState(false);
-
-  // Suppliers list fetched from the server for the dropdown
   const [suppliers, setSuppliers] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
+  const [existingItems, setExistingItems] = useState([]); // { id, name, category }[]
+  const [duplicateError, setDuplicateError] = useState("");
 
-  // Fetch brands when modal opens
+  // Fetch existing inventory for duplicate validation
+  useEffect(() => {
+    if (!open) return;
+    const fetchExisting = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/inventory`, {
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setExistingItems(
+            data.map((item) => ({
+              id: String(item.id).split(":")[0],
+              name: item.name?.trim().toLowerCase(),
+              category: item.category?.trim().toLowerCase(),
+            })),
+          );
+        }
+      } catch (e) {
+        console.error("Failed to fetch existing inventory:", e);
+      }
+    };
+    fetchExisting();
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     const fetchBrands = async () => {
@@ -66,7 +89,6 @@ export default function EditInventoryModal({
     fetchBrands();
   }, [open]);
 
-  // Fetch suppliers when modal opens
   useEffect(() => {
     if (!open) return;
     const fetchSuppliers = async () => {
@@ -90,36 +112,28 @@ export default function EditInventoryModal({
   }, [open]);
 
   // Pre-fill form when itemData changes
-  // --- FIX: brand is stored as plain text in inventory, so match brand name to brand list to get brand_id ---
   useEffect(() => {
     if (itemData && brands.length > 0) {
-      // Match the stored brand text to a brand_id from the brands list
       const matchedBrand = brands.find(
         (b) =>
           b.brand_name?.toLowerCase().trim() ===
           itemData.brand?.toLowerCase().trim(),
       );
-
-      // Match the stored supplier text to a supplier_id from the suppliers list
       const matchedSupplier = suppliers.find(
         (s) =>
           s.supplier_name?.toLowerCase().trim() ===
           itemData.supplier?.toLowerCase().trim(),
       );
-
       setFormData({
         name: itemData.name || "",
         category: itemData.category || "Plastic",
         uom: itemData.uom || "Pieces",
         minStock: itemData.minStock || 10,
         price: itemData.price || 0,
-        // Use matched brand_id if found, else fall back to empty
         brand_id: matchedBrand ? matchedBrand.brand_id : "",
-        // Use matched supplier_id if found, else fall back to empty
         supplier_id: matchedSupplier ? matchedSupplier.supplier_id : "",
       });
     } else if (itemData && brands.length === 0) {
-      // Brands not loaded yet — set everything except brand/supplier
       setFormData({
         name: itemData.name || "",
         category: itemData.category || "Plastic",
@@ -130,13 +144,38 @@ export default function EditInventoryModal({
         supplier_id: "",
       });
     }
+    setDuplicateError("");
   }, [itemData, brands, suppliers]);
 
-  // Logic to hide price for user level 3 (Production)
+  // Check duplicate whenever name or category changes — exclude the current item itself
+  useEffect(() => {
+    if (!formData.name.trim() || !formData.category) {
+      setDuplicateError("");
+      return;
+    }
+    const cleanName = formData.name.trim().toLowerCase();
+    const cleanCat = formData.category.trim().toLowerCase();
+    const currentId = itemData ? String(itemData.id).split(":")[0] : null;
+
+    const conflict = existingItems.find(
+      (item) =>
+        item.name === cleanName &&
+        item.category === cleanCat &&
+        item.id !== currentId,
+    );
+
+    if (conflict) {
+      setDuplicateError(
+        `"${formData.name.trim()}" in ${formData.category} already exists in system records.`,
+      );
+    } else {
+      setDuplicateError("");
+    }
+  }, [formData.name, formData.category, existingItems, itemData]);
+
   const isProduction =
     String(userLevel) === "3" || String(itemData?.user_level) === "3";
 
-  // --- LOGIC: CHECK IF ANYTHING CHANGED ---
   const isUnchanged =
     itemData &&
     formData.name === (itemData.name || "") &&
@@ -149,20 +188,19 @@ export default function EditInventoryModal({
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
     let updatedValue = value;
     if (name === "name") {
-      updatedValue = value.slice(0, 100); // VARCHAR(100)
+      updatedValue = value.slice(0, 100);
     } else if (name === "minStock") {
-      updatedValue = Math.max(0, parseInt(value, 10) || 0); // INTEGER >= 0
+      updatedValue = Math.max(0, parseInt(value, 10) || 0);
     } else if (name === "price") {
-      updatedValue = Math.max(0, parseFloat(value) || 0); // DECIMAL >= 0
+      updatedValue = Math.max(0, parseFloat(value) || 0);
     }
-
     setFormData({ ...formData, [name]: updatedValue });
   };
 
   const handleSubmit = async () => {
+    if (duplicateError) return;
     try {
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/inventory/${itemData.id}`,
@@ -214,7 +252,9 @@ export default function EditInventoryModal({
               label="Item Name"
               name="name"
               value={formData.name}
-              inputProps={{ maxLength: 100 }} // VARCHAR(100) limit
+              inputProps={{ maxLength: 100 }}
+              error={!!duplicateError}
+              helperText={duplicateError}
               onChange={handleChange}
             />
           </Grid>
@@ -227,6 +267,7 @@ export default function EditInventoryModal({
               label="Category"
               name="category"
               value={formData.category}
+              error={!!duplicateError}
               onChange={handleChange}
             >
               {categories.map((opt) => (
@@ -255,7 +296,7 @@ export default function EditInventoryModal({
             </TextField>
           </Grid>
 
-          {/* BRAND DROPDOWN — populated from /brands, same layout as supplier */}
+          {/* BRAND DROPDOWN */}
           <Grid item xs={formData.category === "Trading" ? 6 : 12}>
             <TextField
               select
@@ -280,7 +321,7 @@ export default function EditInventoryModal({
             </TextField>
           </Grid>
 
-          {/* SUPPLIER DROPDOWN — only visible when category is Trading */}
+          {/* SUPPLIER DROPDOWN — only for Trading */}
           {formData.category === "Trading" && (
             <Grid item xs={6}>
               <TextField
@@ -315,12 +356,12 @@ export default function EditInventoryModal({
               label="Minimum Stock Level"
               name="minStock"
               value={formData.minStock}
-              inputProps={{ min: 0, step: "1" }} // INTEGER limit rules
+              inputProps={{ min: 0, step: "1" }}
               onChange={handleChange}
             />
           </Grid>
 
-          {/* PRICE — hidden for Production (userLevel 3) */}
+          {/* PRICE — hidden for Production */}
           {!isProduction && (
             <Grid item xs={6}>
               <TextField
@@ -329,7 +370,7 @@ export default function EditInventoryModal({
                 label="Price"
                 name="price"
                 value={formData.price}
-                inputProps={{ min: 0, step: "0.01" }} // DECIMAL limit rules
+                inputProps={{ min: 0, step: "0.01" }}
                 onChange={handleChange}
               />
             </Grid>
@@ -344,7 +385,7 @@ export default function EditInventoryModal({
         <Button
           variant="contained"
           onClick={handleSubmit}
-          disabled={isUnchanged} // --- DISABLED IF NO CHANGES ---
+          disabled={isUnchanged || !!duplicateError}
           sx={{ fontWeight: "bold" }}
         >
           Update Item

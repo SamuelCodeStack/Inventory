@@ -562,7 +562,7 @@ export default function RawMaterials({ mode, userLevel }) {
                 <ListItemIcon>
                   <Print fontSize="small" color="primary" />
                 </ListItemIcon>
-                <ListItemText>Print</ListItemText>
+                <ListItemText>Item Logs</ListItemText>
               </MenuItem>
             )}
 

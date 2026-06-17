@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -25,6 +25,31 @@ export default function AddSupplierModal({
   });
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
+  const [existingNames, setExistingNames] = useState([]); // lowercase supplier names
+
+  // Fetch existing suppliers for duplicate name validation
+  useEffect(() => {
+    if (open) {
+      const fetchExisting = async () => {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/suppliers`, {
+            credentials: "include",
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setExistingNames(
+              data
+                .filter((s) => s.supplier_name)
+                .map((s) => s.supplier_name.trim().toLowerCase()),
+            );
+          }
+        } catch (e) {
+          console.error("Failed to fetch existing suppliers:", e);
+        }
+      };
+      fetchExisting();
+    }
+  }, [open]);
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -33,8 +58,13 @@ export default function AddSupplierModal({
 
   const validate = () => {
     const newErrors = {};
-    if (!form.supplier_name.trim())
+    if (!form.supplier_name.trim()) {
       newErrors.supplier_name = "Supplier name is required";
+    } else if (
+      existingNames.includes(form.supplier_name.trim().toLowerCase())
+    ) {
+      newErrors.supplier_name = `"${form.supplier_name.trim()}" already exists in system records.`;
+    }
     return newErrors;
   };
 

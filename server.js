@@ -1635,32 +1635,27 @@ app.delete("/api/brands/:id", async (req, res) => {
 
 // ==========================================
 // AUTOMATIC LOG CLEANUP
-// Runs every minute for testing purposes
+// Runs every hour while server is on
+// Deletes logs older than 5 days
 // ==========================================
 
-// cron.schedule("* * * * *", async () => {
-//   console.log("--- Starting Scheduled Log Cleanup ---");
-//   try {
-//     // Changed interval to 1 minute to match the frontend "Last Minute" trigger
-//     const result = await pool.query(
-//       "DELETE FROM activity_logs WHERE created_at < NOW() - INTERVAL '1 minute'",
-//     );
+cron.schedule("0 * * * *", async () => {
+  console.log("--- Starting Scheduled Log Cleanup ---");
+  try {
+    const result = await pool.query(
+      "DELETE FROM activity_logs WHERE created_at < NOW() - INTERVAL '5 days'",
+    );
 
-//     // --- DIALOG LOGGING ---
-//     const timestamp = new Date().toLocaleTimeString();
-//     console.log("-----------------------------------------");
-//     console.log(`[${timestamp}] ✨ Cleanup Status: SUCCESS`);
-//     console.log(`🗑️  Logs Deleted: ${result.rowCount}`);
-//     console.log("-----------------------------------------");
-
-//     console.log(
-//       `Cleanup complete: Deleted ${result.rowCount} logs older than 1 minute.`,
-//     );
-//   } catch (err) {
-//     console.error("Scheduled cleanup failed:", err);
-//   }
-// });
-
+    const timestamp = new Date().toLocaleTimeString();
+    console.log("-----------------------------------------");
+    console.log(`[${timestamp}] ✨ Cleanup Status: SUCCESS`);
+    console.log(`🗑️  Logs Deleted: ${result.rowCount}`);
+    console.log(`📅  Removed logs older than 5 days`);
+    console.log("-----------------------------------------");
+  } catch (err) {
+    console.error("Scheduled cleanup failed:", err);
+  }
+});
 // ==========================================
 // CATCH-ALL ERROR HANDLER
 // ==========================================

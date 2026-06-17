@@ -8,7 +8,6 @@ import {
   TextField,
   MenuItem,
   Grid,
-  Box,
   IconButton,
   Divider,
   Stack,
@@ -51,11 +50,12 @@ export default function AddRawMaterialModal({
 
   const [items, setItems] = useState([{ ...emptyRow }]);
   const [loading, setLoading] = useState(false);
-  const [existingNames, setExistingNames] = useState([]);
+  const [existingItems, setExistingItems] = useState([]); // { name, category }[]
 
+  // Fetch existing raw materials — store name + category pairs
   useEffect(() => {
     if (open) {
-      const fetchExistingRawMaterials = async () => {
+      const fetchExisting = async () => {
         try {
           const response = await fetch(
             `${import.meta.env.VITE_API_URL}/raw-materials`,
@@ -63,40 +63,51 @@ export default function AddRawMaterialModal({
           );
           if (response.ok) {
             const data = await response.json();
-            setExistingNames(
+            setExistingItems(
               data
                 .filter((item) => item.material_name)
-                .map((item) => item.material_name.trim().toLowerCase()),
+                .map((item) => ({
+                  name: item.material_name.trim().toLowerCase(),
+                  category: item.category?.trim().toLowerCase(),
+                })),
             );
           }
         } catch (error) {
-          console.error("Failed to fetch existing raw material names:", error);
+          console.error("Failed to fetch existing raw materials:", error);
         }
       };
-      fetchExistingRawMaterials();
+      fetchExisting();
     }
   }, [open]);
 
-  const checkDuplicateName = (nameValue, currentIndex) => {
+  // Duplicate = same name AND same category
+  const checkDuplicate = (nameValue, categoryValue, currentIndex) => {
     const cleanName = nameValue.trim().toLowerCase();
-    if (!cleanName) return { exists: false, message: "" };
+    const cleanCat = categoryValue.trim().toLowerCase();
+    if (!cleanName || !cleanCat) return { exists: false, message: "" };
 
-    if (existingNames.includes(cleanName)) {
+    // Check DB
+    const existsInDB = existingItems.some(
+      (item) => item.name === cleanName && item.category === cleanCat,
+    );
+    if (existsInDB) {
       return {
         exists: true,
-        message: `"${nameValue.trim()}" already exists in system records.`,
+        message: `"${nameValue.trim()}" in ${categoryValue} already exists in system records.`,
       };
     }
 
+    // Check within form rows
     const duplicateInFormIndex = items.findIndex(
       (item, idx) =>
         idx !== currentIndex &&
-        item.material_name.trim().toLowerCase() === cleanName,
+        item.material_name.trim().toLowerCase() === cleanName &&
+        item.category.trim().toLowerCase() === cleanCat,
     );
     if (duplicateInFormIndex !== -1) {
       return {
         exists: true,
-        message: `"${nameValue.trim()}" is duplicated in row ${duplicateInFormIndex + 1}.`,
+        message: `"${nameValue.trim()}" in ${categoryValue} is duplicated in row ${duplicateInFormIndex + 1}.`,
       };
     }
 
@@ -110,7 +121,7 @@ export default function AddRawMaterialModal({
       !item.unit ||
       !item.qty_ ||
       !item.minimum_stock ||
-      checkDuplicateName(item.material_name, index).exists,
+      checkDuplicate(item.material_name, item.category, index).exists,
   );
 
   const addRow = () => setItems([...items, { ...emptyRow }]);
@@ -186,139 +197,144 @@ export default function AddRawMaterialModal({
       <DialogContent dividers sx={{ maxHeight: "70vh" }}>
         <Stack spacing={4} divider={<Divider />}>
           {items.map((item, index) => {
-            const validationStatus = checkDuplicateName(
+            const validationStatus = checkDuplicate(
               item.material_name,
+              item.category,
               index,
             );
             return (
-              <Box key={index} sx={{ pt: index === 0 ? 0 : 2 }}>
-                <Grid container spacing={2} alignItems="flex-start">
-                  {/* Material Name */}
-                  <Grid item xs={12} md={8}>
-                    <TextField
-                      fullWidth
-                      label="Material Name"
-                      value={item.material_name}
-                      inputProps={{ maxLength: 100 }}
-                      error={
-                        item.material_name.length > 100 ||
-                        validationStatus.exists
-                      }
-                      helperText={
-                        item.material_name.length > 100
-                          ? "Maximum 100 characters"
-                          : validationStatus.message
-                      }
-                      onChange={(e) =>
-                        handleChange(index, "material_name", e.target.value)
-                      }
-                      size="small"
-                      placeholder="e.g. Lubricant Oil"
-                      autoFocus={index === 0}
-                    />
-                  </Grid>
-
-                  {/* Category */}
-                  <Grid item xs={12} md={4}>
-                    <TextField
-                      select
-                      fullWidth
-                      label="Category"
-                      value={item.category}
-                      onChange={(e) =>
-                        handleChange(index, "category", e.target.value)
-                      }
-                      size="small"
-                    >
-                      {CATEGORIES.map((cat) => (
-                        <MenuItem key={cat} value={cat}>
-                          {cat}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  </Grid>
-
-                  {/* Unit */}
-                  <Grid item xs={12} md={4}>
-                    <TextField
-                      select
-                      fullWidth
-                      label="Unit"
-                      value={item.unit}
-                      onChange={(e) =>
-                        handleChange(index, "unit", e.target.value)
-                      }
-                      size="small"
-                    >
-                      {UNIT_OPTIONS.map((u) => (
-                        <MenuItem key={u} value={u}>
-                          {u}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  </Grid>
-
-                  {/* Initial Quantity */}
-                  <Grid item xs={6} md={4}>
-                    <TextField
-                      fullWidth
-                      type="number"
-                      label="Initial Stock Quantity"
-                      value={item.qty_}
-                      onChange={(e) =>
-                        handleChange(index, "qty_", e.target.value)
-                      }
-                      size="small"
-                    />
-                  </Grid>
-
-                  {/* Min Stock */}
-                  <Grid item xs={6} md={items.length > 1 ? 3 : 4}>
-                    <TextField
-                      fullWidth
-                      type="number"
-                      label="Low Stock Alert Threshold"
-                      value={item.minimum_stock}
-                      onChange={(e) =>
-                        handleChange(index, "minimum_stock", e.target.value)
-                      }
-                      size="small"
-                    />
-                  </Grid>
-
-                  {/* Remove row button */}
-                  {items.length > 1 && (
-                    <Grid
-                      item
-                      xs={12}
-                      md={1}
-                      sx={{ textAlign: "right", pt: "6px !important" }}
-                    >
-                      <IconButton
-                        color="error"
-                        onClick={() => removeRow(index)}
-                        disabled={items.length === 1}
-                      >
-                        <Delete fontSize="small" />
-                      </IconButton>
-                    </Grid>
-                  )}
+              <Grid
+                container
+                spacing={2}
+                alignItems="flex-start"
+                key={index}
+                sx={{ pt: index === 0 ? 0 : 2 }}
+              >
+                {/* Material Name */}
+                <Grid item xs={12} md={8}>
+                  <TextField
+                    fullWidth
+                    label="Material Name"
+                    value={item.material_name}
+                    inputProps={{ maxLength: 100 }}
+                    error={
+                      item.material_name.length > 100 || validationStatus.exists
+                    }
+                    helperText={
+                      item.material_name.length > 100
+                        ? "Maximum 100 characters"
+                        : validationStatus.message
+                    }
+                    onChange={(e) =>
+                      handleChange(index, "material_name", e.target.value)
+                    }
+                    size="small"
+                    placeholder="e.g. Lubricant Oil"
+                    autoFocus={index === 0}
+                  />
                 </Grid>
-              </Box>
+
+                {/* Category */}
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Category"
+                    value={item.category}
+                    error={validationStatus.exists}
+                    onChange={(e) =>
+                      handleChange(index, "category", e.target.value)
+                    }
+                    size="small"
+                  >
+                    {CATEGORIES.map((cat) => (
+                      <MenuItem key={cat} value={cat}>
+                        {cat}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+
+                {/* Unit */}
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Unit"
+                    value={item.unit}
+                    onChange={(e) =>
+                      handleChange(index, "unit", e.target.value)
+                    }
+                    size="small"
+                  >
+                    {UNIT_OPTIONS.map((u) => (
+                      <MenuItem key={u} value={u}>
+                        {u}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+
+                {/* Initial Quantity */}
+                <Grid item xs={6} md={4}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Initial Stock Quantity"
+                    value={item.qty_}
+                    onChange={(e) =>
+                      handleChange(index, "qty_", e.target.value)
+                    }
+                    size="small"
+                  />
+                </Grid>
+
+                {/* Min Stock */}
+                <Grid item xs={6} md={items.length > 1 ? 3 : 4}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Low Stock Alert Threshold"
+                    value={item.minimum_stock}
+                    onChange={(e) =>
+                      handleChange(index, "minimum_stock", e.target.value)
+                    }
+                    size="small"
+                  />
+                </Grid>
+
+                {/* Remove row */}
+                {items.length > 1 && (
+                  <Grid
+                    item
+                    xs={12}
+                    md={1}
+                    sx={{ textAlign: "right", pt: "6px !important" }}
+                  >
+                    <IconButton
+                      color="error"
+                      onClick={() => removeRow(index)}
+                      disabled={items.length === 1}
+                    >
+                      <Delete fontSize="small" />
+                    </IconButton>
+                  </Grid>
+                )}
+              </Grid>
             );
           })}
         </Stack>
 
-        <Box sx={{ mt: 3 }}>
+        <Stack sx={{ mt: 3 }}>
           <Button
             variant="outlined"
             startIcon={<AddCircle />}
             onClick={addRow}
-            sx={{ borderRadius: 2 }}
+            sx={{ borderRadius: 2, alignSelf: "flex-start" }}
           >
             Add Another Material
           </Button>
-        </Box>
+        </Stack>
       </DialogContent>
 
       <DialogActions sx={{ p: 2.5 }}>

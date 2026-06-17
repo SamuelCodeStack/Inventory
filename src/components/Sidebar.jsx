@@ -77,11 +77,15 @@ export default function Sidebar({
       path: "/raw-materials",
     },
 
-    {
-      text: "Suppliers",
-      icon: <LocalShipping />,
-      path: "/suppliers",
-    },
+    ...(hasDashboardAccess
+      ? [
+          {
+            text: "Suppliers",
+            icon: <LocalShipping />,
+            path: "/suppliers",
+          },
+        ]
+      : []),
 
     ...(isAdmin
       ? [

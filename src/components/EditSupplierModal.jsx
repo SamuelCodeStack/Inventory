@@ -26,6 +26,33 @@ export default function EditSupplierModal({
   });
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
+  const [existingNames, setExistingNames] = useState([]); // { id, name }[]
+
+  // Fetch existing suppliers for duplicate name validation
+  useEffect(() => {
+    if (!open) return;
+    const fetchExisting = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/suppliers`, {
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setExistingNames(
+            data
+              .filter((s) => s.supplier_name)
+              .map((s) => ({
+                id: String(s.supplier_id),
+                name: s.supplier_name.trim().toLowerCase(),
+              })),
+          );
+        }
+      } catch (e) {
+        console.error("Failed to fetch existing suppliers:", e);
+      }
+    };
+    fetchExisting();
+  }, [open]);
 
   // Pre-fill form when supplierData changes
   useEffect(() => {
@@ -47,8 +74,19 @@ export default function EditSupplierModal({
 
   const validate = () => {
     const newErrors = {};
-    if (!form.supplier_name.trim())
+    if (!form.supplier_name.trim()) {
       newErrors.supplier_name = "Supplier name is required";
+    } else {
+      const cleanName = form.supplier_name.trim().toLowerCase();
+      const currentId = supplierData ? String(supplierData.supplier_id) : null;
+      // Conflict = same name, different supplier ID
+      const conflict = existingNames.find(
+        (s) => s.name === cleanName && s.id !== currentId,
+      );
+      if (conflict) {
+        newErrors.supplier_name = `"${form.supplier_name.trim()}" already exists in system records.`;
+      }
+    }
     return newErrors;
   };
 

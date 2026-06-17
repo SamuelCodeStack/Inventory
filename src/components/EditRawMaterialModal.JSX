@@ -46,7 +46,38 @@ export default function EditRawMaterialModal({
     unit: "KG",
     minimum_stock: 0,
   });
+  const [existingItems, setExistingItems] = useState([]); // { id, name, category }[]
+  const [duplicateError, setDuplicateError] = useState("");
 
+  // Fetch existing raw materials for duplicate validation
+  useEffect(() => {
+    if (!open) return;
+    const fetchExisting = async () => {
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/raw-materials`,
+          { credentials: "include" },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setExistingItems(
+            data
+              .filter((item) => item.material_name)
+              .map((item) => ({
+                id: String(item.material_id),
+                name: item.material_name.trim().toLowerCase(),
+                category: item.category?.trim().toLowerCase(),
+              })),
+          );
+        }
+      } catch (e) {
+        console.error("Failed to fetch existing raw materials:", e);
+      }
+    };
+    fetchExisting();
+  }, [open]);
+
+  // Pre-fill form when itemData changes
   useEffect(() => {
     if (itemData) {
       setFormData({
@@ -55,8 +86,35 @@ export default function EditRawMaterialModal({
         unit: itemData.unit || "KG",
         minimum_stock: itemData.minimum_stock ?? 0,
       });
+      setDuplicateError("");
     }
   }, [itemData]);
+
+  // Check duplicate whenever name or category changes — exclude the current item
+  useEffect(() => {
+    if (!formData.material_name.trim() || !formData.category) {
+      setDuplicateError("");
+      return;
+    }
+    const cleanName = formData.material_name.trim().toLowerCase();
+    const cleanCat = formData.category.trim().toLowerCase();
+    const currentId = itemData ? String(itemData.material_id) : null;
+
+    const conflict = existingItems.find(
+      (item) =>
+        item.name === cleanName &&
+        item.category === cleanCat &&
+        item.id !== currentId,
+    );
+
+    if (conflict) {
+      setDuplicateError(
+        `"${formData.material_name.trim()}" in ${formData.category} already exists in system records.`,
+      );
+    } else {
+      setDuplicateError("");
+    }
+  }, [formData.material_name, formData.category, existingItems, itemData]);
 
   const isUnchanged =
     itemData &&
@@ -74,6 +132,7 @@ export default function EditRawMaterialModal({
   };
 
   const handleSubmit = async () => {
+    if (duplicateError) return;
     try {
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/raw-materials/${itemData.material_id}`,
@@ -108,12 +167,6 @@ export default function EditRawMaterialModal({
       disableScrollLock
       PaperProps={{ sx: { borderRadius: 3, backgroundImage: "none" } }}
     >
-      {/*
-        FIX 1: DialogTitle renders as <h2> by default AND internally wraps
-        children in <Typography variant="h6"> → <h6>, causing h2>h6 nesting.
-        Adding component="div" overrides the outer tag to <div>, eliminating
-        the invalid nesting entirely.
-      */}
       <DialogTitle
         component="div"
         sx={{
@@ -133,11 +186,8 @@ export default function EditRawMaterialModal({
       </DialogTitle>
 
       <DialogContent dividers>
-        {/*
-          FIX 2: Grid v2 removed xs/sm/md/item props.
-          Use size={{ xs: N, sm: N }} instead of item xs={N} sm={N}.
-        */}
         <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
+          {/* Material Name */}
           <Grid size={12}>
             <TextField
               fullWidth
@@ -145,11 +195,11 @@ export default function EditRawMaterialModal({
               name="material_name"
               value={formData.material_name}
               inputProps={{ maxLength: 100 }}
-              error={formData.material_name.length > 100}
+              error={formData.material_name.length > 100 || !!duplicateError}
               helperText={
                 formData.material_name.length > 100
                   ? "Maximum 100 characters"
-                  : ""
+                  : duplicateError
               }
               onChange={handleChange}
               size="small"
@@ -157,6 +207,7 @@ export default function EditRawMaterialModal({
             />
           </Grid>
 
+          {/* Category */}
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               select
@@ -164,6 +215,7 @@ export default function EditRawMaterialModal({
               label="Category"
               name="category"
               value={formData.category}
+              error={!!duplicateError}
               onChange={handleChange}
               size="small"
             >
@@ -175,6 +227,7 @@ export default function EditRawMaterialModal({
             </TextField>
           </Grid>
 
+          {/* Unit */}
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               select
@@ -197,6 +250,7 @@ export default function EditRawMaterialModal({
             <Divider />
           </Grid>
 
+          {/* Min Stock */}
           <Grid size={12}>
             <TextField
               fullWidth
@@ -220,6 +274,7 @@ export default function EditRawMaterialModal({
           onClick={handleSubmit}
           disabled={
             isUnchanged ||
+            !!duplicateError ||
             !formData.material_name ||
             formData.material_name.length > 100
           }
