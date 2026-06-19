@@ -480,7 +480,6 @@ function FinishedGoodsTable({ data, isDark, brandColorMap }) {
                           key={row.id}
                           hover
                           sx={{
-                            borderLeft: `4px solid ${headerColor}`,
                             "&:hover td": {
                               bgcolor: hexToRgba(headerColor, 0.08),
                             },

@@ -564,8 +564,8 @@ export default function Inventory({ mode, user }) {
         selected={selectedIds.includes(row.id)}
         sx={{
           "& .MuiTableCell-root": { color: statusColor },
+          // ✅ borderLeft removed — no more color strip
           ...(brandColor && {
-            borderLeft: `4px solid ${brandColor}`,
             "&:hover td": { bgcolor: hexToRgba(brandColor, 0.08) },
           }),
         }}
@@ -1088,7 +1088,6 @@ export default function Inventory({ mode, user }) {
             transformOrigin={{ horizontal: "right", vertical: "top" }}
             anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
           >
-            {/* Print — closes menu since it opens a modal */}
             <MenuItem onClick={handleOpenPrint}>
               <ListItemIcon>
                 <Print fontSize="small" sx={{ color: "#ef7d14" }} />

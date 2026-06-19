@@ -2,24 +2,25 @@ import pg from "pg";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import session from "express-session"; // Added
-import pgSession from "connect-pg-simple"; // Added
-import bcrypt from "bcrypt"; // Added
+import session from "express-session";
+import pgSession from "connect-pg-simple";
+import bcrypt from "bcrypt";
 import cron from "node-cron";
-import nodemailer from "nodemailer"; // Added
+import nodemailer from "nodemailer";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
+import { createServer } from "http";
+import { Server } from "socket.io";
 
-// Configure the temporary disk storage engine environment for incoming file chunks
 const upload = multer({ dest: "C:/Users/Samuel/Desktop/Backup/temp/" });
 
 dotenv.config();
 
 const app = express();
+const httpServer = createServer(app);
 const port = 3000;
 
-// Split the string into an array, or default to an empty array if not found
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",")
   : [];
@@ -27,9 +28,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl)
       if (!origin) return callback(null, true);
-
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
@@ -50,35 +49,46 @@ const pool = new pg.Pool({
   port: process.env.PG_PORT,
 });
 
+const io = new Server(httpServer, {
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+  },
+});
+
+io.on("connection", (socket) => {
+  console.log("Client connected:", socket.id);
+  socket.on("disconnect", () => {
+    console.log("Client disconnected:", socket.id);
+  });
+});
+
 // ==========================================
 // SESSION CONFIGURATION
 // ==========================================
 const PostgresStore = pgSession(session);
 
-// --- UPDATED SESSION CONFIGURATION ---
 app.use(
   session({
     store: new PostgresStore({ pool: pool }),
     secret: process.env.SESSION_SECRET || "kimwin_secret_key",
     resave: false,
     saveUninitialized: false,
-    proxy: true, // Required for sessions to work over local network IPs
+    proxy: true,
     cookie: {
-      secure: false, // Keep false for HTTP
+      secure: false,
       httpOnly: true,
-      sameSite: "lax", // Changed from default to 'lax' to allow the cookie to be saved via IP access
+      sameSite: "lax",
       maxAge: 24 * 60 * 60 * 1000,
     },
   }),
 );
 
-// Helper to clean IDs (Handles cases like "16:1")
 const cleanId = (id) => {
   if (typeof id === "string") return id.split(":")[0];
   return id;
 };
 
-// --- ACTIVITY LOG HELPER ---
 const logActivity = async (
   req,
   actionType,
@@ -144,7 +154,7 @@ app.post("/api/auth/login", async (req, res) => {
       req.session.user = {
         id: user.user_id,
         name: user.full_name,
-        email: user.email, // ADDED: Mapping email from database to session
+        email: user.email,
         user_level: user.user_level,
       };
       res.json({ message: "Logged in successfully", user: req.session.user });
@@ -169,7 +179,6 @@ app.post("/api/auth/logout", (req, res) => {
     if (err) {
       return res.status(500).json({ error: "Could not log out" });
     }
-    // This is the critical part: it clears the session cookie from the browser
     res.clearCookie("connect.sid", {
       path: "/",
       httpOnly: true,
@@ -211,7 +220,6 @@ app.post("/api/auth/forgot-password", async (req, res) => {
       html: `<h3>Password Reset</h3><p>Your OTP is: <b>${otp}</b></p>`,
     };
 
-    // Use a nested try-catch specifically for the mailer
     try {
       await transporter.sendMail(mailOptions);
       console.log(`✅ OTP sent successfully to: ${email}`);
@@ -239,14 +247,12 @@ app.get("/api/inventory", async (req, res) => {
         (SELECT old_quantity FROM inventory_ledger l 
          WHERE l.item_id = i.item_id 
          ORDER BY recorded_at DESC LIMIT 1) as prev_qty,
-        -- Fetch latest remark for each item from inventory_remarks
         (SELECT ir.remarks FROM inventory_remarks ir 
          WHERE ir.item_id = i.item_id 
          ORDER BY ir.created_at DESC LIMIT 1) as remarks,
         (SELECT ir.created_at FROM inventory_remarks ir 
          WHERE ir.item_id = i.item_id 
          ORDER BY ir.created_at DESC LIMIT 1) as remarks_created_at,
-        -- Fetch who added the latest remark
         (SELECT ir.added_by FROM inventory_remarks ir 
          WHERE ir.item_id = i.item_id 
          ORDER BY ir.created_at DESC LIMIT 1) as remarks_added_by
@@ -261,7 +267,6 @@ app.get("/api/inventory", async (req, res) => {
       previousQuantity: item.prev_qty !== null ? item.prev_qty : item.quantity,
       price: item.price || 0,
       minStock: item.minimum_stock || 10,
-      // Map brand and supplier as plain text fields from the table
       brand: item.brand || "",
       supplier: item.supplier || "",
       status:
@@ -272,7 +277,6 @@ app.get("/api/inventory", async (req, res) => {
             : "In Stock",
       date: item.created_at,
       lastUpdated: item.updated_at,
-      // Remarks from inventory_remarks table
       remarks: item.remarks || "",
       remarks_created_at: item.remarks_created_at || null,
       remarks_added_by: item.remarks_added_by || null,
@@ -290,7 +294,6 @@ app.post("/api/inventory/bulk-add", async (req, res) => {
   try {
     await client.query("BEGIN");
     for (const item of items) {
-      // Resolve brand name from brand_id if provided, otherwise use brand text directly
       let brandName = item.brand || "";
       if (item.brand_id) {
         const brandRes = await client.query(
@@ -300,7 +303,6 @@ app.post("/api/inventory/bulk-add", async (req, res) => {
         brandName = brandRes.rows[0]?.brand_name || "";
       }
 
-      // Resolve supplier name from supplier_id if provided
       let supplierName = item.supplier || "";
       if (item.supplier_id) {
         const supplierRes = await client.query(
@@ -380,31 +382,26 @@ app.patch("/api/inventory/bulk", async (req, res) => {
             [newQty, id],
           );
 
-          // MATCHING RAW MATS LOG STYLE
           let logMessage = `Update Quantity ${itemName} ${oldQty} to ${newQty}`;
 
           if (adjustment && adjustment !== "") {
             const adjValue = parseInt(adjustment);
             if (adjValue > 0) {
               logMessage = `Stock In: ${itemName} ${oldQty} + ${adjValue} = ${newQty}`;
-              // --- CLEAR REMARKS ONLY ON STOCK IN (quantity increased) ---
               await client.query(
                 `DELETE FROM inventory_remarks WHERE item_id = $1`,
                 [id],
               );
             } else if (adjValue < 0) {
               logMessage = `Stock Out: ${itemName} ${oldQty} - ${Math.abs(adjValue)} = ${newQty}`;
-              // Stock Out — remarks remain
             }
           } else {
-            // Direct qty edit: clear remarks only if quantity increased
             if (newQty > oldQty) {
               await client.query(
                 `DELETE FROM inventory_remarks WHERE item_id = $1`,
                 [id],
               );
             }
-            // If quantity decreased via direct edit, remarks remain
           }
 
           await logActivity(req, "UPDATE", "inventory", id, logMessage);
@@ -426,8 +423,6 @@ app.patch("/api/inventory/bulk", async (req, res) => {
 // ==========================================
 // INVENTORY LEDGER ENDPOINT
 // ==========================================
-// ⚠️ Place this BEFORE app.get("/api/inventory/:id", ...)
-// otherwise Express treats "ledger" as an :id param
 
 app.get("/api/inventory/ledger", async (req, res) => {
   try {
@@ -457,7 +452,7 @@ app.get("/api/inventory/ledger", async (req, res) => {
       price: row.price || 0,
       previousQuantity: row.old_quantity,
       quantity: row.new_quantity,
-      adjustment: row.change_amount, // signed: +100 or -50
+      adjustment: row.change_amount,
       transactionDate: row.recorded_at,
     }));
 
@@ -482,7 +477,6 @@ app.patch("/api/inventory/:id", async (req, res) => {
   } = req.body;
 
   try {
-    // GET OLD QUANTITY FOR LEDGER
     const oldData = await pool.query(
       "SELECT quantity FROM inventory WHERE item_id = $1",
       [id],
@@ -497,7 +491,6 @@ app.patch("/api/inventory/:id", async (req, res) => {
       );
     }
 
-    // Resolve brand name from brand_id if provided
     let brandName = req.body.brand || "";
     if (brand_id) {
       const brandRes = await pool.query(
@@ -507,7 +500,6 @@ app.patch("/api/inventory/:id", async (req, res) => {
       brandName = brandRes.rows[0]?.brand_name || "";
     }
 
-    // Resolve supplier name from supplier_id if provided
     let supplierName = req.body.supplier || "";
     if (supplier_id) {
       const supplierRes = await pool.query(
@@ -579,7 +571,6 @@ app.delete("/api/inventory/:id", async (req, res) => {
 // INVENTORY REMARKS ENDPOINTS
 // ==========================================
 
-// POST — Upsert remark; replaces existing remark for the item (one remark per item)
 app.post("/api/inventory/:id/remarks", async (req, res) => {
   const id = cleanId(req.params.id);
   const { remarks } = req.body;
@@ -589,7 +580,6 @@ app.post("/api/inventory/:id/remarks", async (req, res) => {
   }
 
   try {
-    // Check item exists
     const itemInfo = await pool.query(
       "SELECT item_name FROM inventory WHERE item_id = $1",
       [id],
@@ -598,12 +588,9 @@ app.post("/api/inventory/:id/remarks", async (req, res) => {
       return res.status(404).json({ error: "Item not found" });
     }
     const itemName = itemInfo.rows[0].item_name;
-
-    // Get the username from session for added_by
     const addedBy =
       req.session?.user?.username || req.session?.user?.name || "Unknown";
 
-    // --- UPSERT: delete existing remark then insert new one ---
     await pool.query("DELETE FROM inventory_remarks WHERE item_id = $1", [id]);
 
     const result = await pool.query(
@@ -612,6 +599,14 @@ app.post("/api/inventory/:id/remarks", async (req, res) => {
        RETURNING *`,
       [id, remarks.trim(), addedBy],
     );
+
+    // Emit real-time update to all connected clients
+    io.emit("remarks_updated", {
+      itemId: parseInt(id),
+      remarks: remarks.trim(),
+      remarks_added_by: addedBy,
+      remarks_created_at: result.rows[0].created_at,
+    });
 
     await logActivity(
       req,
@@ -628,7 +623,6 @@ app.post("/api/inventory/:id/remarks", async (req, res) => {
   }
 });
 
-// GET — Fetch all remarks for an inventory item
 app.get("/api/inventory/:id/remarks", async (req, res) => {
   const id = cleanId(req.params.id);
   try {
@@ -656,6 +650,14 @@ app.delete("/api/inventory/:id/remarks", async (req, res) => {
     const itemName = info.rows[0].item_name;
 
     await pool.query("DELETE FROM inventory_remarks WHERE item_id = $1", [id]);
+
+    // Emit real-time update to all connected clients
+    io.emit("remarks_updated", {
+      itemId: parseInt(id),
+      remarks: "",
+      remarks_added_by: null,
+      remarks_created_at: null,
+    });
 
     await logActivity(
       req,
@@ -745,7 +747,6 @@ app.post("/api/raw-materials", async (req, res) => {
   }
 });
 
-// --- BULK ADD ENDPOINT ---
 app.post("/api/raw-materials/bulk-add", async (req, res) => {
   const { items } = req.body;
   try {
@@ -781,7 +782,6 @@ app.post("/api/raw-materials/bulk-add", async (req, res) => {
   }
 });
 
-// --- BULK UPDATE ENDPOINT ---
 app.patch("/api/raw-materials/bulk", async (req, res) => {
   const { items } = req.body;
   const client = await pool.connect();
@@ -821,7 +821,6 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
             [newQty, cleanedItemId],
           );
 
-          // AUTO-CLEAR REMARKS ONLY WHEN QUANTITY IS ADDED (increased)
           if (newQty > oldQty) {
             await client.query(
               "DELETE FROM raw_materials_remarks WHERE material_id = $1",
@@ -852,8 +851,6 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
 
 // ==========================================
 // RAW MATERIALS LEDGER ENDPOINT
-// ⚠️ Must be BEFORE app.put/delete("/api/raw-materials/:id")
-// so Express does not treat "ledger" as an :id param
 // ==========================================
 app.get("/api/raw-materials/ledger", async (req, res) => {
   try {
@@ -881,7 +878,7 @@ app.get("/api/raw-materials/ledger", async (req, res) => {
       unit: row.unit || "",
       old_qty: row.old_qty_value,
       new_qty: row.new_qty_value,
-      adjustment: row.change_amount, // signed: +100 stock in, -50 stock out
+      adjustment: row.change_amount,
       transactionDate: row.recorded_at,
     }));
 
@@ -910,7 +907,6 @@ app.put("/api/raw-materials/:id", async (req, res) => {
         [id, oldQty, newQty, newQty - oldQty],
       );
 
-      // AUTO-CLEAR REMARKS ONLY WHEN QUANTITY IS ADDED (increased)
       if (newQty > oldQty) {
         await pool.query(
           "DELETE FROM raw_materials_remarks WHERE material_id = $1",
@@ -961,8 +957,6 @@ app.delete("/api/raw-materials/:id", async (req, res) => {
   }
 });
 
-// (Remarks endpoints unchanged — no qty_ references there)
-
 // ==========================================
 // 4. USER MANAGEMENT ENDPOINTS
 // ==========================================
@@ -989,14 +983,11 @@ app.patch("/api/users/:id/role", async (req, res) => {
   const id = req.params.id;
   const { user_level } = req.body;
   try {
-    // Fetch the name of the user being updated
     const userRes = await pool.query(
       "SELECT full_name FROM users WHERE user_id = $1",
       [id],
     );
     const targetName = userRes.rows[0]?.full_name || "Unknown User";
-
-    // Map level to Role Name
     const roles = { 1: "Admin", 2: "Office", 3: "Production", 4: "Viewer" };
     const roleName = roles[user_level] || user_level;
 
@@ -1026,9 +1017,7 @@ app.delete("/api/users/:id", async (req, res) => {
       [id],
     );
     const name = userInfo.rows[0]?.full_name || "Unknown User";
-
     await pool.query("DELETE FROM users WHERE user_id = $1", [id]);
-
     await logActivity(
       req,
       "DELETE",
@@ -1091,18 +1080,12 @@ app.post("/api/backup/export", async (req, res) => {
 
   const client = await pool.connect();
   try {
-    // Force unambiguous ISO date formatting for this session,
-    // so exported CSV dates always round-trip correctly on import.
     await client.query("SET datestyle = 'ISO, MDY';");
-
-    // 1. Run Inventory Table Export
     await client.query(`
       COPY (SELECT * FROM inventory) 
       TO '${inventoryPath}' 
       WITH CSV HEADER;
     `);
-
-    // 2. Run Raw Materials Table Export
     await client.query(`
       COPY (SELECT * FROM raw_materials) 
       TO '${rawMaterialsPath}' 
@@ -1123,7 +1106,6 @@ app.post("/api/backup/export", async (req, res) => {
     });
   } catch (err) {
     console.error("❌ BACKUP EXPORT SYSTEM FAILURE:", err.message);
-
     if (err.code === "42501") {
       return res.status(403).json({
         error: "Database system permission denied.",
@@ -1131,7 +1113,6 @@ app.post("/api/backup/export", async (req, res) => {
           "The PostgreSQL windows service user account does not have authorization to write files to your Desktop workspace directory directly.",
       });
     }
-
     res.status(500).json({
       error: "Export processing sequence failed.",
       message: err.message,
@@ -1141,7 +1122,6 @@ app.post("/api/backup/export", async (req, res) => {
   }
 });
 
-// New Explicit Import Route Endpoint using Multer middleware
 app.post(
   "/api/backup/import",
   upload.single("backupFile"),
@@ -1156,7 +1136,6 @@ app.post(
     const targetTable = req.body.targetTable;
     const uploadedFilePath = req.file.path.replace(/\\/g, "/");
 
-    // Safety whitelist validation checking
     if (!targetTable || !["inventory", "raw_materials"].includes(targetTable)) {
       if (fs.existsSync(uploadedFilePath)) fs.unlinkSync(uploadedFilePath);
       return res.status(400).json({
@@ -1168,7 +1147,6 @@ app.post(
 
     const client = await pool.connect();
     try {
-      // Read the file header metadata row to verify file data entries match relations
       const fileContent = fs.readFileSync(uploadedFilePath, "utf8");
       const firstLine = fileContent.split(/\r?\n/)[0];
 
@@ -1178,13 +1156,11 @@ app.post(
         );
       }
 
-      // Split and trace target array column items safely, removing carriage returns (\r)
       const headers = firstLine
         .replace(/\r/g, "")
         .split(",")
         .map((h) => h.trim().toLowerCase());
 
-      // Dynamic column alignment block to bridge CSV text with DB relations
       const finalColumns = headers.map((column) => {
         if (targetTable === "inventory") {
           if (column === "raw_material_id") return "material_id";
@@ -1193,14 +1169,13 @@ app.post(
         return column;
       });
 
-      // --- SCHEMA VALIDATION: confirm every CSV header actually exists on the table ---
       const schemaRes = await client.query(
         `SELECT column_name FROM information_schema.columns WHERE table_name = $1`,
         [targetTable],
       );
       const validColumns = new Set(schemaRes.rows.map((r) => r.column_name));
-
       const unknownColumns = finalColumns.filter((c) => !validColumns.has(c));
+
       if (unknownColumns.length > 0) {
         if (fs.existsSync(uploadedFilePath)) fs.unlinkSync(uploadedFilePath);
         return res.status(400).json({
@@ -1211,14 +1186,8 @@ app.post(
         });
       }
 
-      // Safe to interpolate now — every identifier is confirmed against information_schema
       const targetColumns = `(${finalColumns.join(", ")})`;
-
-      // Force the same unambiguous ISO date parsing used on export,
-      // on the SAME session that runs the COPY below.
       await client.query("SET datestyle = 'ISO, MDY';");
-
-      // Open execution query package transactions safely
       await client.query("BEGIN");
       await client.query(`TRUNCATE TABLE ${targetTable} CASCADE;`);
       await client.query(`
@@ -1228,7 +1197,6 @@ app.post(
       `);
       await client.query("COMMIT");
 
-      // Clear disk space footprint
       if (fs.existsSync(uploadedFilePath)) fs.unlinkSync(uploadedFilePath);
 
       await logActivity(
@@ -1245,7 +1213,6 @@ app.post(
     } catch (err) {
       await client.query("ROLLBACK");
       if (fs.existsSync(uploadedFilePath)) fs.unlinkSync(uploadedFilePath);
-
       console.error("❌ IMPORT PARSER ERROR:", err.message);
       res
         .status(400)
@@ -1256,18 +1223,15 @@ app.post(
   },
 );
 
-// GET ALL SUPPLIERS
+// ==========================================
+// 7. SUPPLIER ENDPOINTS
+// ==========================================
+
 app.get("/api/suppliers", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT 
-        supplier_id,
-        supplier_name,
-        address,
-        contact_no,
-        other_details
-       FROM supplier
-       ORDER BY supplier_id DESC`,
+      `SELECT supplier_id, supplier_name, address, contact_no, other_details
+       FROM supplier ORDER BY supplier_id DESC`,
     );
     res.json(result.rows);
   } catch (err) {
@@ -1276,19 +1240,12 @@ app.get("/api/suppliers", async (req, res) => {
   }
 });
 
-// GET SINGLE SUPPLIER BY ID
 app.get("/api/suppliers/:id", async (req, res) => {
   const { id } = req.params;
   try {
     const result = await pool.query(
-      `SELECT 
-        supplier_id,
-        supplier_name,
-        address,
-        contact_no,
-        other_details
-       FROM supplier
-       WHERE supplier_id = $1`,
+      `SELECT supplier_id, supplier_name, address, contact_no, other_details
+       FROM supplier WHERE supplier_id = $1`,
       [id],
     );
     if (result.rows.length === 0) {
@@ -1301,19 +1258,15 @@ app.get("/api/suppliers/:id", async (req, res) => {
   }
 });
 
-// CREATE SUPPLIER
 app.post("/api/suppliers", async (req, res) => {
   const { supplier_name, address, contact_no, other_details } = req.body;
-
   if (!supplier_name || !supplier_name.trim()) {
     return res.status(400).json({ error: "Supplier name is required" });
   }
-
   try {
     const result = await pool.query(
       `INSERT INTO supplier (supplier_name, address, contact_no, other_details)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
+       VALUES ($1, $2, $3, $4) RETURNING *`,
       [
         supplier_name.trim(),
         address?.trim() || null,
@@ -1321,7 +1274,6 @@ app.post("/api/suppliers", async (req, res) => {
         other_details?.trim() || null,
       ],
     );
-
     await logActivity(
       req,
       "INSERT",
@@ -1329,7 +1281,6 @@ app.post("/api/suppliers", async (req, res) => {
       result.rows[0].supplier_id,
       `Added new supplier: ${supplier_name.trim()}`,
     );
-
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("Create supplier error:", err);
@@ -1337,17 +1288,13 @@ app.post("/api/suppliers", async (req, res) => {
   }
 });
 
-// UPDATE SUPPLIER
 app.put("/api/suppliers/:id", async (req, res) => {
   const { id } = req.params;
   const { supplier_name, address, contact_no, other_details } = req.body;
-
   if (!supplier_name || !supplier_name.trim()) {
     return res.status(400).json({ error: "Supplier name is required" });
   }
-
   try {
-    // Check if supplier exists
     const existing = await pool.query(
       "SELECT supplier_name FROM supplier WHERE supplier_id = $1",
       [id],
@@ -1355,15 +1302,9 @@ app.put("/api/suppliers/:id", async (req, res) => {
     if (existing.rows.length === 0) {
       return res.status(404).json({ error: "Supplier not found" });
     }
-
     const result = await pool.query(
-      `UPDATE supplier SET
-        supplier_name = $1,
-        address = $2,
-        contact_no = $3,
-        other_details = $4
-       WHERE supplier_id = $5
-       RETURNING *`,
+      `UPDATE supplier SET supplier_name=$1, address=$2, contact_no=$3, other_details=$4
+       WHERE supplier_id=$5 RETURNING *`,
       [
         supplier_name.trim(),
         address?.trim() || null,
@@ -1372,7 +1313,6 @@ app.put("/api/suppliers/:id", async (req, res) => {
         id,
       ],
     );
-
     await logActivity(
       req,
       "UPDATE",
@@ -1380,7 +1320,6 @@ app.put("/api/suppliers/:id", async (req, res) => {
       id,
       `Updated supplier: ${supplier_name.trim()}`,
     );
-
     res.json(result.rows[0]);
   } catch (err) {
     console.error("Update supplier error:", err);
@@ -1388,11 +1327,9 @@ app.put("/api/suppliers/:id", async (req, res) => {
   }
 });
 
-// DELETE SINGLE SUPPLIER
 app.delete("/api/suppliers/:id", async (req, res) => {
   const { id } = req.params;
   try {
-    // Get name before deletion for logging
     const info = await pool.query(
       "SELECT supplier_name FROM supplier WHERE supplier_id = $1",
       [id],
@@ -1401,9 +1338,7 @@ app.delete("/api/suppliers/:id", async (req, res) => {
       return res.status(404).json({ error: "Supplier not found" });
     }
     const supplierName = info.rows[0].supplier_name;
-
     await pool.query("DELETE FROM supplier WHERE supplier_id = $1", [id]);
-
     await logActivity(
       req,
       "DELETE",
@@ -1411,7 +1346,6 @@ app.delete("/api/suppliers/:id", async (req, res) => {
       id,
       `Deleted supplier: ${supplierName}`,
     );
-
     res.json({ message: "Supplier deleted successfully" });
   } catch (err) {
     console.error("Delete supplier error:", err);
@@ -1423,7 +1357,6 @@ app.delete("/api/suppliers/:id", async (req, res) => {
 // 8. BRAND ENDPOINTS
 // ==========================================
 
-// GET ALL BRANDS
 app.get("/api/brands", async (req, res) => {
   try {
     const result = await pool.query(
@@ -1436,7 +1369,6 @@ app.get("/api/brands", async (req, res) => {
   }
 });
 
-// GET SINGLE BRAND BY ID
 app.get("/api/brands/:id", async (req, res) => {
   const { id } = req.params;
   try {
@@ -1454,10 +1386,8 @@ app.get("/api/brands/:id", async (req, res) => {
   }
 });
 
-// CREATE BRAND
 app.post("/api/brands", async (req, res) => {
   const { brand_name, brand_color } = req.body;
-
   if (!brand_name || !brand_name.trim()) {
     return res.status(400).json({ error: "Brand name is required" });
   }
@@ -1466,18 +1396,15 @@ app.post("/api/brands", async (req, res) => {
       .status(400)
       .json({ error: "Brand name must be 40 characters or less" });
   }
-
   const color =
     brand_color && /^#[0-9A-Fa-f]{6}$/.test(brand_color)
       ? brand_color
       : "#1565c0";
-
   try {
     const result = await pool.query(
       `INSERT INTO brand (brand_name, brand_color) VALUES ($1, $2) RETURNING *`,
       [brand_name.trim(), color],
     );
-
     await logActivity(
       req,
       "INSERT",
@@ -1485,7 +1412,6 @@ app.post("/api/brands", async (req, res) => {
       result.rows[0].brand_id,
       `Added new brand: ${brand_name.trim()}`,
     );
-
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("Create brand error:", err);
@@ -1493,11 +1419,9 @@ app.post("/api/brands", async (req, res) => {
   }
 });
 
-// UPDATE BRAND
 app.put("/api/brands/:id", async (req, res) => {
   const { id } = req.params;
   const { brand_name, brand_color } = req.body;
-
   if (!brand_name || !brand_name.trim()) {
     return res.status(400).json({ error: "Brand name is required" });
   }
@@ -1506,12 +1430,10 @@ app.put("/api/brands/:id", async (req, res) => {
       .status(400)
       .json({ error: "Brand name must be 40 characters or less" });
   }
-
   const color =
     brand_color && /^#[0-9A-Fa-f]{6}$/.test(brand_color)
       ? brand_color
       : "#1565c0";
-
   try {
     const existing = await pool.query(
       "SELECT brand_name FROM brand WHERE brand_id = $1",
@@ -1520,12 +1442,10 @@ app.put("/api/brands/:id", async (req, res) => {
     if (existing.rows.length === 0) {
       return res.status(404).json({ error: "Brand not found" });
     }
-
     const result = await pool.query(
-      `UPDATE brand SET brand_name = $1, brand_color = $2 WHERE brand_id = $3 RETURNING *`,
+      `UPDATE brand SET brand_name=$1, brand_color=$2 WHERE brand_id=$3 RETURNING *`,
       [brand_name.trim(), color, id],
     );
-
     await logActivity(
       req,
       "UPDATE",
@@ -1533,7 +1453,6 @@ app.put("/api/brands/:id", async (req, res) => {
       id,
       `Updated brand: ${brand_name.trim()}`,
     );
-
     res.json(result.rows[0]);
   } catch (err) {
     console.error("Update brand error:", err);
@@ -1541,7 +1460,6 @@ app.put("/api/brands/:id", async (req, res) => {
   }
 });
 
-// DELETE BRAND
 app.delete("/api/brands/:id", async (req, res) => {
   const { id } = req.params;
   try {
@@ -1553,9 +1471,7 @@ app.delete("/api/brands/:id", async (req, res) => {
       return res.status(404).json({ error: "Brand not found" });
     }
     const brandName = info.rows[0].brand_name;
-
     await pool.query("DELETE FROM brand WHERE brand_id = $1", [id]);
-
     await logActivity(
       req,
       "DELETE",
@@ -1563,7 +1479,6 @@ app.delete("/api/brands/:id", async (req, res) => {
       id,
       `Deleted brand: ${brandName}`,
     );
-
     res.json({ message: "Brand deleted successfully" });
   } catch (err) {
     console.error("Delete brand error:", err);
@@ -1573,17 +1488,13 @@ app.delete("/api/brands/:id", async (req, res) => {
 
 // ==========================================
 // AUTOMATIC LOG CLEANUP
-// Runs every hour while server is on
-// Deletes logs older than 5 days
 // ==========================================
-
 cron.schedule("0 * * * *", async () => {
   console.log("--- Starting Scheduled Log Cleanup ---");
   try {
     const result = await pool.query(
       "DELETE FROM activity_logs WHERE created_at < NOW() - INTERVAL '5 days'",
     );
-
     const timestamp = new Date().toLocaleTimeString();
     console.log("-----------------------------------------");
     console.log(`[${timestamp}] ✨ Cleanup Status: SUCCESS`);
@@ -1594,6 +1505,7 @@ cron.schedule("0 * * * *", async () => {
     console.error("Scheduled cleanup failed:", err);
   }
 });
+
 // ==========================================
 // CATCH-ALL ERROR HANDLER
 // ==========================================
@@ -1606,7 +1518,7 @@ app.use((err, req, res, next) => {
 });
 
 // ==========================================
-// PROFILE UPDATE ENDPOINT (With Verification)
+// PROFILE UPDATE ENDPOINT
 // ==========================================
 app.patch("/api/auth/profile", async (req, res) => {
   if (!req.session.user) {
@@ -1617,19 +1529,15 @@ app.patch("/api/auth/profile", async (req, res) => {
   const userId = req.session.user.id;
 
   try {
-    // 1. Get current user data for verification and logging
     const userRes = await pool.query(
       "SELECT full_name, email, password_hash, user_level FROM users WHERE user_id = $1",
       [userId],
     );
-
     if (userRes.rows.length === 0) {
       return res.status(404).json({ error: "User not found" });
     }
 
     const currentUser = userRes.rows[0];
-
-    // 2. Verify current password (REQUIRED for security)
     const isMatch = await bcrypt.compare(
       verifyPassword,
       currentUser.password_hash,
@@ -1638,44 +1546,28 @@ app.patch("/api/auth/profile", async (req, res) => {
       return res.status(401).json({ error: "Incorrect current password." });
     }
 
-    // 3. Prepare logging descriptions
     let descriptions = [];
-    if (fullName !== currentUser.full_name) {
+    if (fullName !== currentUser.full_name)
       descriptions.push(
         `name from "${currentUser.full_name}" to "${fullName}"`,
       );
-    }
-    if (email !== currentUser.email) {
+    if (email !== currentUser.email)
       descriptions.push(`email from "${currentUser.email}" to "${email}"`);
-    }
-    if (newPassword) {
-      descriptions.push("password");
-    }
+    if (newPassword) descriptions.push("password");
 
-    let query;
-    let params;
-
+    let query, params;
     if (newPassword && newPassword.trim() !== "") {
       const hashedPassword = await bcrypt.hash(newPassword, 10);
-      query = `
-        UPDATE users 
-        SET full_name = $1, email = $2, password_hash = $3 
-        WHERE user_id = $4 
-        RETURNING user_id, full_name, email, user_level`;
+      query = `UPDATE users SET full_name=$1, email=$2, password_hash=$3 WHERE user_id=$4 RETURNING user_id, full_name, email, user_level`;
       params = [fullName, email, hashedPassword, userId];
     } else {
-      query = `
-        UPDATE users 
-        SET full_name = $1, email = $2 
-        WHERE user_id = $3 
-        RETURNING user_id, full_name, email, user_level`;
+      query = `UPDATE users SET full_name=$1, email=$2 WHERE user_id=$3 RETURNING user_id, full_name, email, user_level`;
       params = [fullName, email, userId];
     }
 
     const result = await pool.query(query, params);
     const updatedUser = result.rows[0];
 
-    // Update session
     req.session.user = {
       id: updatedUser.user_id,
       name: updatedUser.full_name,
@@ -1683,7 +1575,6 @@ app.patch("/api/auth/profile", async (req, res) => {
       user_level: updatedUser.user_level,
     };
 
-    // Log the activity
     if (descriptions.length > 0) {
       await logActivity(
         req,
@@ -1718,7 +1609,7 @@ app.post("/api/auth/verify-otp", async (req, res) => {
   const { email, otp } = req.body;
   try {
     const result = await pool.query(
-      "SELECT * FROM users WHERE email = $1 AND reset_otp = $2 AND otp_expiry > NOW()",
+      "SELECT * FROM users WHERE email=$1 AND reset_otp=$2 AND otp_expiry > NOW()",
       [email, otp],
     );
     if (result.rows.length === 0) {
@@ -1735,7 +1626,7 @@ app.post("/api/auth/reset-password", async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     const result = await pool.query(
-      "UPDATE users SET password_hash = $1, reset_otp = NULL, otp_expiry = NULL WHERE email = $2 AND reset_otp = $3 AND otp_expiry > NOW() RETURNING user_id",
+      "UPDATE users SET password_hash=$1, reset_otp=NULL, otp_expiry=NULL WHERE email=$2 AND reset_otp=$3 AND otp_expiry > NOW() RETURNING user_id",
       [hashedPassword, email, otp],
     );
     if (result.rowCount === 0) {
@@ -1749,6 +1640,7 @@ app.post("/api/auth/reset-password", async (req, res) => {
   }
 });
 
-app.listen(port, "0.0.0.0", () =>
+// ← CHANGED: app.listen → httpServer.listen
+httpServer.listen(port, "0.0.0.0", () =>
   console.log(`Server running on http://192.168.1.155:${port}`),
 );

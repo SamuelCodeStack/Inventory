@@ -10,5 +10,14 @@ module.exports = {
         NODE_ENV: "development",
       },
     },
+    {
+      name: "frontend",
+      script: "node_modules/vite/bin/vite.js",
+      args: "--host 0.0.0.0 --port 5173",
+      cwd: "C:/Users/Samuel/Desktop/Inventory/inventory",
+      env: {
+        NODE_ENV: "development",
+      },
+    },
   ],
 };
