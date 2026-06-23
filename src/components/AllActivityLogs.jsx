@@ -483,7 +483,6 @@ export default function AllActivityLogs({ mode }) {
           </Grid>
           <Grid item xs={6} sm={2}>
             <TextField
-              select
               fullWidth
               size="small"
               label="Date"
@@ -491,6 +490,7 @@ export default function AllActivityLogs({ mode }) {
               value={selectedDayFilter === "ALL" ? "" : selectedDayFilter}
               onChange={(e) => setSelectedDayFilter(e.target.value || "ALL")}
               InputLabelProps={{ shrink: true }}
+              inputProps={{ max: new Date().toISOString().split("T")[0] }}
             />
           </Grid>
           <Grid item xs={6} sm={2.5}>

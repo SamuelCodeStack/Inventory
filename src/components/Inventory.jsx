@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { io } from "socket.io-client";
 import {
   Box,
   Typography,
@@ -196,6 +197,34 @@ export default function Inventory({ mode, user }) {
   useEffect(() => {
     fetchInventory();
     fetchBrands();
+  }, []);
+
+  useEffect(() => {
+    const socket = io(import.meta.env.VITE_API_URL.replace("/api", ""), {
+      withCredentials: true,
+    });
+
+    socket.on(
+      "remarks_updated",
+      ({ itemId, remarks, remarks_added_by, remarks_created_at }) => {
+        setInventoryData((prev) =>
+          prev.map((item) =>
+            item.id === itemId
+              ? { ...item, remarks, remarks_added_by, remarks_created_at }
+              : item,
+          ),
+        );
+        setOriginalData((prev) =>
+          prev.map((item) =>
+            item.id === itemId
+              ? { ...item, remarks, remarks_added_by, remarks_created_at }
+              : item,
+          ),
+        );
+      },
+    );
+
+    return () => socket.disconnect();
   }, []);
 
   const filteredData = inventoryData.filter((item) => {
@@ -473,12 +502,7 @@ export default function Inventory({ mode, user }) {
     }
   };
 
-  const getStatusColor = (status) => {
-    if (status === "Out of Stock") return "#e74c3c";
-    if (status === "Low Stock") return "#e67e22";
-    return "inherit";
-  };
-
+  // ✅ CHANGED — status text/cell coloring removed; status bar below still shows color
   const renderStatusBar = (row) => {
     const minStock = row.min_stock ?? row.minStock ?? 0;
     const qty = row.quantity ?? 0;
@@ -554,7 +578,6 @@ export default function Inventory({ mode, user }) {
 
   const renderRow = (row, brandColor = null) => {
     const currentMinStock = row.min_stock ?? row.minStock ?? 0;
-    const statusColor = getStatusColor(row.status);
     const isRemarkOpen = activeRemarkRowId === row.id;
 
     return (
@@ -563,8 +586,6 @@ export default function Inventory({ mode, user }) {
         hover
         selected={selectedIds.includes(row.id)}
         sx={{
-          "& .MuiTableCell-root": { color: statusColor },
-          // ✅ borderLeft removed — no more color strip
           ...(brandColor && {
             "&:hover td": { bgcolor: hexToRgba(brandColor, 0.08) },
           }),
@@ -588,11 +609,7 @@ export default function Inventory({ mode, user }) {
             wordBreak: "break-word",
           }}
         >
-          <Typography
-            variant="body2"
-            fontWeight="bold"
-            sx={{ color: statusColor }}
-          >
+          <Typography variant="body2" fontWeight="bold">
             {row.name}
           </Typography>
         </TableCell>
@@ -613,9 +630,7 @@ export default function Inventory({ mode, user }) {
                     : "rgba(0,0,0,0.15)",
                 }}
               />
-              <Typography variant="body2" sx={{ color: statusColor }}>
-                {row.brand}
-              </Typography>
+              <Typography variant="body2">{row.brand}</Typography>
             </Stack>
           ) : (
             <Typography variant="body2" sx={{ color: "text.disabled" }}>
@@ -659,7 +674,6 @@ export default function Inventory({ mode, user }) {
                 disableUnderline: true,
                 sx: {
                   fontWeight: "bold",
-                  color: statusColor,
                   display: "flex",
                   justifyContent: "flex-end",
                   minWidth: "100px",
@@ -667,7 +681,6 @@ export default function Inventory({ mode, user }) {
                     textAlign: "right",
                     paddingRight: "8px",
                     flexGrow: 1,
-                    color: statusColor,
                     width: `${Math.max(4, String(row.quantity).length) * 0.5}ch`,
                   },
                 },
@@ -678,16 +691,7 @@ export default function Inventory({ mode, user }) {
 
         {showMinStock && (
           <TableCell align="right" sx={{ pr: 2 }}>
-            <Typography
-              variant="body2"
-              sx={{
-                fontWeight: "bold",
-                color:
-                  row.quantity <= currentMinStock
-                    ? "#ef7d14"
-                    : "text.secondary",
-              }}
-            >
+            <Typography variant="body2" sx={{ fontWeight: "bold" }}>
               {currentMinStock}
             </Typography>
           </TableCell>

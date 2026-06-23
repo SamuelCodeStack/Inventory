@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { io } from "socket.io-client";
 import {
   Box,
   Typography,
@@ -142,6 +143,34 @@ export default function RawMaterials({ mode, userLevel }) {
     fetchMaterials();
   }, []);
 
+  useEffect(() => {
+    const socket = io(import.meta.env.VITE_API_URL.replace("/api", ""), {
+      withCredentials: true,
+    });
+
+    socket.on(
+      "raw_remarks_updated",
+      ({ materialId, remarks, remarks_added_by, remarks_created_at }) => {
+        setMaterials((prev) =>
+          prev.map((item) =>
+            item.material_id === materialId
+              ? { ...item, remarks, remarks_added_by, remarks_created_at }
+              : item,
+          ),
+        );
+        setOriginalData((prev) =>
+          prev.map((item) =>
+            item.material_id === materialId
+              ? { ...item, remarks, remarks_added_by, remarks_created_at }
+              : item,
+          ),
+        );
+      },
+    );
+
+    return () => socket.disconnect();
+  }, []);
+
   const handleQuantityChangeLocal = (material_id, newQuantity) => {
     const qty = Math.max(0, parseInt(newQuantity) || 0);
     setMaterials((prev) =>
@@ -225,14 +254,7 @@ export default function RawMaterials({ mode, userLevel }) {
     return { label: "In Stock", color: "success" };
   };
 
-  const getStatusColor = (row) => {
-    const qty = row.qty_ ?? 0;
-    const minStock = row.minimum_stock ?? 0;
-    if (qty <= 0) return "#e74c3c";
-    if (qty <= minStock) return "#f39c12";
-    return null;
-  };
-
+  // ✅ CHANGED — status bar still colored; this is the only colored stock indicator now
   const renderStatusBar = (row) => {
     const minStock = row.minimum_stock ?? 0;
     const qty = row.qty_ ?? 0;
@@ -805,7 +827,6 @@ export default function RawMaterials({ mode, userLevel }) {
 
               <TableBody>
                 {paginatedMaterials.map((row) => {
-                  const statusColor = getStatusColor(row);
                   const isRemarkOpen = activeRemarkRowId === row.material_id;
 
                   return (
@@ -820,13 +841,7 @@ export default function RawMaterials({ mode, userLevel }) {
                       )}
 
                       <TableCell>
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            color: statusColor || "text.primary",
-                            fontWeight: statusColor ? "600" : "400",
-                          }}
-                        >
+                        <Typography variant="body2">
                           #{row.material_id}
                         </Typography>
                       </TableCell>
@@ -838,11 +853,7 @@ export default function RawMaterials({ mode, userLevel }) {
                           wordBreak: "break-word",
                         }}
                       >
-                        <Typography
-                          variant="body2"
-                          fontWeight="600"
-                          sx={{ color: statusColor || "text.primary" }}
-                        >
+                        <Typography variant="body2" fontWeight="600">
                           {row.material_name}
                         </Typography>
                       </TableCell>
@@ -850,7 +861,7 @@ export default function RawMaterials({ mode, userLevel }) {
                       <TableCell>
                         <Typography
                           variant="body2"
-                          sx={{ color: statusColor || "text.secondary" }}
+                          sx={{ color: "text.secondary" }}
                         >
                           {row.category}
                         </Typography>
@@ -859,7 +870,7 @@ export default function RawMaterials({ mode, userLevel }) {
                       <TableCell>
                         <Typography
                           variant="body2"
-                          sx={{ color: statusColor || "text.secondary" }}
+                          sx={{ color: "text.secondary" }}
                         >
                           {row.unit || "—"}
                         </Typography>
@@ -893,12 +904,10 @@ export default function RawMaterials({ mode, userLevel }) {
                                 display: "flex",
                                 justifyContent: "flex-end",
                                 minWidth: "100px",
-                                color: statusColor || "text.primary",
                                 "& input": {
                                   textAlign: "right",
                                   paddingRight: "8px",
                                   flexGrow: 1,
-                                  color: statusColor || "inherit",
                                   width: `${Math.max(4, String(row.qty_ ?? 0).length) * 0.5}ch`,
                                 },
                               },
@@ -911,13 +920,7 @@ export default function RawMaterials({ mode, userLevel }) {
                         <TableCell align="right" sx={{ pr: 2 }}>
                           <Typography
                             variant="body2"
-                            sx={{
-                              fontWeight: "bold",
-                              color:
-                                (row.qty_ ?? 0) <= (row.minimum_stock ?? 0)
-                                  ? "primary.main"
-                                  : "text.secondary",
-                            }}
+                            sx={{ fontWeight: "bold", color: "text.secondary" }}
                           >
                             {row.minimum_stock ?? 0}
                           </Typography>

@@ -176,9 +176,7 @@ app.get("/api/auth/me", (req, res) => {
 
 app.post("/api/auth/logout", (req, res) => {
   req.session.destroy((err) => {
-    if (err) {
-      return res.status(500).json({ error: "Could not log out" });
-    }
+    if (err) return res.status(500).json({ error: "Could not log out" });
     res.clearCookie("connect.sid", {
       path: "/",
       httpOnly: true,
@@ -237,7 +235,7 @@ app.post("/api/auth/forgot-password", async (req, res) => {
 });
 
 // ==========================================
-// INVENTORY ENDPOINT
+// INVENTORY ENDPOINTS
 // ==========================================
 
 app.get("/api/inventory", async (req, res) => {
@@ -375,10 +373,7 @@ app.patch("/api/inventory/bulk", async (req, res) => {
           );
 
           await client.query(
-            `UPDATE inventory SET 
-             quantity = $1, 
-             updated_at = now() 
-             WHERE item_id = $2`,
+            `UPDATE inventory SET quantity = $1, updated_at = now() WHERE item_id = $2`,
             [newQty, id],
           );
 
@@ -392,6 +387,13 @@ app.patch("/api/inventory/bulk", async (req, res) => {
                 `DELETE FROM inventory_remarks WHERE item_id = $1`,
                 [id],
               );
+              // Emit remarks cleared
+              io.emit("remarks_updated", {
+                itemId: parseInt(id),
+                remarks: "",
+                remarks_added_by: null,
+                remarks_created_at: null,
+              });
             } else if (adjValue < 0) {
               logMessage = `Stock Out: ${itemName} ${oldQty} - ${Math.abs(adjValue)} = ${newQty}`;
             }
@@ -401,6 +403,12 @@ app.patch("/api/inventory/bulk", async (req, res) => {
                 `DELETE FROM inventory_remarks WHERE item_id = $1`,
                 [id],
               );
+              io.emit("remarks_updated", {
+                itemId: parseInt(id),
+                remarks: "",
+                remarks_added_by: null,
+                remarks_created_at: null,
+              });
             }
           }
 
@@ -428,21 +436,12 @@ app.get("/api/inventory/ledger", async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT 
-        l.printinv_id,
-        l.item_id,
-        l.old_quantity,
-        l.new_quantity,
-        l.change_amount,
-        l.recorded_at,
-        i.item_name,
-        i.category,
-        i.unit,
-        i.price
+        l.printinv_id, l.item_id, l.old_quantity, l.new_quantity,
+        l.change_amount, l.recorded_at, i.item_name, i.category, i.unit, i.price
        FROM inventory_ledger l
        JOIN inventory i ON l.item_id = i.item_id
        ORDER BY l.recorded_at DESC`,
     );
-
     const mappedData = result.rows.map((row) => ({
       id: row.printinv_id,
       itemId: row.item_id,
@@ -455,7 +454,6 @@ app.get("/api/inventory/ledger", async (req, res) => {
       adjustment: row.change_amount,
       transactionDate: row.recorded_at,
     }));
-
     res.json(mappedData);
   } catch (err) {
     console.error("Fetch ledger error:", err);
@@ -485,8 +483,7 @@ app.patch("/api/inventory/:id", async (req, res) => {
 
     if (oldQty !== quantity) {
       await pool.query(
-        `INSERT INTO inventory_ledger (item_id, old_quantity, new_quantity, change_amount)
-         VALUES ($1, $2, $3, $4)`,
+        `INSERT INTO inventory_ledger (item_id, old_quantity, new_quantity, change_amount) VALUES ($1, $2, $3, $4)`,
         [id, oldQty, quantity, quantity - oldQty],
       );
     }
@@ -550,9 +547,7 @@ app.delete("/api/inventory/:id", async (req, res) => {
       [id],
     );
     const itemName = itemInfo.rows[0]?.item_name || "Unknown Item";
-
     await pool.query("DELETE FROM inventory WHERE item_id = $1", [id]);
-
     await logActivity(
       req,
       "DELETE",
@@ -584,9 +579,8 @@ app.post("/api/inventory/:id/remarks", async (req, res) => {
       "SELECT item_name FROM inventory WHERE item_id = $1",
       [id],
     );
-    if (itemInfo.rows.length === 0) {
+    if (itemInfo.rows.length === 0)
       return res.status(404).json({ error: "Item not found" });
-    }
     const itemName = itemInfo.rows[0].item_name;
     const addedBy =
       req.session?.user?.username || req.session?.user?.name || "Unknown";
@@ -595,12 +589,10 @@ app.post("/api/inventory/:id/remarks", async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO inventory_remarks (item_id, remarks, added_by, created_at)
-       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
-       RETURNING *`,
+       VALUES ($1, $2, $3, CURRENT_TIMESTAMP) RETURNING *`,
       [id, remarks.trim(), addedBy],
     );
 
-    // Emit real-time update to all connected clients
     io.emit("remarks_updated", {
       itemId: parseInt(id),
       remarks: remarks.trim(),
@@ -615,7 +607,6 @@ app.post("/api/inventory/:id/remarks", async (req, res) => {
       id,
       `Added remark for item: ${itemName} by ${addedBy}`,
     );
-
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("Save remark error:", err);
@@ -644,14 +635,12 @@ app.delete("/api/inventory/:id/remarks", async (req, res) => {
       "SELECT item_name FROM inventory WHERE item_id = $1",
       [id],
     );
-    if (info.rows.length === 0) {
+    if (info.rows.length === 0)
       return res.status(404).json({ error: "Item not found" });
-    }
     const itemName = info.rows[0].item_name;
 
     await pool.query("DELETE FROM inventory_remarks WHERE item_id = $1", [id]);
 
-    // Emit real-time update to all connected clients
     io.emit("remarks_updated", {
       itemId: parseInt(id),
       remarks: "",
@@ -674,7 +663,7 @@ app.delete("/api/inventory/:id/remarks", async (req, res) => {
 });
 
 // ==========================================
-// 3. RAW MATERIALS ENDPOINTS
+// RAW MATERIALS ENDPOINTS
 // ==========================================
 
 app.get("/api/raw-materials", async (req, res) => {
@@ -723,9 +712,8 @@ app.post("/api/raw-materials", async (req, res) => {
   const { material_name, category, unit, qty_, minimum_stock } = req.body;
   try {
     const result = await pool.query(
-      `INSERT INTO raw_materials 
-        (material_name, category, unit, quantity, minimum_stock) 
-        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      `INSERT INTO raw_materials (material_name, category, unit, quantity, minimum_stock) 
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [
         material_name,
         category,
@@ -753,9 +741,8 @@ app.post("/api/raw-materials/bulk-add", async (req, res) => {
     const results = [];
     for (const item of items) {
       const result = await pool.query(
-        `INSERT INTO raw_materials 
-          (material_name, category, unit, quantity, minimum_stock) 
-          VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        `INSERT INTO raw_materials (material_name, category, unit, quantity, minimum_stock) 
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
         [
           item.material_name,
           item.category,
@@ -826,6 +813,12 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
               "DELETE FROM raw_materials_remarks WHERE material_id = $1",
               [cleanedItemId],
             );
+            io.emit("raw_remarks_updated", {
+              materialId: parseInt(cleanedItemId),
+              remarks: "",
+              remarks_added_by: null,
+              remarks_created_at: null,
+            });
           }
 
           await logActivity(
@@ -852,24 +845,16 @@ app.patch("/api/raw-materials/bulk", async (req, res) => {
 // ==========================================
 // RAW MATERIALS LEDGER ENDPOINT
 // ==========================================
+
 app.get("/api/raw-materials/ledger", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT
-        l.ledger_id,
-        l.material_id,
-        l.old_qty_value,
-        l.new_qty_value,
-        l.change_amount,
-        l.recorded_at,
-        r.material_name,
-        r.category,
-        r.unit
+      `SELECT l.ledger_id, l.material_id, l.old_qty_value, l.new_qty_value,
+        l.change_amount, l.recorded_at, r.material_name, r.category, r.unit
        FROM raw_materials_ledger l
        JOIN raw_materials r ON l.material_id = r.material_id
        ORDER BY l.recorded_at DESC`,
     );
-
     const mappedData = result.rows.map((row) => ({
       id: row.ledger_id,
       material_id: row.material_id,
@@ -881,7 +866,6 @@ app.get("/api/raw-materials/ledger", async (req, res) => {
       adjustment: row.change_amount,
       transactionDate: row.recorded_at,
     }));
-
     res.json(mappedData);
   } catch (err) {
     console.error("Fetch raw materials ledger error:", err);
@@ -912,6 +896,12 @@ app.put("/api/raw-materials/:id", async (req, res) => {
           "DELETE FROM raw_materials_remarks WHERE material_id = $1",
           [id],
         );
+        io.emit("raw_remarks_updated", {
+          materialId: parseInt(id),
+          remarks: "",
+          remarks_added_by: null,
+          remarks_created_at: null,
+        });
       }
     }
 
@@ -958,6 +948,112 @@ app.delete("/api/raw-materials/:id", async (req, res) => {
 });
 
 // ==========================================
+// RAW MATERIALS REMARKS ENDPOINTS
+// ==========================================
+
+app.post("/api/raw-materials/:id/remarks", async (req, res) => {
+  const id = cleanId(req.params.id);
+  const { remarks } = req.body;
+
+  if (!remarks || !remarks.trim()) {
+    return res.status(400).json({ error: "Remarks cannot be empty" });
+  }
+
+  try {
+    const matInfo = await pool.query(
+      "SELECT material_name FROM raw_materials WHERE material_id = $1",
+      [id],
+    );
+    if (matInfo.rows.length === 0)
+      return res.status(404).json({ error: "Material not found" });
+    const materialName = matInfo.rows[0].material_name;
+    const addedBy =
+      req.session?.user?.username || req.session?.user?.name || "Unknown";
+
+    await pool.query(
+      "DELETE FROM raw_materials_remarks WHERE material_id = $1",
+      [id],
+    );
+
+    const result = await pool.query(
+      `INSERT INTO raw_materials_remarks (material_id, remarks, added_by, created_at)
+       VALUES ($1, $2, $3, CURRENT_TIMESTAMP) RETURNING *`,
+      [id, remarks.trim(), addedBy],
+    );
+
+    io.emit("raw_remarks_updated", {
+      materialId: parseInt(id),
+      remarks: remarks.trim(),
+      remarks_added_by: addedBy,
+      remarks_created_at: result.rows[0].created_at,
+    });
+
+    await logActivity(
+      req,
+      "INSERT",
+      "raw_materials_remarks",
+      id,
+      `Added remark for material: ${materialName} by ${addedBy}`,
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error("Save raw material remark error:", err);
+    res.status(500).json({ error: "Failed to save remark" });
+  }
+});
+
+app.get("/api/raw-materials/:id/remarks", async (req, res) => {
+  const id = cleanId(req.params.id);
+  try {
+    const result = await pool.query(
+      `SELECT * FROM raw_materials_remarks WHERE material_id = $1 ORDER BY created_at DESC`,
+      [id],
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Fetch raw material remarks error:", err);
+    res.status(500).json({ error: "Failed to fetch remarks" });
+  }
+});
+
+app.delete("/api/raw-materials/:id/remarks", async (req, res) => {
+  const id = cleanId(req.params.id);
+  try {
+    const info = await pool.query(
+      "SELECT material_name FROM raw_materials WHERE material_id = $1",
+      [id],
+    );
+    if (info.rows.length === 0)
+      return res.status(404).json({ error: "Material not found" });
+    const materialName = info.rows[0].material_name;
+
+    await pool.query(
+      "DELETE FROM raw_materials_remarks WHERE material_id = $1",
+      [id],
+    );
+
+    io.emit("raw_remarks_updated", {
+      materialId: parseInt(id),
+      remarks: "",
+      remarks_added_by: null,
+      remarks_created_at: null,
+    });
+
+    await logActivity(
+      req,
+      "DELETE",
+      "raw_materials_remarks",
+      id,
+      `Cleared remark for material: ${materialName}`,
+    );
+    res.json({ message: "Remark cleared successfully" });
+  } catch (err) {
+    console.error("Delete raw material remark error:", err);
+    res.status(500).json({ error: "Failed to clear remark" });
+  }
+});
+
+// ==========================================
 // 4. USER MANAGEMENT ENDPOINTS
 // ==========================================
 
@@ -996,6 +1092,13 @@ app.patch("/api/users/:id/role", async (req, res) => {
       id,
     ]);
 
+    // ✅ NEW — notify the affected user's browser(s) in real time
+    io.emit("role_changed", {
+      userId: parseInt(id),
+      newRole: user_level,
+      roleName,
+    });
+
     await logActivity(
       req,
       "UPDATE",
@@ -1018,6 +1121,10 @@ app.delete("/api/users/:id", async (req, res) => {
     );
     const name = userInfo.rows[0]?.full_name || "Unknown User";
     await pool.query("DELETE FROM users WHERE user_id = $1", [id]);
+
+    // ✅ NEW
+    io.emit("user_deleted", { userId: parseInt(id) });
+
     await logActivity(
       req,
       "DELETE",
@@ -1068,9 +1175,7 @@ app.post("/api/backup/export", async (req, res) => {
     req.body.destinationPath || "C:/Users/Samuel/Desktop/Backup";
 
   try {
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true });
-    }
+    if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
   } catch (dirErr) {
     console.error("❌ Failed to create directory:", dirErr.message);
   }
@@ -1081,17 +1186,12 @@ app.post("/api/backup/export", async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("SET datestyle = 'ISO, MDY';");
-    await client.query(`
-      COPY (SELECT * FROM inventory) 
-      TO '${inventoryPath}' 
-      WITH CSV HEADER;
-    `);
-    await client.query(`
-      COPY (SELECT * FROM raw_materials) 
-      TO '${rawMaterialsPath}' 
-      WITH CSV HEADER;
-    `);
-
+    await client.query(
+      `COPY (SELECT * FROM inventory) TO '${inventoryPath}' WITH CSV HEADER;`,
+    );
+    await client.query(
+      `COPY (SELECT * FROM raw_materials) TO '${rawMaterialsPath}' WITH CSV HEADER;`,
+    );
     await logActivity(
       req,
       "EXPORT",
@@ -1099,7 +1199,6 @@ app.post("/api/backup/export", async (req, res) => {
       null,
       `Exported database backups manually to Desktop/Backup`,
     );
-
     res.status(200).json({
       message: "Database system backups exported successfully!",
       paths: { inventory: inventoryPath, rawMaterials: rawMaterialsPath },
@@ -1149,18 +1248,15 @@ app.post(
     try {
       const fileContent = fs.readFileSync(uploadedFilePath, "utf8");
       const firstLine = fileContent.split(/\r?\n/)[0];
-
-      if (!firstLine) {
+      if (!firstLine)
         throw new Error(
           "The uploaded file structure header row evaluation failed.",
         );
-      }
 
       const headers = firstLine
         .replace(/\r/g, "")
         .split(",")
         .map((h) => h.trim().toLowerCase());
-
       const finalColumns = headers.map((column) => {
         if (targetTable === "inventory") {
           if (column === "raw_material_id") return "material_id";
@@ -1180,9 +1276,7 @@ app.post(
         if (fs.existsSync(uploadedFilePath)) fs.unlinkSync(uploadedFilePath);
         return res.status(400).json({
           error: "Column mismatch",
-          message: `The uploaded CSV has column(s) that don't exist on "${targetTable}": ${unknownColumns.join(
-            ", ",
-          )}. Valid columns are: ${[...validColumns].join(", ")}.`,
+          message: `The uploaded CSV has column(s) that don't exist on "${targetTable}": ${unknownColumns.join(", ")}. Valid columns are: ${[...validColumns].join(", ")}.`,
         });
       }
 
@@ -1190,15 +1284,12 @@ app.post(
       await client.query("SET datestyle = 'ISO, MDY';");
       await client.query("BEGIN");
       await client.query(`TRUNCATE TABLE ${targetTable} CASCADE;`);
-      await client.query(`
-        COPY ${targetTable} ${targetColumns}
-        FROM '${uploadedFilePath}' 
-        WITH (FORMAT csv, HEADER true);
-      `);
+      await client.query(
+        `COPY ${targetTable} ${targetColumns} FROM '${uploadedFilePath}' WITH (FORMAT csv, HEADER true);`,
+      );
       await client.query("COMMIT");
 
       if (fs.existsSync(uploadedFilePath)) fs.unlinkSync(uploadedFilePath);
-
       await logActivity(
         req,
         "IMPORT",
@@ -1206,7 +1297,6 @@ app.post(
         null,
         `Restored ${targetTable} file datasets via control panel dashboard upload.`,
       );
-
       res.status(200).json({
         message: `Successfully synchronized system data table properties directly into ${targetTable}!`,
       });
@@ -1230,8 +1320,7 @@ app.post(
 app.get("/api/suppliers", async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT supplier_id, supplier_name, address, contact_no, other_details
-       FROM supplier ORDER BY supplier_id DESC`,
+      `SELECT supplier_id, supplier_name, address, contact_no, other_details FROM supplier ORDER BY supplier_id DESC`,
     );
     res.json(result.rows);
   } catch (err) {
@@ -1244,13 +1333,11 @@ app.get("/api/suppliers/:id", async (req, res) => {
   const { id } = req.params;
   try {
     const result = await pool.query(
-      `SELECT supplier_id, supplier_name, address, contact_no, other_details
-       FROM supplier WHERE supplier_id = $1`,
+      `SELECT supplier_id, supplier_name, address, contact_no, other_details FROM supplier WHERE supplier_id = $1`,
       [id],
     );
-    if (result.rows.length === 0) {
+    if (result.rows.length === 0)
       return res.status(404).json({ error: "Supplier not found" });
-    }
     res.json(result.rows[0]);
   } catch (err) {
     console.error("Fetch supplier error:", err);
@@ -1260,13 +1347,11 @@ app.get("/api/suppliers/:id", async (req, res) => {
 
 app.post("/api/suppliers", async (req, res) => {
   const { supplier_name, address, contact_no, other_details } = req.body;
-  if (!supplier_name || !supplier_name.trim()) {
+  if (!supplier_name || !supplier_name.trim())
     return res.status(400).json({ error: "Supplier name is required" });
-  }
   try {
     const result = await pool.query(
-      `INSERT INTO supplier (supplier_name, address, contact_no, other_details)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
+      `INSERT INTO supplier (supplier_name, address, contact_no, other_details) VALUES ($1, $2, $3, $4) RETURNING *`,
       [
         supplier_name.trim(),
         address?.trim() || null,
@@ -1291,20 +1376,17 @@ app.post("/api/suppliers", async (req, res) => {
 app.put("/api/suppliers/:id", async (req, res) => {
   const { id } = req.params;
   const { supplier_name, address, contact_no, other_details } = req.body;
-  if (!supplier_name || !supplier_name.trim()) {
+  if (!supplier_name || !supplier_name.trim())
     return res.status(400).json({ error: "Supplier name is required" });
-  }
   try {
     const existing = await pool.query(
       "SELECT supplier_name FROM supplier WHERE supplier_id = $1",
       [id],
     );
-    if (existing.rows.length === 0) {
+    if (existing.rows.length === 0)
       return res.status(404).json({ error: "Supplier not found" });
-    }
     const result = await pool.query(
-      `UPDATE supplier SET supplier_name=$1, address=$2, contact_no=$3, other_details=$4
-       WHERE supplier_id=$5 RETURNING *`,
+      `UPDATE supplier SET supplier_name=$1, address=$2, contact_no=$3, other_details=$4 WHERE supplier_id=$5 RETURNING *`,
       [
         supplier_name.trim(),
         address?.trim() || null,
@@ -1334,9 +1416,8 @@ app.delete("/api/suppliers/:id", async (req, res) => {
       "SELECT supplier_name FROM supplier WHERE supplier_id = $1",
       [id],
     );
-    if (info.rows.length === 0) {
+    if (info.rows.length === 0)
       return res.status(404).json({ error: "Supplier not found" });
-    }
     const supplierName = info.rows[0].supplier_name;
     await pool.query("DELETE FROM supplier WHERE supplier_id = $1", [id]);
     await logActivity(
@@ -1376,9 +1457,8 @@ app.get("/api/brands/:id", async (req, res) => {
       `SELECT brand_id, brand_name, brand_color FROM brand WHERE brand_id = $1`,
       [id],
     );
-    if (result.rows.length === 0) {
+    if (result.rows.length === 0)
       return res.status(404).json({ error: "Brand not found" });
-    }
     res.json(result.rows[0]);
   } catch (err) {
     console.error("Fetch brand error:", err);
@@ -1388,14 +1468,12 @@ app.get("/api/brands/:id", async (req, res) => {
 
 app.post("/api/brands", async (req, res) => {
   const { brand_name, brand_color } = req.body;
-  if (!brand_name || !brand_name.trim()) {
+  if (!brand_name || !brand_name.trim())
     return res.status(400).json({ error: "Brand name is required" });
-  }
-  if (brand_name.trim().length > 40) {
+  if (brand_name.trim().length > 40)
     return res
       .status(400)
       .json({ error: "Brand name must be 40 characters or less" });
-  }
   const color =
     brand_color && /^#[0-9A-Fa-f]{6}$/.test(brand_color)
       ? brand_color
@@ -1422,14 +1500,12 @@ app.post("/api/brands", async (req, res) => {
 app.put("/api/brands/:id", async (req, res) => {
   const { id } = req.params;
   const { brand_name, brand_color } = req.body;
-  if (!brand_name || !brand_name.trim()) {
+  if (!brand_name || !brand_name.trim())
     return res.status(400).json({ error: "Brand name is required" });
-  }
-  if (brand_name.trim().length > 40) {
+  if (brand_name.trim().length > 40)
     return res
       .status(400)
       .json({ error: "Brand name must be 40 characters or less" });
-  }
   const color =
     brand_color && /^#[0-9A-Fa-f]{6}$/.test(brand_color)
       ? brand_color
@@ -1439,9 +1515,8 @@ app.put("/api/brands/:id", async (req, res) => {
       "SELECT brand_name FROM brand WHERE brand_id = $1",
       [id],
     );
-    if (existing.rows.length === 0) {
+    if (existing.rows.length === 0)
       return res.status(404).json({ error: "Brand not found" });
-    }
     const result = await pool.query(
       `UPDATE brand SET brand_name=$1, brand_color=$2 WHERE brand_id=$3 RETURNING *`,
       [brand_name.trim(), color, id],
@@ -1467,9 +1542,8 @@ app.delete("/api/brands/:id", async (req, res) => {
       "SELECT brand_name FROM brand WHERE brand_id = $1",
       [id],
     );
-    if (info.rows.length === 0) {
+    if (info.rows.length === 0)
       return res.status(404).json({ error: "Brand not found" });
-    }
     const brandName = info.rows[0].brand_name;
     await pool.query("DELETE FROM brand WHERE brand_id = $1", [id]);
     await logActivity(
@@ -1521,9 +1595,8 @@ app.use((err, req, res, next) => {
 // PROFILE UPDATE ENDPOINT
 // ==========================================
 app.patch("/api/auth/profile", async (req, res) => {
-  if (!req.session.user) {
+  if (!req.session.user)
     return res.status(401).json({ error: "Not authenticated" });
-  }
 
   const { fullName, email, newPassword, verifyPassword } = req.body;
   const userId = req.session.user.id;
@@ -1533,18 +1606,16 @@ app.patch("/api/auth/profile", async (req, res) => {
       "SELECT full_name, email, password_hash, user_level FROM users WHERE user_id = $1",
       [userId],
     );
-    if (userRes.rows.length === 0) {
+    if (userRes.rows.length === 0)
       return res.status(404).json({ error: "User not found" });
-    }
 
     const currentUser = userRes.rows[0];
     const isMatch = await bcrypt.compare(
       verifyPassword,
       currentUser.password_hash,
     );
-    if (!isMatch) {
+    if (!isMatch)
       return res.status(401).json({ error: "Incorrect current password." });
-    }
 
     let descriptions = [];
     if (fullName !== currentUser.full_name)
@@ -1594,9 +1665,8 @@ app.patch("/api/auth/profile", async (req, res) => {
     });
   } catch (err) {
     console.error("Profile Update Error:", err);
-    if (err.code === "23505") {
+    if (err.code === "23505")
       return res.status(400).json({ error: "Email is already in use." });
-    }
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
@@ -1612,9 +1682,8 @@ app.post("/api/auth/verify-otp", async (req, res) => {
       "SELECT * FROM users WHERE email=$1 AND reset_otp=$2 AND otp_expiry > NOW()",
       [email, otp],
     );
-    if (result.rows.length === 0) {
+    if (result.rows.length === 0)
       return res.status(400).json({ error: "Invalid or expired OTP." });
-    }
     res.json({ message: "OTP verified. Proceed to reset password." });
   } catch (err) {
     res.status(500).json({ error: "Verification failed." });
@@ -1629,18 +1698,17 @@ app.post("/api/auth/reset-password", async (req, res) => {
       "UPDATE users SET password_hash=$1, reset_otp=NULL, otp_expiry=NULL WHERE email=$2 AND reset_otp=$3 AND otp_expiry > NOW() RETURNING user_id",
       [hashedPassword, email, otp],
     );
-    if (result.rowCount === 0) {
+    if (result.rowCount === 0)
       return res
         .status(400)
         .json({ error: "Reset failed. OTP may have expired." });
-    }
     res.json({ message: "Password updated successfully!" });
   } catch (err) {
     res.status(500).json({ error: "Reset failed." });
   }
 });
 
-// ← CHANGED: app.listen → httpServer.listen
+// ← httpServer.listen instead of app.listen
 httpServer.listen(port, "0.0.0.0", () =>
-  console.log(`Server running on http://192.168.1.155:${port}`),
+  console.log(`Server running on http://192.168.1.3:${port}`),
 );

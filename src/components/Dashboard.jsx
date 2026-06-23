@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { io } from "socket.io-client";
 import {
   Box,
   Typography,
@@ -1233,6 +1234,43 @@ export default function Dashboard({ mode }) {
 
   useEffect(() => {
     fetchAll();
+  }, []);
+
+  // ← ADD: Socket.io real-time sync for dashboard
+  useEffect(() => {
+    const socket = io(import.meta.env.VITE_API_URL.replace("/api", ""), {
+      withCredentials: true,
+    });
+
+    // Finished goods remarks
+    socket.on(
+      "remarks_updated",
+      ({ itemId, remarks, remarks_added_by, remarks_created_at }) => {
+        setFgData((prev) =>
+          prev.map((item) =>
+            item.id === itemId
+              ? { ...item, remarks, remarks_added_by, remarks_created_at }
+              : item,
+          ),
+        );
+      },
+    );
+
+    // Raw materials remarks
+    socket.on(
+      "raw_remarks_updated",
+      ({ materialId, remarks, remarks_added_by, remarks_created_at }) => {
+        setRmData((prev) =>
+          prev.map((item) =>
+            item.material_id === materialId || item.id === materialId
+              ? { ...item, remarks, remarks_added_by, remarks_created_at }
+              : item,
+          ),
+        );
+      },
+    );
+
+    return () => socket.disconnect();
   }, []);
 
   const kpis = useMemo(() => {

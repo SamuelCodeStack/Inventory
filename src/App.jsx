@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { io } from "socket.io-client";
 import {
   BrowserRouter,
   Routes,
@@ -14,31 +15,80 @@ import {
   CircularProgress,
   Snackbar,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Button,
+  IconButton,
 } from "@mui/material";
-import { CleaningServices } from "@mui/icons-material";
+import {
+  CleaningServices,
+  GppMaybe,
+  Menu as MenuIcon,
+} from "@mui/icons-material";
 import Sidebar from "./components/Sidebar.jsx";
-import Header from "./components/Header.jsx";
 import Inventory from "./components/Inventory.jsx";
 import UserManagement from "./components/UserManagement.jsx";
 import Auth from "./components/Auth.jsx";
 import RawMaterials from "./components/RawMaterials.jsx";
 import AllActivityLogs from "./components/AllActivityLogs.jsx";
-import Dashboard from "./components/Dashboard.jsx"; // ADDED: Dashboard Import
+import Dashboard from "./components/Dashboard.jsx";
 import Backup from "./components/Backup.jsx";
-import Profile from "./components/UserProfile.jsx"; // ADDED: Profile Import
+import Profile from "./components/UserProfile.jsx";
 import Suppliers from "./components/Suppliers.jsx";
 
 function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // --- ADDED: GLOBAL CLEANUP STATE ---
   const [prevLogCount, setPrevLogCount] = useState(null);
   const [cleanupNotify, setCleanupNotify] = useState({ open: false, count: 0 });
 
-  // --- ADDED: BACKGROUND MONITOR FOR CRON CLEANUP ---
+  const [roleChangeNotice, setRoleChangeNotice] = useState({
+    open: false,
+    roleName: "",
+    reason: "role",
+  });
+
   useEffect(() => {
-    // Only Superadmin (0) monitors cleanup based on your requirement
+    if (!user) return;
+
+    const socket = io(import.meta.env.VITE_API_URL.replace("/api", ""), {
+      withCredentials: true,
+    });
+
+    socket.on("role_changed", ({ userId, roleName }) => {
+      if (parseInt(userId) === parseInt(user.id)) {
+        setRoleChangeNotice({ open: true, roleName, reason: "role" });
+      }
+    });
+
+    socket.on("user_deleted", ({ userId }) => {
+      if (parseInt(userId) === parseInt(user.id)) {
+        setRoleChangeNotice({ open: true, roleName: "", reason: "deleted" });
+      }
+    });
+
+    return () => socket.disconnect();
+  }, [user]);
+
+  const handleForcedLogout = async () => {
+    try {
+      await fetch(`${import.meta.env.VITE_API_URL}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (e) {
+      console.error("Forced logout request failed", e);
+    } finally {
+      localStorage.setItem("kimwin_logout", Date.now().toString());
+      window.location.href = "/login";
+    }
+  };
+
+  useEffect(() => {
     if (!user || user.user_level !== 0) return;
 
     const monitorCleanup = async () => {
@@ -57,7 +107,6 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
       }
     };
 
-    // Check for cleanup every minute, synced with the cron cycle roughly
     const interval = setInterval(() => {
       const seconds = new Date().getSeconds();
       if (seconds === 0) {
@@ -65,7 +114,6 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
       }
     }, 1000);
 
-    // Initial check on mount
     monitorCleanup();
 
     return () => clearInterval(interval);
@@ -90,7 +138,6 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
 
   const isAuthPage = location.pathname === "/login";
 
-  // STRICT GUARD: If no user, only the login route exists in the entire app
   if (!user) {
     return (
       <Routes>
@@ -103,22 +150,16 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
     );
   }
 
-  // If logged in, redirect away from login
   if (isAuthPage && user) {
     return <Navigate to="/" replace />;
   }
 
-  // Helper for Role-Based Access Control
-  // Superadmin = 0, Admin = 1 (Both have same access)
   const isAdmin =
     user.user_level === 0 ||
     user.user_level === "0" ||
     user.user_level === "1" ||
-    user.user_level === 1 ||
-    user.user_level === "1";
+    user.user_level === 1;
 
-  // Logic for Action Buttons visibility: Admin and Production can edit.
-  // Superadmin = 0, Admin = 1, Office = 2, Production = 3, Viewer = 4
   const canEditInventory =
     isAdmin || user.user_level === 3 || user.user_level === "3";
 
@@ -146,11 +187,29 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
           transition: "margin 0.2s ease-in-out",
         }}
       >
-        <Header mode={mode} onMenuClick={handleDrawerToggle} user={user} />
+        {/* Minimal mobile-only menu button replaces the old Header bar */}
+        <Box
+          sx={{
+            display: { xs: "flex", sm: "none" },
+            alignItems: "center",
+            p: 1,
+            borderBottom:
+              mode === "light" ? "1px solid #eee" : "1px solid #333",
+            bgcolor: "background.paper",
+          }}
+        >
+          <IconButton
+            color="inherit"
+            aria-label="open drawer"
+            edge="start"
+            onClick={handleDrawerToggle}
+          >
+            <MenuIcon />
+          </IconButton>
+        </Box>
 
         <Box sx={{ p: 0 }}>
           <Routes>
-            {/* Root path: Redirect user level 3 and 4 to inventory, others to dashboard */}
             <Route
               path="/"
               element={
@@ -186,7 +245,6 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
               path="/suppliers"
               element={<Suppliers mode={mode} user={user} />}
             />
-            {/* Protected Routes based on user_level */}
             <Route
               path="/user-management"
               element={
@@ -227,7 +285,6 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
         </Box>
       </Box>
 
-      {/* --- ADDED: GLOBAL CLEANUP DIALOG NOTIFICATION --- */}
       <Snackbar
         open={cleanupNotify.open}
         autoHideDuration={8000}
@@ -245,6 +302,38 @@ function AppContent({ mode, toggleDarkMode, user, setUser, loading }) {
           auto-deleted.
         </Alert>
       </Snackbar>
+
+      <Dialog
+        open={roleChangeNotice.open}
+        disableEscapeKeyDown
+        onClose={() => {}}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            fontWeight: "bold",
+          }}
+        >
+          <GppMaybe color="warning" />
+          {roleChangeNotice.reason === "deleted"
+            ? "Account Removed"
+            : "Account Permissions Updated"}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {roleChangeNotice.reason === "deleted"
+              ? "Your account has been removed by an administrator. You will now be logged out."
+              : `Your role has been changed to "${roleChangeNotice.roleName}" by an administrator. Please log in again for the changes to take effect.`}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="contained" onClick={handleForcedLogout} autoFocus>
+            OK, Log Out
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -256,7 +345,6 @@ function App() {
     return localStorage.getItem("kimwin_theme_mode") || "light";
   });
 
-  // Check Auth on Load
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -267,7 +355,6 @@ function App() {
         const data = await response.json();
         if (data.loggedIn) {
           setUser(data.user);
-          // Sync user level to localStorage for child components if needed
           localStorage.setItem("userLevel", data.user.user_level);
         } else {
           setUser(null);
@@ -282,11 +369,9 @@ function App() {
     checkAuth();
   }, []);
 
-  // ADDED: Sync logout across all open tabs
   useEffect(() => {
     const syncLogout = (event) => {
       if (event.key === "kimwin_logout") {
-        // Force a reload to clear all state and trigger auth check
         window.location.reload();
       }
     };
@@ -332,8 +417,6 @@ function App() {
     <BrowserRouter>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        {/* The key prop here is MAGIC. When user changes to null, 
-            the whole AppContent is destroyed and reset. */}
         <AppContent
           key={user ? user.id : "guest"}
           mode={mode}
