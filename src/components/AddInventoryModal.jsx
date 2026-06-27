@@ -16,18 +16,23 @@ import { AddCircle, Delete, Save, Close } from "@mui/icons-material";
 const CATEGORIES = ["Paper", "Plastic", "Injection", "Trading"];
 const UNITS = ["Pieces", "Bundle", "Box"];
 
+// Users in these levels don't see/edit price (Production = 3, Trading = 6)
+const HIDE_PRICE_LEVELS = ["3", "6"];
+
 export default function AddInventoryModal({
   open,
   handleClose,
   onSaveSuccess,
   userLevel,
 }) {
+  const hidePrice = HIDE_PRICE_LEVELS.includes(String(userLevel));
+
   const emptyRow = {
     name: "",
     category: "",
     uom: "",
     quantity: "",
-    price: String(userLevel) === "3" ? "0.00" : "",
+    price: hidePrice ? "0.00" : "",
     minStock: "",
     brand_id: "",
     supplier_id: "",
@@ -394,8 +399,8 @@ export default function AddInventoryModal({
                     </TextField>
                   </Grid>
 
-                  {/* PRICE — hidden for Production (userLevel 3) */}
-                  {String(userLevel) !== "3" && (
+                  {/* PRICE — hidden for Production (3) and Trading (6) */}
+                  {!hidePrice && (
                     <Grid item xs={6} md={3}>
                       <Typography
                         variant="caption"
@@ -424,7 +429,7 @@ export default function AddInventoryModal({
                   )}
 
                   {/* QTY */}
-                  <Grid item xs={6} md={String(userLevel) === "3" ? 3 : 2}>
+                  <Grid item xs={6} md={hidePrice ? 3 : 2}>
                     <Typography
                       variant="caption"
                       fontWeight="bold"
@@ -446,7 +451,7 @@ export default function AddInventoryModal({
                   </Grid>
 
                   {/* MIN STOCK */}
-                  <Grid item xs={6} md={String(userLevel) === "3" ? 3 : 2}>
+                  <Grid item xs={6} md={hidePrice ? 3 : 2}>
                     <Typography
                       variant="caption"
                       fontWeight="bold"

@@ -62,7 +62,9 @@ export default function Suppliers({ mode, user }) {
     user?.user_level === 2 ||
     user?.user_level === "2" ||
     user?.user_level === 3 ||
-    user?.user_level === "3";
+    user?.user_level === "3" ||
+    user?.user_level === 6 ||
+    user?.user_level === "6";
 
   const canViewActionColumn =
     user?.user_level === 0 ||
@@ -72,7 +74,9 @@ export default function Suppliers({ mode, user }) {
     user?.user_level === 2 ||
     user?.user_level === "2" ||
     user?.user_level === 3 ||
-    user?.user_level === "3";
+    user?.user_level === "3" ||
+    user?.user_level === 6 ||
+    user?.user_level === "6";
 
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(0);

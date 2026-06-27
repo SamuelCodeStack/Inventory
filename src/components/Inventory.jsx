@@ -84,34 +84,25 @@ export default function Inventory({ mode, user }) {
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [isSelectionEnabled, setIsSelectionEnabled] = useState(false);
-
-  // ── Ledger data for print modal ──
   const [ledgerData, setLedgerData] = useState([]);
-
   const [groupByBrand, setGroupByBrand] = useState(false);
   const [brandColorMap, setBrandColorMap] = useState({});
-
   const [anchorEl, setAnchorEl] = useState(null);
   const isMenuOpen = Boolean(anchorEl);
   const handleMenuOpen = (e) => setAnchorEl(e.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);
-
   const [showRemarks, setShowRemarks] = useState(false);
   const [showMinStock, setShowMinStock] = useState(false);
-
   const [activeRemarkRowId, setActiveRemarkRowId] = useState(null);
   const [remarkInputValue, setRemarkInputValue] = useState("");
   const [savingRemark, setSavingRemark] = useState(false);
   const [deletingRemarkId, setDeletingRemarkId] = useState(null);
-
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [brandFilter, setBrandFilter] = useState("All");
-
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
-
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
@@ -119,6 +110,8 @@ export default function Inventory({ mode, user }) {
   });
   const isDark = mode === "dark";
 
+  // ── Permissions ──
+  // canModify: can add, edit, delete, update quantities (levels 0–3)
   const canModify =
     user?.user_level === 0 ||
     user?.user_level === "0" ||
@@ -127,8 +120,11 @@ export default function Inventory({ mode, user }) {
     user?.user_level === 2 ||
     user?.user_level === "2" ||
     user?.user_level === 3 ||
-    user?.user_level === "3";
+    user?.user_level === "3" ||
+    user?.user_level === 6 ||
+    user?.user_level === "6";
 
+  // canViewActionColumn: show action buttons — true for modify users AND ViewerAdmin (5)
   const canViewActionColumn =
     user?.user_level === 0 ||
     user?.user_level === "0" ||
@@ -137,13 +133,21 @@ export default function Inventory({ mode, user }) {
     user?.user_level === 2 ||
     user?.user_level === "2" ||
     user?.user_level === 3 ||
-    user?.user_level === "3";
+    user?.user_level === "3" ||
+    user?.user_level === 5 ||
+    user?.user_level === "5" ||
+    user?.user_level === 6 ||
+    user?.user_level === "6";
 
+  // canViewPrice: hide price from level 3 (Production) and level 4 (Viewer)
+  // ViewerAdmin (5) CAN see price
   const canViewPrice =
     user?.user_level !== 3 &&
     user?.user_level !== "3" &&
     user?.user_level !== 4 &&
-    user?.user_level !== "4";
+    user?.user_level !== "4" &&
+    user?.user_level !== 6 &&
+    user?.user_level !== "6";
 
   const showMessage = (msg, sev = "success") =>
     setSnackbar({ open: true, message: msg, severity: sev });
@@ -155,9 +159,8 @@ export default function Inventory({ mode, user }) {
       if (Array.isArray(data)) {
         const map = {};
         data.forEach((b) => {
-          if (b.brand_name?.trim()) {
+          if (b.brand_name?.trim())
             map[b.brand_name.trim()] = b.brand_color || "#1565c0";
-          }
         });
         setBrandColorMap(map);
       }
@@ -178,7 +181,6 @@ export default function Inventory({ mode, user }) {
     }
   };
 
-  // ── Fetch ledger then open print modal ──
   const handleOpenPrint = async () => {
     try {
       const res = await fetch(
@@ -203,7 +205,6 @@ export default function Inventory({ mode, user }) {
     const socket = io(import.meta.env.VITE_API_URL.replace("/api", ""), {
       withCredentials: true,
     });
-
     socket.on(
       "remarks_updated",
       ({ itemId, remarks, remarks_added_by, remarks_created_at }) => {
@@ -223,7 +224,6 @@ export default function Inventory({ mode, user }) {
         );
       },
     );
-
     return () => socket.disconnect();
   }, []);
 
@@ -257,7 +257,6 @@ export default function Inventory({ mode, user }) {
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage,
   );
-
   const groupedPaginatedData = getGroupedData(paginatedData);
 
   const handleResetFilters = () => {
@@ -380,7 +379,10 @@ export default function Inventory({ mode, user }) {
     try {
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/inventory/${cleanId}`,
-        { method: "DELETE", credentials: "include" },
+        {
+          method: "DELETE",
+          credentials: "include",
+        },
       );
       if (res.ok) {
         setInventoryData((prev) => prev.filter((item) => item.id !== id));
@@ -420,7 +422,10 @@ export default function Inventory({ mode, user }) {
       try {
         const res = await fetch(
           `${import.meta.env.VITE_API_URL}/inventory/${cleanId}`,
-          { method: "DELETE", credentials: "include" },
+          {
+            method: "DELETE",
+            credentials: "include",
+          },
         );
         if (res.ok) successCount++;
       } catch (e) {
@@ -487,7 +492,10 @@ export default function Inventory({ mode, user }) {
       const cleanId = String(itemId).split(":")[0];
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/inventory/${cleanId}/remarks`,
-        { method: "DELETE", credentials: "include" },
+        {
+          method: "DELETE",
+          credentials: "include",
+        },
       );
       if (res.ok) {
         showMessage("Remark cleared", "info");
@@ -502,7 +510,6 @@ export default function Inventory({ mode, user }) {
     }
   };
 
-  // ✅ CHANGED — status text/cell coloring removed; status bar below still shows color
   const renderStatusBar = (row) => {
     const minStock = row.min_stock ?? row.minStock ?? 0;
     const qty = row.quantity ?? 0;
@@ -939,16 +946,22 @@ export default function Inventory({ mode, user }) {
                   )}
                 </>
               )}
-              <IconButton
-                size="small"
-                color="info"
-                onClick={() => {
-                  setSelectedItem({ ...row, id: String(row.id).split(":")[0] });
-                  setOpenEditModal(true);
-                }}
-              >
-                <Edit fontSize="inherit" />
-              </IconButton>
+              {/* ViewerAdmin sees edit button but it's view-only — canModify gate keeps saves disabled */}
+              {canModify && (
+                <IconButton
+                  size="small"
+                  color="info"
+                  onClick={() => {
+                    setSelectedItem({
+                      ...row,
+                      id: String(row.id).split(":")[0],
+                    });
+                    setOpenEditModal(true);
+                  }}
+                >
+                  <Edit fontSize="inherit" />
+                </IconButton>
+              )}
             </Stack>
           </TableCell>
         )}
@@ -1183,12 +1196,7 @@ export default function Inventory({ mode, user }) {
             {canModify && <Divider sx={{ my: 0.5 }} />}
 
             {canModify && isEditingQty && (
-              <MenuItem
-                onClick={() => {
-                  handleDiscard();
-                }}
-                sx={{ color: "error.main" }}
-              >
+              <MenuItem onClick={handleDiscard} sx={{ color: "error.main" }}>
                 <ListItemIcon>
                   <Undo fontSize="small" color="error" />
                 </ListItemIcon>
@@ -1201,7 +1209,7 @@ export default function Inventory({ mode, user }) {
                 <ListItemIcon>
                   <EditNote fontSize="small" sx={{ color: "#ef7d14" }} />
                 </ListItemIcon>
-                <ListItemText>Edit Qty</ListItemText>
+                <ListItemText>Update Quantity</ListItemText>
               </MenuItem>
             )}
 
@@ -1517,7 +1525,6 @@ export default function Inventory({ mode, user }) {
         itemData={selectedItem}
         userLevel={user?.user_level}
       />
-
       <PrintInventoryModal
         open={openPrintModal}
         userLevel={user?.user_level}
@@ -1528,7 +1535,6 @@ export default function Inventory({ mode, user }) {
             : ledgerData
         }
       />
-
       <BrandModal
         open={openBrandModal}
         handleClose={() => {

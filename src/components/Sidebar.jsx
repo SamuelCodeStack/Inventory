@@ -46,7 +46,6 @@ export default function Sidebar({
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const drawerWidth = isCollapsed ? 70 : 240;
-
   const [anchorEl, setAnchorEl] = useState(null);
   const [unreadLogs, setUnreadLogs] = useState(0);
   const [openPersonalLogs, setOpenPersonalLogs] = useState(false);
@@ -62,7 +61,6 @@ export default function Sidebar({
         method: "POST",
         credentials: "include",
       });
-
       if (response.ok) {
         localStorage.setItem("kimwin_logout", Date.now());
         window.location.href = "/login";
@@ -83,9 +81,7 @@ export default function Sidebar({
           { credentials: "include" },
         );
         const data = await response.json();
-
         const lastRead = localStorage.getItem(`lastReadLogs_${cleanId}`);
-
         if (lastRead) {
           const newLogs = data.filter(
             (log) => new Date(log.created_at) > new Date(lastRead),
@@ -98,7 +94,6 @@ export default function Sidebar({
         console.error("Notification fetch failed", err);
       }
     };
-
     if (user) {
       fetchUnreadCount();
       const interval = setInterval(fetchUnreadCount, 30000);
@@ -112,23 +107,43 @@ export default function Sidebar({
     2: "Office",
     3: "Production",
     4: "Viewer",
+    5: "Viewer Admin",
+    6: "Trading",
   };
 
+  // Dashboard: levels 0,1,2,5 (Trading excluded — no dashboard access)
   const hasDashboardAccess =
     user?.user_level === 0 ||
     user?.user_level === "0" ||
     user?.user_level === 1 ||
     user?.user_level === "1" ||
     user?.user_level === 2 ||
-    user?.user_level === "2";
+    user?.user_level === "2" ||
+    user?.user_level === 5 ||
+    user?.user_level === "5";
 
+  // Admin only: levels 0,1
   const isAdmin =
     user?.user_level === 0 ||
     user?.user_level === "0" ||
     user?.user_level === 1 ||
     user?.user_level === "1";
 
+  // Superadmin only: level 0
   const superAdmin = user?.user_level === 0 || user?.user_level === "0";
+
+  // Supplier access: levels 0,1,2,5,6 (Trading gets supplier access)
+  const hasSupplierAccess =
+    user?.user_level === 0 ||
+    user?.user_level === "0" ||
+    user?.user_level === 1 ||
+    user?.user_level === "1" ||
+    user?.user_level === 2 ||
+    user?.user_level === "2" ||
+    user?.user_level === 5 ||
+    user?.user_level === "5" ||
+    user?.user_level === 6 ||
+    user?.user_level === "6";
 
   const menuItems = [
     ...(hasDashboardAccess
@@ -136,7 +151,7 @@ export default function Sidebar({
       : []),
     { text: "Finished Goods", icon: <Inventory />, path: "/inventory" },
     { text: "Raw Materials", icon: <Layers />, path: "/raw-materials" },
-    ...(hasDashboardAccess
+    ...(hasSupplierAccess
       ? [{ text: "Suppliers", icon: <LocalShipping />, path: "/suppliers" }]
       : []),
     ...(isAdmin
@@ -220,7 +235,6 @@ export default function Sidebar({
           )}
         </Box>
 
-        {/* Notification bell — only shown when expanded */}
         {!isCollapsed && isAdmin && (
           <IconButton
             size="small"
@@ -262,7 +276,6 @@ export default function Sidebar({
       >
         {menuItems.map((item, index) => {
           const isActive = location.pathname === item.path;
-
           return (
             <React.Fragment key={index}>
               {item.section && !isCollapsed && (
@@ -431,7 +444,6 @@ export default function Sidebar({
               </ListItemIcon>
               Profile
             </MenuItem>
-
             <MenuItem
               onClick={() => {
                 handleProfileClose();
@@ -444,9 +456,7 @@ export default function Sidebar({
               </ListItemIcon>
               Activity
             </MenuItem>
-
             <Divider />
-
             <MenuItem
               onClick={handleLogout}
               sx={{ color: "error.main", py: 1, fontSize: 14 }}
@@ -478,7 +488,7 @@ export default function Sidebar({
                 <LightMode fontSize="small" sx={{ color: "text.secondary" }} />
               )}
               <Typography variant="body2" color="text.secondary">
-                Dark mode
+                {mode === "dark" ? "Light mode" : "Dark mode"}
               </Typography>
             </Box>
           )}

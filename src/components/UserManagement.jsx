@@ -24,17 +24,19 @@ import {
   Search,
   ManageAccounts,
   MailOutline,
-  History, // Added for Activity Log icon
+  History,
 } from "@mui/icons-material";
-import UserActivityModal from "./UserActivityModal"; // Ensure you create this file
+import UserActivityModal from "./UserActivityModal";
 
 const THEME_ORANGE = "#f2994a";
-// UPDATED: roles mapped to their numeric levels
+
 const roles = [
   { label: "Admin", value: 1 },
   { label: "Office", value: 2 },
   { label: "Production", value: 3 },
   { label: "Viewer", value: 4 },
+  { label: "Viewer Admin", value: 5 },
+  { label: "Trading", value: 6 },
 ];
 
 export default function UserManagement({ mode }) {
@@ -45,22 +47,16 @@ export default function UserManagement({ mode }) {
     message: "",
     severity: "success",
   });
-
-  // Modal States for Activity Log
   const [openLogModal, setOpenLogModal] = useState(false);
   const [selectedUserForLog, setSelectedUserForLog] = useState(null);
 
-  // --- USER ROLE LOGIC ---
-  const currentUserLevel = parseInt(localStorage.getItem("userLevel")); // 0: Superadmin, 1: Admin
+  const currentUserLevel = parseInt(localStorage.getItem("userLevel"));
   const isSuperAdmin = currentUserLevel === 0;
-
   const isDark = mode === "dark";
 
-  // 1. FETCH USERS FROM DATABASE
   const fetchUsers = async () => {
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL}/users`);
-      // const response = await fetch("http://localhost:3000/api/users");
       const data = await response.json();
       setUsers(data);
     } catch (err) {
@@ -72,21 +68,17 @@ export default function UserManagement({ mode }) {
     fetchUsers();
   }, []);
 
-  // 2. UPDATE ROLE IN DATABASE
   const handleRoleChange = async (userId, newRole) => {
     try {
       const response = await fetch(
-        // `http://localhost:3000/api/users/${userId}/role`,
         `${import.meta.env.VITE_API_URL}/users/${userId}/role`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          // FIX: Changed key from 'role' to 'user_level' to match your backend
           credentials: "include",
           body: JSON.stringify({ user_level: newRole }),
         },
       );
-
       if (response.ok) {
         setUsers((prev) =>
           prev.map((u) =>
@@ -110,20 +102,16 @@ export default function UserManagement({ mode }) {
     }
   };
 
-  // 3. DELETE USER FROM DATABASE
   const handleDeleteUser = async (userId) => {
     if (!window.confirm("Are you sure you want to delete this user?")) return;
-
     try {
       const response = await fetch(
-        // `http://localhost:3000/api/users/${userId}`,
         `${import.meta.env.VITE_API_URL}/users/${userId}`,
         {
           method: "DELETE",
-          credentials: "include", // Required to send session cookies for activity logs
+          credentials: "include",
         },
       );
-
       if (response.ok) {
         setUsers((prev) => prev.filter((u) => u.id !== userId));
         setNotification({
@@ -143,7 +131,7 @@ export default function UserManagement({ mode }) {
 
   const filteredUsers = users.filter(
     (u) =>
-      u.user_level !== 0 && // Hide Superadmins (level 0) from the table
+      u.user_level !== 0 &&
       (u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         u.email.toLowerCase().includes(searchQuery.toLowerCase())),
   );
@@ -244,21 +232,18 @@ export default function UserManagement({ mode }) {
                 <TableCell align="center">
                   <TextField
                     select
-                    // Value priority: use user_level directly
                     value={user.user_level ?? 4}
                     size="small"
-                    // Disable if current user is Admin and the target user is also an Admin
                     disabled={!isSuperAdmin && user.user_level === 1}
                     onChange={(e) =>
                       handleRoleChange(user.id, parseInt(e.target.value))
                     }
-                    // Select display logic: Use SelectProps to force display of label even if item is filtered
                     SelectProps={{
                       renderValue: (selected) =>
                         roles.find((r) => r.value === selected)?.label,
                     }}
                     sx={{
-                      width: 130,
+                      width: 140,
                       "& .MuiSelect-select": {
                         py: 0.5,
                         fontSize: "0.8125rem",
@@ -267,7 +252,6 @@ export default function UserManagement({ mode }) {
                     }}
                   >
                     {roles
-                      // Hide "Admin" option if current user is not a Superadmin
                       .filter((option) => isSuperAdmin || option.value !== 1)
                       .map((option) => (
                         <MenuItem key={option.value} value={option.value}>
@@ -278,8 +262,6 @@ export default function UserManagement({ mode }) {
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    <History fontSize="inherit" sx={{ display: "none" }} />{" "}
-                    {/* Icon reference */}
                     <Tooltip title="View Activity Logs">
                       <IconButton
                         size="small"
@@ -293,7 +275,6 @@ export default function UserManagement({ mode }) {
                         <History fontSize="inherit" />
                       </IconButton>
                     </Tooltip>
-                    {/* Only show delete button if current user is Superadmin (level 0) */}
                     {isSuperAdmin && (
                       <Tooltip title="Delete User">
                         <IconButton

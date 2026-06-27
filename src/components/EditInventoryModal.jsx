@@ -173,8 +173,10 @@ export default function EditInventoryModal({
     }
   }, [formData.name, formData.category, existingItems, itemData]);
 
-  const isProduction =
-    String(userLevel) === "3" || String(itemData?.user_level) === "3";
+  // Users in these levels don't see/edit price (Production = 3, Trading = 6)
+  const hidePrice =
+    ["3", "6"].includes(String(userLevel)) ||
+    ["3", "6"].includes(String(itemData?.user_level));
 
   const isUnchanged =
     itemData &&
@@ -349,7 +351,7 @@ export default function EditInventoryModal({
           )}
 
           {/* MIN STOCK */}
-          <Grid item xs={isProduction ? 12 : 6}>
+          <Grid item xs={hidePrice ? 12 : 6}>
             <TextField
               fullWidth
               type="number"
@@ -361,8 +363,8 @@ export default function EditInventoryModal({
             />
           </Grid>
 
-          {/* PRICE — hidden for Production */}
-          {!isProduction && (
+          {/* PRICE — hidden for Production and Trading */}
+          {!hidePrice && (
             <Grid item xs={6}>
               <TextField
                 fullWidth

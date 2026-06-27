@@ -60,45 +60,70 @@ export default function RawMaterials({ mode, userLevel }) {
   const [isEditingQty, setIsEditingQty] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [enableCheckboxes, setEnableCheckboxes] = useState(false);
-
-  // ── Ledger data for print modal ──
   const [ledgerData, setLedgerData] = useState([]);
-
   const [anchorEl, setAnchorEl] = useState(null);
   const isMenuOpen = Boolean(anchorEl);
   const handleMenuOpen = (e) => setAnchorEl(e.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);
-
   const [showRemarks, setShowRemarks] = useState(false);
   const [showMinStock, setShowMinStock] = useState(false);
-
   const [activeRemarkRowId, setActiveRemarkRowId] = useState(null);
   const [remarkInputValue, setRemarkInputValue] = useState("");
   const [savingRemark, setSavingRemark] = useState(false);
   const [deletingRemarkId, setDeletingRemarkId] = useState(null);
-
-  const canPrint = [0, "0", 1, "1", 2, "2", 3, "3", 4, "4"].includes(userLevel);
-  const canAction = [0, "0", 1, "1", 2, "2", 3, "3"].includes(userLevel);
-
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [unitFilter, setUnitFilter] = useState("All");
-
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
-
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openEditModal, setOpenEditModal] = useState(false);
   const [openPrintModal, setOpenPrintModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
-
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
     severity: "success",
   });
   const isDark = mode === "dark";
+
+  // ── Permissions ──
+  const canPrint = [
+    0,
+    "0",
+    1,
+    "1",
+    2,
+    "2",
+    3,
+    "3",
+    4,
+    "4",
+    5,
+    "5",
+    6,
+    "6",
+  ].includes(userLevel);
+  // canAction: can add, edit, delete, update quantities (levels 0–3)
+  const canAction = [0, "0", 1, "1", 2, "2", 3, "3", 6, "6"].includes(
+    userLevel,
+  );
+  // canViewAction: show the action column — includes ViewerAdmin (5)
+  const canViewAction = [
+    0,
+    "0",
+    1,
+    "1",
+    2,
+    "2",
+    3,
+    "3",
+    5,
+    "5",
+    6,
+    "6",
+  ].includes(userLevel);
 
   const fetchMaterials = async () => {
     try {
@@ -108,10 +133,7 @@ export default function RawMaterials({ mode, userLevel }) {
         { credentials: "include" },
       );
       const data = await response.json();
-      const initializedData = data.map((item) => ({
-        ...item,
-        adjustment: "",
-      }));
+      const initializedData = data.map((item) => ({ ...item, adjustment: "" }));
       setMaterials(initializedData);
       setOriginalData(JSON.parse(JSON.stringify(initializedData)));
       setSelectedIds([]);
@@ -122,7 +144,6 @@ export default function RawMaterials({ mode, userLevel }) {
     }
   };
 
-  // ── Fetch ledger then open print modal ──
   const handleOpenPrint = async () => {
     try {
       const res = await fetch(
@@ -147,7 +168,6 @@ export default function RawMaterials({ mode, userLevel }) {
     const socket = io(import.meta.env.VITE_API_URL.replace("/api", ""), {
       withCredentials: true,
     });
-
     socket.on(
       "raw_remarks_updated",
       ({ materialId, remarks, remarks_added_by, remarks_created_at }) => {
@@ -167,7 +187,6 @@ export default function RawMaterials({ mode, userLevel }) {
         );
       },
     );
-
     return () => socket.disconnect();
   }, []);
 
@@ -225,7 +244,6 @@ export default function RawMaterials({ mode, userLevel }) {
         qty_: item.qty_,
         adjustment: item.adjustment,
       }));
-
     try {
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/raw-materials/bulk`,
@@ -254,7 +272,6 @@ export default function RawMaterials({ mode, userLevel }) {
     return { label: "In Stock", color: "success" };
   };
 
-  // ✅ CHANGED — status bar still colored; this is the only colored stock indicator now
   const renderStatusBar = (row) => {
     const minStock = row.minimum_stock ?? 0;
     const qty = row.qty_ ?? 0;
@@ -364,7 +381,10 @@ export default function RawMaterials({ mode, userLevel }) {
       setDeletingRemarkId(material_id);
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/raw-materials/${material_id}/remarks`,
-        { method: "DELETE", credentials: "include" },
+        {
+          method: "DELETE",
+          credentials: "include",
+        },
       );
       if (res.ok) {
         showSnackbar("Remark cleared", "info");
@@ -390,28 +410,24 @@ export default function RawMaterials({ mode, userLevel }) {
     const statusObj = getStatus(m);
     const name = m.material_name ?? "";
     const id = String(m.material_id ?? "");
-    const matchesSearch =
-      name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      id.includes(searchQuery);
-    const matchesCategory =
-      categoryFilter === "All" || m.category === categoryFilter;
-    const matchesStatus =
-      statusFilter === "All" || statusObj.label === statusFilter;
-    const matchesUnit = unitFilter === "All" || m.unit === unitFilter;
-    return matchesSearch && matchesCategory && matchesStatus && matchesUnit;
+    return (
+      (name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        id.includes(searchQuery)) &&
+      (categoryFilter === "All" || m.category === categoryFilter) &&
+      (statusFilter === "All" || statusObj.label === statusFilter) &&
+      (unitFilter === "All" || m.unit === unitFilter)
+    );
   });
 
   const paginatedMaterials = filteredMaterials.slice(
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage,
   );
-
   const handleChangePage = (event, newPage) => setPage(newPage);
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
-
   const showSnackbar = (message, severity = "success") =>
     setSnackbar({ open: true, message, severity });
 
@@ -655,7 +671,7 @@ export default function RawMaterials({ mode, userLevel }) {
                   <ListItemIcon>
                     <EditNote fontSize="small" color="primary" />
                   </ListItemIcon>
-                  <ListItemText>Edit Qty</ListItemText>
+                  <ListItemText>Update Quantity</ListItemText>
                 </MenuItem>
               ))}
 
@@ -684,7 +700,6 @@ export default function RawMaterials({ mode, userLevel }) {
       </Box>
 
       <TableContainer component={Paper} sx={{ borderRadius: 3, p: 2 }}>
-        {/* FILTER BAR */}
         <Grid container spacing={2} sx={{ mb: 3 }} alignItems="center">
           <Grid size={{ xs: 12, md: 5 }}>
             <TextField
@@ -817,7 +832,7 @@ export default function RawMaterials({ mode, userLevel }) {
                       Remarks
                     </TableCell>
                   )}
-                  {canAction && (
+                  {canViewAction && (
                     <TableCell align="right" sx={{ fontWeight: "bold" }}>
                       Actions
                     </TableCell>
@@ -828,7 +843,6 @@ export default function RawMaterials({ mode, userLevel }) {
               <TableBody>
                 {paginatedMaterials.map((row) => {
                   const isRemarkOpen = activeRemarkRowId === row.material_id;
-
                   return (
                     <TableRow key={row.material_id} hover>
                       {canAction && !isEditingQty && enableCheckboxes && (
@@ -866,7 +880,6 @@ export default function RawMaterials({ mode, userLevel }) {
                           {row.category}
                         </Typography>
                       </TableCell>
-
                       <TableCell>
                         <Typography
                           variant="body2"
@@ -1004,7 +1017,6 @@ export default function RawMaterials({ mode, userLevel }) {
                                 </Typography>
                               )
                             )}
-
                             <Collapse in={isRemarkOpen} unmountOnExit>
                               <Stack
                                 direction="row"
@@ -1066,7 +1078,7 @@ export default function RawMaterials({ mode, userLevel }) {
                         </TableCell>
                       )}
 
-                      {canAction && (
+                      {canViewAction && (
                         <TableCell align="right">
                           <Stack
                             direction="row"
@@ -1125,16 +1137,19 @@ export default function RawMaterials({ mode, userLevel }) {
                                 )}
                               </>
                             )}
-                            <IconButton
-                              size="small"
-                              color="info"
-                              onClick={() => {
-                                setSelectedItem(row);
-                                setOpenEditModal(true);
-                              }}
-                            >
-                              <Edit fontSize="inherit" />
-                            </IconButton>
+                            {/* Only canAction users get the edit button */}
+                            {canAction && (
+                              <IconButton
+                                size="small"
+                                color="info"
+                                onClick={() => {
+                                  setSelectedItem(row);
+                                  setOpenEditModal(true);
+                                }}
+                              >
+                                <Edit fontSize="inherit" />
+                              </IconButton>
+                            )}
                           </Stack>
                         </TableCell>
                       )}
@@ -1175,7 +1190,6 @@ export default function RawMaterials({ mode, userLevel }) {
         onSaveSuccess={fetchMaterials}
         mode={mode}
       />
-
       <PrintRawMaterialModal
         open={openPrintModal}
         handleClose={() => setOpenPrintModal(false)}
@@ -1185,7 +1199,6 @@ export default function RawMaterials({ mode, userLevel }) {
             : ledgerData
         }
       />
-
       {selectedItem && (
         <EditRawMaterialModal
           open={openEditModal}

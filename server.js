@@ -1084,7 +1084,14 @@ app.patch("/api/users/:id/role", async (req, res) => {
       [id],
     );
     const targetName = userRes.rows[0]?.full_name || "Unknown User";
-    const roles = { 1: "Admin", 2: "Office", 3: "Production", 4: "Viewer" };
+    const roles = {
+      1: "Admin",
+      2: "Office",
+      3: "Production",
+      4: "Viewer",
+      5: "Viewer Admin",
+      6: "Trading",
+    };
     const roleName = roles[user_level] || user_level;
 
     await pool.query("UPDATE users SET user_level = $1 WHERE user_id = $2", [
@@ -1710,5 +1717,5 @@ app.post("/api/auth/reset-password", async (req, res) => {
 
 // ← httpServer.listen instead of app.listen
 httpServer.listen(port, "0.0.0.0", () =>
-  console.log(`Server running on http://192.168.1.3:${port}`),
+  console.log(`Server running on http://192.168.1.2:${port}`),
 );

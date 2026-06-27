@@ -27,34 +27,24 @@ import {
 } from "@mui/icons-material";
 
 export default function Auth({ mode, toggleDarkMode }) {
-  // Views: 'login' | 'register' | 'forgot' | 'verify-otp'
   const [view, setView] = useState("login");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false); // New Loading State
+  const [isLoading, setIsLoading] = useState(false);
   const isDark = mode === "dark";
 
-  // Form States
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
-    otp: "", // Added for OTP verification
+    otp: "",
   });
 
-  // FIXED: Immediate cross-tab synchronization for Login and Logout
   useEffect(() => {
     const syncAuth = (event) => {
-      // If any tab logs in, all other tabs on the login page must redirect to home
-      if (event.key === "kimwin_login") {
-        window.location.href = "/";
-      }
-      // If any tab logs out, all other tabs must return to login
-      if (event.key === "kimwin_logout") {
-        window.location.href = "/login";
-      }
+      if (event.key === "kimwin_login") window.location.href = "/";
+      if (event.key === "kimwin_logout") window.location.href = "/login";
     };
-
     window.addEventListener("storage", syncAuth);
     return () => window.removeEventListener("storage", syncAuth);
   }, []);
@@ -63,33 +53,29 @@ export default function Auth({ mode, toggleDarkMode }) {
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    if (error) setError(""); // Clear error when typing
+    if (error) setError("");
   };
 
-  // --- SUBMIT HANDLERS ---
   const handleAuthAction = async (e) => {
     e.preventDefault();
     setError("");
-    setIsLoading(true); // Start animation
+    setIsLoading(true);
 
     let endpoint = "";
     if (view === "login") endpoint = "/api/auth/login";
     else if (view === "register") endpoint = "/api/auth/register";
     else if (view === "forgot") endpoint = "/api/auth/forgot-password";
-    else if (view === "verify-otp") endpoint = "/api/auth/reset-password"; // Use reset endpoint when submitting OTP + New Password
+    else if (view === "verify-otp") endpoint = "/api/auth/reset-password";
 
     try {
-      // FIXED: Use VITE_API_URL instead of hardcoded localhost
-      // We clean the URL to ensure it points to the correct base path
       const apiUrl = import.meta.env.VITE_API_URL.replace(/\/api$/, "");
-
       const response = await fetch(`${apiUrl}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // Critical for keeping you logged in
+        credentials: "include",
         body: JSON.stringify({
           ...formData,
-          newPassword: formData.password, // Mapping for reset-password endpoint
+          newPassword: formData.password,
         }),
       });
 
@@ -97,12 +83,9 @@ export default function Auth({ mode, toggleDarkMode }) {
 
       if (response.ok) {
         if (view === "login") {
-          // CRITICAL: Set the login signal BEFORE redirecting the current tab
-          // This ensures other tabs receive the "storage" event immediately
           localStorage.setItem("kimwin_login", Date.now().toString());
           window.location.href = "/";
         } else if (view === "forgot") {
-          // After requesting reset, move to OTP entry
           setView("verify-otp");
           alert("OTP sent! Please check your email.");
         } else {
@@ -116,7 +99,7 @@ export default function Auth({ mode, toggleDarkMode }) {
     } catch (err) {
       setError("Network error: Could not connect to server.");
     } finally {
-      setIsLoading(false); // Stop animation regardless of outcome
+      setIsLoading(false);
     }
   };
 
@@ -129,10 +112,10 @@ export default function Auth({ mode, toggleDarkMode }) {
         justifyContent: "center",
         bgcolor: isDark ? "#121212" : "#f4f7f9",
         p: 2,
-        position: "relative", // Required for absolute positioning of the toggle
+        position: "relative",
       }}
     >
-      {/* --- DARK MODE TOGGLE BUTTON --- */}
+      {/* Dark mode toggle */}
       <Box sx={{ position: "absolute", top: 20, right: 20 }}>
         <Tooltip
           title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
@@ -164,7 +147,7 @@ export default function Auth({ mode, toggleDarkMode }) {
           backgroundImage: "none",
         }}
       >
-        {/* LOGO AREA */}
+        {/* Logo */}
         <Box sx={{ mb: 3 }}>
           <Typography variant="h4" fontWeight="bold" color="primary">
             KIMWIN
@@ -223,7 +206,7 @@ export default function Auth({ mode, toggleDarkMode }) {
               type="email"
               size="small"
               required
-              disabled={view === "verify-otp" || isLoading} // Prevent email change during OTP entry
+              disabled={view === "verify-otp" || isLoading}
               value={formData.email}
               onChange={handleInputChange}
               InputProps={{
@@ -263,17 +246,38 @@ export default function Auth({ mode, toggleDarkMode }) {
               />
             )}
 
+            {/* ── Password field — single eye icon, no browser default ── */}
             {view !== "forgot" && (
               <TextField
                 fullWidth
                 label={view === "verify-otp" ? "New Password" : "Password"}
                 name="password"
+                // Always use "text" type and control visibility manually
+                // This prevents the browser from rendering its own eye icon
                 type={showPassword ? "text" : "password"}
                 size="small"
                 required
                 disabled={isLoading}
                 value={formData.password}
                 onChange={handleInputChange}
+                // Suppress browser's native password reveal button
+                inputProps={{
+                  style: { WebkitTextSecurity: undefined },
+                }}
+                sx={{
+                  // Hide MS Edge / IE built-in password reveal button
+                  "& input::-ms-reveal": { display: "none" },
+                  "& input::-ms-clear": { display: "none" },
+                  // Hide Chrome's built-in password reveal button
+                  "& input::-webkit-credentials-auto-fill-button": {
+                    visibility: "hidden",
+                    display: "none !important",
+                    pointerEvents: "none",
+                    height: 0,
+                    width: 0,
+                    margin: 0,
+                  },
+                }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -286,8 +290,14 @@ export default function Auth({ mode, toggleDarkMode }) {
                         onClick={togglePassword}
                         edge="end"
                         disabled={isLoading}
+                        tabIndex={-1}
+                        size="small"
                       >
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                        {showPassword ? (
+                          <VisibilityOff fontSize="small" />
+                        ) : (
+                          <Visibility fontSize="small" />
+                        )}
                       </IconButton>
                     </InputAdornment>
                   ),
